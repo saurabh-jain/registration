@@ -811,6 +811,7 @@ class CurveMatching(curveMatching.CurveMatching):
 
     def endOptim(self):
         if self.iter %10 > 0:
+            (obj1, self.xt, Jt, self.cval) = self.objectiveFunDef(self.at, self.Afft, withJacobian=True)
             nn = 0 ;
             for k in range(self.ncurve):
                 if self.dim==2:
@@ -854,13 +855,13 @@ class CurveMatching(curveMatching.CurveMatching):
                     self.lmb[t, :] -= 0.5*self.derCstrFun(self.cval[t, :]/self.mu)/self.mu
             print 'mean lambdas', np.fabs(self.lmb).sum() / self.lmb.size
             if self.converged:
-                self.gradEps *= .75
+                self.gradEps *= .5
                 if (((self.cval**2).sum()/self.cval.size) > self.muEps**2):
                     self.mu *= 0.5
                 else:
                     self.muEps = self.muEps /2
-            else:
-                self.mu *= 0.9
+            # else:
+            #     self.mu *= 0.9
             self.obj = None
             it = it+1
             
