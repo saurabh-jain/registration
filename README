@@ -1,0 +1,4 @@
+This repository contains source code for LDDMM registration
+
+py-lddmm: python code for surface and curve matching running python2.7 and using PIL and vtk5 python library (more details to come)
+diffeoReg (to come): C++ code for image matching (LDDMM and metamorphosis)
