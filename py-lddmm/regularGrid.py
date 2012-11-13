@@ -79,7 +79,7 @@ class RegularGrid(object):
         self.create(mesh_only)
 
     def __getGridZeros(self):
-      return numpy.zeros((self.num_points, self.num_points))
+      return numpy.zeros((self.dims))
     grid_zeros = property(__getGridZeros)
 
     def __associate(self, el_index, node_list, el_list):
@@ -273,37 +273,39 @@ class RegularGrid(object):
         return [el, bary]
 
     def raised_cosine(self, mf, beta):
-      f_x = 1./(2.0*numpy.pi) * self.xsi_1
-      f_y = 1./(2.0*numpy.pi) * self.xsi_2
-      if mf == -1:
-        f_max = numpy.max(f_x)
-        T = (1+beta)/(2*f_max)
-      else:
-        f_cut = 1./(2.0*numpy.pi) * numpy.sqrt(numpy.sqrt(1./mf) - 1)
-        T = 1./(2*f_cut)
-        f_max = numpy.max(f_x)
-        roll_max = (1+beta)/(2*T)
-        if roll_max >= f_max:
-          logging.info("warning: rollover exceeds max frequency.")
-          suggest_beta = f_max * 2*T - 1.
-          logging.info("suggest beta: %f." % (suggest_beta))
+        f_x = 1./(2.0*numpy.pi) * self.xsi_1
+        f_y = 1./(2.0*numpy.pi) * self.xsi_2
+        if mf == -1:
+            f_max = numpy.max(f_x)
+            T = (1+beta)/(2*f_max)
+        else:
+            f_cut = 1./(2.0*numpy.pi) * numpy.sqrt(numpy.sqrt(1./mf) - 1)
+            T = 1./(2*f_cut)
+            f_max = numpy.max(f_x)
+            roll_max = (1+beta)/(2*T)
+            if roll_max >= f_max:
+                logging.info("warning: rollover exceeds max frequency.")
+                suggest_beta = f_max * 2*T - 1.
+                logging.info("suggest beta: %f." % (suggest_beta))
 
-      outer_cut_x = self.grid_zeros
-      outer_cut_y = self.grid_zeros
-      inner = numpy.abs(f_x) <= (1-beta)/ (2.*T)
-      mid1 = numpy.abs(f_x) > (1-beta) / (2.*T)
-      mid2 = numpy.abs(f_x) < (1+beta) / (2.*T)
-      mid = (mid1.astype(int) + mid2.astype(int)) == 2
-      outer_cut_x[inner] = T
-      outer_cut_x[mid] = (T/2.) * (1 + numpy.cos((numpy.pi*T)/beta*(numpy.abs(f_x) - (1-beta)/(2*T))))[mid]
-      inner = numpy.abs(f_y) <= (1-beta)/ (2.*T)
-      mid1 = numpy.abs(f_y) > (1-beta) / (2.*T)
-      mid2 = numpy.abs(f_y) < (1+beta) / (2.*T)
-      mid = (mid1.astype(int) + mid2.astype(int)) == 2
-      outer_cut_y[inner] = T
-      outer_cut_y[mid] = (T/2.) * (1 + numpy.cos((numpy.pi*T)/beta*(numpy.abs(f_y) - (1-beta)/(2*T))))[mid]
-      outer_cut =  (1./T) * outer_cut_x * (1./T) * outer_cut_y
-      return outer_cut
+        outer_cut_x = self.grid_zeros
+        outer_cut_y = self.grid_zeros
+        inner = numpy.abs(f_x) <= (1-beta)/ (2.*T)
+        mid1 = numpy.abs(f_x) > (1-beta) / (2.*T)
+        mid2 = numpy.abs(f_x) < (1+beta) / (2.*T)
+        mid = (mid1.astype(int) + mid2.astype(int)) == 2
+        outer_cut_x[inner] = T
+        outer_cut_x[mid] = (T/2.) * (1 + numpy.cos((numpy.pi*T)/beta* \
+                                (numpy.abs(f_x) - (1-beta)/(2*T))))[mid]
+        inner = numpy.abs(f_y) <= (1-beta)/ (2.*T)
+        mid1 = numpy.abs(f_y) > (1-beta) / (2.*T)
+        mid2 = numpy.abs(f_y) < (1+beta) / (2.*T)
+        mid = (mid1.astype(int) + mid2.astype(int)) == 2
+        outer_cut_y[inner] = T
+        outer_cut_y[mid] = (T/2.) * (1 + numpy.cos((numpy.pi*T)/beta* \
+                            (numpy.abs(f_y) - (1-beta)/(2*T))))[mid]
+        outer_cut =  (1./T) * outer_cut_x * (1./T) * outer_cut_y
+        return outer_cut
 
     def interpolate(self, f_list, x, y):
         interp_list = []
@@ -331,9 +333,9 @@ class RegularGrid(object):
         return f_interp
 
     def divergence(self, v):
-      w, e, s, n = self.grid_neighbors()
-      dxv1 = (v[e,0] - v[w,0])/(2.0*self.dx)
-      dyv2 = (v[n,1] - v[s,1])/(2.0*self.dx)
+      w, e, s, n, d, u = self.grid_neighbors()
+      dxv1 = (v[e,0] - v[w,0])/(2.0*self.dx[0])
+      dyv2 = (v[n,1] - v[s,1])/(2.0*self.dx[1])
       div = dxv1 + dyv2
       return div
 
@@ -475,11 +477,121 @@ class RegularGrid(object):
                          f[pindex_z_xy]*(ax)*(ay)*(az)
         return numpy.reshape(F[:,:], N[0]*N[1]*N[2])
 
+    def grid_interpolate_gradient_2d(self, f, pts):
+        x = pts[:,0]
+        y = pts[:,1]
+        z = pts[:,2]
+
+        N = self.num_points
+        (indexx, indexy) = meshgrid2((range(N[0]), range(N[1])))
+        indexx = indexx.astype(int)
+        indexy = indexy.astype(int)
+
+        F = numpy.reshape(f.copy(), self.dims).astype(complex)
+        X = numpy.reshape(x - self.nodes[:,0], self.dims)
+        Y = numpy.reshape(y - self.nodes[:,1], self.dims)
+
+        stepsx = X / self.dx[0]
+        stepsy = Y / self.dx[1]
+
+        px = numpy.floor(stepsx)
+        py = numpy.floor(stepsy)
+
+        ax = stepsx - px
+        ay = stepsy - py
+
+        pxindex = (indexx + px).astype(int)
+        pyindex = (indexy + py).astype(int)
+        pxindex_x = (pxindex + 1).astype(int)
+        pyindex_y = (pyindex + 1).astype(int)
+
+        pxindex[(pxindex<0)] = 0
+        pyindex[(pyindex<0)] = 0
+        pxindex_x[(pxindex_x<0)] = 0
+        pyindex_y[(pyindex_y<0)] = 0
+
+        pxindex[(pxindex>N[0]-1)] = N[0]-1
+        pyindex[(pyindex>N[1]-1)] = N[1]-1
+        pxindex_x[(pxindex_x>N[0]-1)] = N[0]-1
+        pyindex_y[(pyindex_y>N[1]-1)] = N[1]-1
+
+        pindex = (pxindex + (N[0])*(pyindex)).astype(int)
+        pindex_x = (pxindex_x + (N[0])*(pyindex)).astype(int)
+        pindex_y = (pxindex + (N[0])*(pyindex_y)).astype(int)
+        pindex_xy = (pxindex_x + (N[0])*(pyindex_y)).astype(int)
+
+        F1 = f[pindex]*-1*(1-ay) + f[pindex_x]*1*(1-ay) + f[pindex_y]*-1*(ay) \
+                            + f[pindex_xy]*1*(ay)
+        F2 = f[pindex]*(1-ax)*-1 + f[pindex_x]*(ax)*-1 + f[pindex_y]*(1-ax)*1 \
+                            + f[pindex_xy]*(ax)*1
+        gf = numpy.zeros((self.num_nodes, 3)).astype(complex)
+        gf[:,0] = numpy.reshape(F1, self.num_nodes)
+        gf[:,1] = numpy.reshape(F2, self.num_nodes)
+        return gf
+
+    def spread(self, data, pindex):
+        idxi = numpy.reshape(pindex, (self.num_nodes))
+        idxj = numpy.zeros(self.num_nodes)
+        idx = numpy.vstack((idxi,idxj))
+        rdata = numpy.reshape(data, (self.num_nodes))
+        f_interp1 = scipy.sparse.csc_matrix((rdata, idx), (self.num_nodes,1))
+        return numpy.reshape(f_interp1.toarray(), (self.num_nodes))
+
+    def grid_interpolate_dual_2d(self, f, pts):
+        x = pts[:,0]
+        y = pts[:,1]
+        z = pts[:,2]
+
+        N = self.num_points
+        (indexx, indexy) = meshgrid2((range(N[0]), range(N[1])))
+        indexx = indexx.astype(int)
+        indexy = indexy.astype(int)
+
+        F = numpy.reshape(f.copy(), self.dims).astype(complex)
+        X = numpy.reshape(x - self.nodes[:,0], self.dims)
+        Y = numpy.reshape(y - self.nodes[:,1], self.dims)
+
+        stepsx = X / self.dx[0]
+        stepsy = Y / self.dx[1]
+
+        px = numpy.floor(stepsx)
+        py = numpy.floor(stepsy)
+
+        ax = stepsx - px
+        ay = stepsy - py
+
+        pxindex = (indexx + px).astype(int)
+        pyindex = (indexy + py).astype(int)
+        pxindex_x = (pxindex + 1).astype(int)
+        pyindex_y = (pyindex + 1).astype(int)
+
+        pxindex[(pxindex<0)] = 0
+        pyindex[(pyindex<0)] = 0
+        pxindex_x[(pxindex_x<0)] = 0
+        pyindex_y[(pyindex_y<0)] = 0
+
+        pxindex[(pxindex>N[0]-1)] = N[0]-1
+        pyindex[(pyindex>N[1]-1)] = N[1]-1
+        pxindex_x[(pxindex_x>N[0]-1)] = N[0]-1
+        pyindex_y[(pyindex_y>N[1]-1)] = N[1]-1
+
+        pindex = (pxindex + (N[0])*(pyindex)).astype(int)
+        pindex_x = (pxindex_x + (N[0])*(pyindex)).astype(int)
+        pindex_y = (pxindex + (N[0])*(pyindex_y)).astype(int)
+        pindex_xy = (pxindex_x + (N[0])*(pyindex_y)).astype(int)
+
+        f_interp = self.spread(F*(1-ax)*(1-ay), pindex)
+        f_interp += self.spread(F*(ax)*(1-ay), pindex_x)
+        f_interp += self.spread(F*(1-ax)*(ay), pindex_y)
+        f_interp += self.spread(F*(ax)*(ay), pindex_xy)
+        return f_interp
+
+
     def inner_prod(self, f, g):
-      f_c = .25 * (f[self.elements[:,0]] + f[self.elements[:,1]] + f[self.elements[:,2]] + f[self.elements[:,3]])
-      g_c = .25 * (g[self.elements[:,0]] + g[self.elements[:,1]] + g[self.elements[:,2]] + g[self.elements[:,3]])
-      integral = numpy.sum(f_c * g_c * self.element_volumes)
-      return integral
+        f_c = .25 * (f[self.elements[:,0]] + f[self.elements[:,1]] + f[self.elements[:,2]] + f[self.elements[:,3]])
+        g_c = .25 * (g[self.elements[:,0]] + g[self.elements[:,1]] + g[self.elements[:,2]] + g[self.elements[:,3]])
+        integral = numpy.sum(f_c * g_c * self.element_volumes)
+        return integral
 
     def integrate_dual(self, b):
         int_b = numpy.zeros_like(b)
