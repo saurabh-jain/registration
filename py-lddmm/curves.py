@@ -72,7 +72,7 @@ class Curve:
 
             
     # Computes isocontours using vtk               
-    def Isocontour(self, data, value=0.5, target=100.0, scales = [1., 1.], smooth = 30, fill_holes = 1.):
+    def Isocontour(self, data, value=0.5, target=100.0, scales = [1., 1.], smooth = 30, fill_holes = 1., singleComponent = True):
         #data = self.LocalSignedDistance(data0, value)
         img = vtkImageData()
         img.SetDimensions(data.shape[0], data.shape[1], 1)
@@ -91,13 +91,15 @@ class Curve:
         cf.Update()
         # return cf
         # #print cf
-        connectivity = vtkPolyDataConnectivityFilter()
-        connectivity.ScalarConnectivityOff()
-        connectivity.SetExtractionModeToLargestRegion()
-        connectivity.SetInput(cf.GetOutput())
-        connectivity.Update()
-        g = connectivity.GetOutput()
-
+        if singleComponent:
+            connectivity = vtkPolyDataConnectivityFilter()
+            connectivity.ScalarConnectivityOff()
+            connectivity.SetExtractionModeToLargestRegion()
+            connectivity.SetInput(cf.GetOutput())
+            connectivity.Update()
+            g = connectivity.GetOutput()
+        else:
+            g = cf.GetOutput()
             
         # if smooth > 0:
         #     smoother= vtkWindowedSincPolyDataFilter()
