@@ -121,7 +121,7 @@ class Surface:
         return res                
             
     # Computes isosurfaces using vtk               
-    def Isosurface(self, data, value=0.5, target=1000.0, scales = [1., 1., 1.], smooth = 30, fill_holes = 1.):
+    def Isosurface(self, data, value=0.5, target=1000.0, scales = [1., 1., 1.], smooth = -1, fill_holes = 1.):
         #data = self.LocalSignedDistance(data0, value)
         img = vtkImageData()
         img.SetDimensions(data.shape)
@@ -154,12 +154,12 @@ class Surface:
             smoother.SetInput(g)
             #     else:
             # smoother.SetInputConnection(contour.GetOutputPort())    
-            smoother.SetNumberOfIterations(smooth)
+            smoother.SetNumberOfIterations(30)
             #this has little effect on the error!
             #smoother.BoundarySmoothingOff()
             #smoother.FeatureEdgeSmoothingOff()
             #smoother.SetFeatureAngle(120.0)
-            #smoother.SetPassBand(.001)        #this increases the error a lot!
+            smoother.SetPassBand(smooth)        #this increases the error a lot!
             smoother.NonManifoldSmoothingOn()
             smoother.NormalizeCoordinatesOn()
             smoother.GenerateErrorScalarsOn() 
