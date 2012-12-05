@@ -47,7 +47,7 @@ class SplineInterp(object):
         linop = scipy.sparse.linalg.LinearOperator((N,N), self.solve_mult, \
                             dtype=float)
         sol = scipy.sparse.linalg.cg(linop, rhs, \
-                            callback=self.solve_callback, maxiter=1000)
+                            callback=self.solve_callback, maxiter=5000)
         return sol[0]
 
 class SmoothImageMeta(object):
@@ -55,7 +55,7 @@ class SmoothImageMeta(object):
     def __init__(self, output_dir):
         self.output_dir = output_dir
         self.dim = 2
-        self.sigma = .3
+        self.sigma = 1.
         self.sfactor = 1./numpy.power(self.sigma, 2)
         self.num_points = (20,20)
         self.domain_max = (20.,20.)
@@ -70,6 +70,7 @@ class SmoothImageMeta(object):
         self.dt = (self.time_max - self.time_min) / (self.num_times - 1)
         self.optimize_iteration = 0
         self.gradEps = 1e-20
+        self.g_eps = 1e-2
 
         logging.info("sigma: %f" % self.sigma)
         logging.info("num_points: %s" % str(self.rg.num_points))
@@ -87,19 +88,28 @@ class SmoothImageMeta(object):
         self.id_y = self.rg.nodes[:,1].copy()
         #self.alpha = numpy.zeros(self.num_points**2)
         self.m = numpy.zeros((rg.num_nodes, self.num_times))
-        self.KV = kfun.Kernel(name = 'gauss', sigma = 3)
-        self.KH= kfun.Kernel(name = 'gauss', sigma = 1.5)
-        #self.KV = kfun.Kernel(name = 'laplacian', sigma=3.)
-        #self.KV= kfun.Kernel(name = 'laplacian', sigma=3, order=3)
-        #self.KH= kfun.Kernel(name = 'laplacian', sigma=5, order=3)
+        #self.KV = kfun.Kernel(name = 'gauss', sigma = 4)
+        #self.KH= kfun.Kernel(name = 'gauss', sigma = 2)
+        self.KV = kfun.Kernel(name = 'laplacian', sigma=1.25, order=3)
+        self.KH = kfun.Kernel(name = 'laplacian', sigma=.75, order=3)
         self.alpha = numpy.ones(rg.num_nodes) * 0.
         self.alpha_state = numpy.zeros_like(self.alpha)
 
         # initialize some test images
         self.dual_target = numpy.zeros(rg.num_nodes)
         self.dual_template = numpy.zeros(rg.num_nodes)
-        self.dual_template[210] = 1.
-        self.dual_target[212] = 1.
+        val = 10
+        self.dual_template[210] = 1 * val
+        self.dual_target[211] = 1 * val
+        #self.dual_template[979] = 1
+        #self.dual_target[980] = 1
+        #self.dual_template[4272] = 1
+        #self.dual_target[4273] = 1
+
+        #h_list = numpy.array([189, 190, 191, 209, 211, 229, 230, 231])
+        #self.dual_template[h_list] = .5 * val
+        #self.dual_target[h_list+1] = .5 * val
+
         self.template = self.KH.applyK(rg.nodes, self.dual_template)
         self.target = self.KH.applyK(rg.nodes, self.dual_target)
         rdt = self.dual_template.reshape([self.dual_template.shape[0],1])
@@ -123,14 +133,14 @@ class SmoothImageMeta(object):
 #        self.target = tr1.ravel()
 
 #        size = self.num_points
-#        ims = [Image.open("eight_1a.png").rotate(-90).resize(size), \
-#                            Image.open("eight_2a.png").rotate(-90).resize(size)]
+#        ims = [Image.open("test_images/eight_1a.png").rotate(-90).resize(size), \
+#                            Image.open("test_images/eight_2a.png").rotate(-90).resize(size)]
 #        tp = numpy.zeros(size)
 #        tr = numpy.zeros(size)
 #        for j in range(size[0]):
 #            for k in range(size[0]):
-#                tp[j,k] = ims[0].getpixel((j,k)) / 100.
-#                tr[j,k] = ims[1].getpixel((j,k)) / 100.
+#                tp[j,k] = ims[0].getpixel((j,k)) / 25.5
+#                tr[j,k] = ims[1].getpixel((j,k)) / 25.5
 #        self.template = tp.ravel()
 #        self.target = tr.ravel()
 #
@@ -163,7 +173,7 @@ class SmoothImageMeta(object):
     def getVariable(self):
         return self
 
-    def objectiveFun(self):
+    def objectiveFun2(self):
         rg, N, T = self.get_sim_data()
         self.shoot()
         interp_loc = self.xt[:,:,T-1].copy()
@@ -172,6 +182,32 @@ class SmoothImageMeta(object):
         diff = self.m[:,T-1] - interp_target.real
         sqrtJ = numpy.sqrt(self.J[:,T-1])
         objFun = numpy.dot(diff*sqrtJ, rg.integrate_dual(sqrtJ*diff))
+        rg.create_vtk_sg()
+        rg.add_vtk_point_data(self.xt[:,:,T-1].real, "x")
+        rg.add_vtk_point_data(interp_target.real, "i_target")
+        rg.add_vtk_point_data(self.target, "target")
+        rg.add_vtk_point_data(self.template, "template")
+        rg.add_vtk_point_data(self.m[:,T-1].real, "m")
+        rg.add_vtk_point_data(diff, "diff")
+        rg.add_vtk_point_data(rg.integrate_dual(diff), "idiff")
+        rg.add_vtk_point_data(self.J[:,T-1].real, "J")
+        rg.vtk_write(0, "objFun_test", output_dir=self.output_dir)
+        if numpy.isnan(objFun):
+            import pdb
+            pdb.set_trace()
+            import sys
+            sys.exit()
+        return objFun
+
+    def objectiveFun(self):
+        rg, N, T = self.get_sim_data()
+        self.shoot()
+        interp_loc = self.xt[:,:,T-1].copy()
+        #interp_target = rg.grid_interpolate(self.target, interp_loc).real
+        interp_target = self.KH.applyK(interp_loc, self.dual_target, y=rg.nodes)
+        diff = self.m[:,T-1] - interp_target.real
+        sqrtJ = numpy.sqrt(self.J[:,T-1])
+        objFun = numpy.dot(diff*sqrtJ, sqrtJ*diff) * self.g_eps
         rg.create_vtk_sg()
         rg.add_vtk_point_data(self.xt[:,:,T-1].real, "x")
         rg.add_vtk_point_data(interp_target.real, "i_target")
@@ -241,19 +277,25 @@ class SmoothImageMeta(object):
         rdt = self.dual_target.reshape([self.dual_target.shape[0],1])
         d_interp = self.KH.applyDiffKT(interp_loc, \
                             [numpy.ones_like(rdt)],\
-                             [rdt])
+                             [rdt], y=rg.nodes)
 
         sJ = numpy.sqrt(self.J[:,T-1])
-        dm = 2*sJ*rg.integrate_dual(sJ * diff).real
+        #dm = 2*sJ*rg.integrate_dual(sJ * diff).real
         dx = numpy.zeros((rg.num_nodes, 3))
-
+        dm = 2*diff*self.J[:,T-1]
         for k in range(3):
-            dx[:,k] = 2.*sJ*rg.integrate_dual(sJ*diff).real \
+            #dx[:,k] = 2.*sJ*rg.integrate_dual(sJ*diff).real \
+            #                    *(-1)*d_interp[:,k].real
+            dx[:,k] = 2.*diff*self.J[:,T-1] \
                                 *(-1)*d_interp[:,k].real
-        dJ = rg.integrate_dual(sJ*diff).real * diff * (1./sJ)
+
+        #dJ = rg.integrate_dual(sJ*diff).real * diff * (1./sJ)
+        dJ = diff * diff
+        dx *= self.g_eps
+        dm *= self.g_eps
+        dJ *= self.g_eps
 
         # test the gradient
-        print "endpoint grad test"
         objOld = self.objectiveFun()
         eps = 1e-12
         x = self.xt[:,:,T-1]
@@ -274,11 +316,13 @@ class SmoothImageMeta(object):
         interp_target = self.KH.applyK(x1, self.dual_target, y=rg.nodes)
         diff = m1 - interp_target.real
         sqrtJ = numpy.sqrt(J1)
-        objFun = numpy.dot(diff*sqrtJ, rg.integrate_dual(sqrtJ*diff))
+        objFun = numpy.dot(diff*sqrtJ, sqrtJ*diff) * self.g_eps
+        #objFun = numpy.dot(diff*sqrtJ, rg.integrate_dual(sqrtJ*diff))
+
         ip = numpy.multiply(dx, xr).sum(axis=1).sum() \
                     + numpy.dot(dm, mr)  \
                     + numpy.dot(dJ, jr)
-        print (objFun - objOld)/eps, ip
+        print "Endpoint gradient test:  ", (objFun - objOld)/eps, ip
 
         rg.create_vtk_sg()
         rg.add_vtk_point_data(diff.real, "diff")
@@ -292,7 +336,6 @@ class SmoothImageMeta(object):
         rg.add_vtk_point_data(dx.real, "dx")
         rg.vtk_write(0, "grad_test", output_dir=self.output_dir)
 
-        pdb.set_trace()
 
         return [dx, dm, dJ]
 
@@ -323,24 +366,19 @@ class SmoothImageMeta(object):
                             self.KH.applyDiffKT(xt, [numpy.ones_like(ralpha)],\
                              [ralpha]))
 
-            #temp = self.KV.applyK(xt, a)
-            #dtemp = numpy.zeros(N**2)
-            #for d in range(3):
-            #    dtemp[:] += zt[:,d] * temp[:,d]
-            #m1 = self.sfactor * dtemp
-            #m2 = self.KH.applyK(xt, self.alpha)
-            #m[:,t+1] = m[:,t] + self.dt * (m1 + m2)
             temp = self.KV.precompute(xt, diff=False)
             temp2 = numpy.dot(zt, a.T)
-            m1 = self.sfactor * (temp*temp2).sum(axis=1)
+            m1 = self.sfactor * numpy.multiply(temp,temp2).sum(axis=1)
             m2 = self.KH.applyK(xt, self.alpha)
             m[:,t+1] = m[:,t] + self.dt * (m1 + m2)
 
             temp = self.KV.precompute(xt, diff=True)
             zx = 2*(numpy.dot(xt, a.T) - numpy.multiply(xt,a).sum(axis=1))
-            term1 = (temp*zx).sum(axis=1) * J[:,t]
+            temp2 = numpy.multiply(temp, zx)
+            #term1 = numpy.multiply(J[:,t].reshape([J[:,t].shape[0],1]),temp2)\
+            #                    .sum(axis=1)
+            term1 = numpy.multiply(J[:,t], temp2.sum(axis=1))
             J[:,t+1] = J[:,t] + self.dt * self.sfactor * term1
-
 
             rg.create_vtk_sg()
             ktest = self.KV.applyK(xt, numpy.ones_like(a))
@@ -379,6 +417,9 @@ class SmoothImageMeta(object):
         em[:,T-1] = dm.real
         eJ[:,T-1] = dJ.real
         alpha = self.alpha.copy()
+        xshape = [alpha.shape[0], 1]
+        ralpha = alpha.reshape(xshape)
+        oa = numpy.ones_like(ralpha)
 
         for t in range(T-1, -1, -1):
             xt = self.xt[:,:,t]
@@ -388,31 +429,57 @@ class SmoothImageMeta(object):
             a = numpy.multiply(zt, numpy.vstack((alpha, alpha, alpha)).T)
 
             if t > 0:
+                dKV = self.KV.precompute(xt, diff=True)
+
                 #  eta_x evolution
                 term1 = self.KV.applyDiffKT(xt, [ex[:,:,t]], [a])
                 term2 = self.KV.applyDiffKT(xt, [a], [ex[:,:,t]])
                 term3 = self.KV.applyDDiffK11(xt, zt, a, ez[:,:,t])
                 term4 = self.KV.applyDDiffK12(xt, a, zt, ez[:,:,t])
-                oa = numpy.ones_like(alpha)
-                term5 = self.KH.applyDDiffK11(xt, oa.reshape( \
-                                    [oa.shape[0], 1]), \
-                                    alpha.reshape([alpha.shape[0],1]), \
-                                    ez[:,:,t])
-                term6 = self.KH.applyDDiffK12(xt, \
-                                    alpha.reshape([alpha.shape[0],1]), \
-                                    oa.reshape([oa.shape[0],1]), ez[:,:,t])
-                zem = numpy.multiply(zt, em[:,t].reshape([xt.shape[0],1]))
-                term7 = self.KV.applyDiffKT(xt, [zem],[a])
-                term8 = self.KV.applyDiffKT(xt, [a], [zem])
-                rem = em[:,t].reshape([em[:,t].shape[0],1])
-                ra = alpha.reshape([alpha.shape[0],1])
-                term9 = self.KH.applyDiffKT(xt, [rem], [ra])
-                term10 = self.KH.applyDiffKT(xt, [ra], [rem])
+                term5 = self.KH.applyDDiffK11(xt, oa, ralpha, ez[:,:,t])
+                term6 = self.KH.applyDDiffK12(xt, ralpha, oa, ez[:,:,t])
+
+                zz = numpy.dot(zt, a.T)
+                g1 = numpy.multiply(dKV, zz)
+                g1 = numpy.multiply(g1, em[:,t].reshape(xshape))
+                term7 = 2*(numpy.multiply(xt, g1.sum(axis=1).reshape(xshape))-\
+                                    numpy.dot(g1, xt))
+                zz = numpy.dot(a, zt.T)
+                g1 = numpy.multiply(dKV, zz)
+                g1 = numpy.multiply(g1, em[:,t])
+                term8 = 2*(numpy.multiply(xt, g1.sum(axis=1).reshape(xshape))-\
+                                    numpy.dot(g1, xt))
+
+                rem = em[:,t].reshape(xshape)
+                term9 = self.KH.applyDiffKT(xt, [rem], [ralpha])
+                term10 = self.KH.applyDiffKT(xt, [ralpha], [rem])
+
+                ddKV = self.KV.precompute(xt, diff2=True)
+                xxp = (numpy.dot(xt, zt.T) - numpy.multiply(xt, zt)\
+                                    .sum(axis=1))
                 jej = numpy.multiply(Jt, eJ[:,t])
-                rjej = jej.reshape([jej.shape[0], 1])
-                ra = alpha.reshape([alpha.shape[0], 1])
-                term11 = -1.0*self.KV.applyDDiffK12(xt, rjej, ra, zt)
-                term12 = -1.0*self.KV.applyDDiffK11(xt, ra, rjej, zt)
+                rjej = jej.reshape(xshape)
+                na = numpy.dot(rjej, ralpha.T)
+                xpja = numpy.multiply(xxp, na)
+                u = numpy.multiply(ddKV, xpja)
+                t11 = 4*(numpy.multiply(u.sum(axis=1).reshape(xshape), xt) - \
+                                     numpy.dot(u, xt))
+                u = numpy.multiply(dKV, na)
+                term11 = t11 + 2*numpy.dot(u, zt)
+
+                xxp = (-numpy.dot(zt, xt.T) + numpy.multiply(xt,zt)\
+                                    .sum(axis=1).reshape(xshape))
+                jej = numpy.multiply(Jt, eJ[:,t])
+                rjej = jej.reshape(xshape)
+                na = numpy.dot(ralpha, rjej.T)
+                xpja = numpy.multiply(xxp, na)
+                u = numpy.multiply(ddKV, xpja)
+                t12 = -4*(numpy.multiply(u.sum(axis=1).reshape(xshape), xt) - \
+                                     numpy.dot(u, xt))
+                u = numpy.multiply(dKV, na)
+                term12 = t12 + -2*numpy.multiply(u.sum(axis=1).\
+                                    reshape(xshape), zt)
+
                 ex[:,:,t-1] = ex[:,:,t] - self.dt * (-self.sfactor*(term1+ \
                                     term2) + self.sfactor*(term3+term4) + \
                                      term5 + term6 \
@@ -435,40 +502,33 @@ class SmoothImageMeta(object):
                 rg.vtk_write(t, "ex_test", output_dir=self.output_dir)
 
                 # eta_z evolution
-                term1 = numpy.multiply(self.KV.applyK(xt, ex[:,:,t]), \
-                                    alpha.reshape([xt.shape[0],1]))
-                g = self.KV.precompute(xt, diff=True)
-                xe = 2. * (-numpy.dot(xt, ez[:,:,t].T) + numpy.multiply(xt, \
-                                    ez[:,:,t]).sum(axis=1) )
-                g1 = numpy.multiply(g, xe)
-                g1 = numpy.multiply(g1, numpy.dot(
-                                    alpha.reshape([alpha.shape[0],1]), \
-                                    oa.reshape([oa.shape[0],1]).T))
-                term2 = numpy.dot(g1, zt)
+                term1 = numpy.multiply(self.KV.applyK(xt, ex[:,:,t]), ralpha)
 
-                #xe = 2. * (numpy.multiply(xt, ez[:,:,t]).sum(axis=1)[:, \
-                #                    numpy.newaxis]-numpy.dot(ez[:,:,t], xt.T) )
-                xe = 2. * (numpy.multiply(xt, ez[:,:,t]).sum(axis=1) \
-                                    -numpy.dot(ez[:,:,t], xt.T) )
-                g1 = numpy.multiply(g, xe)
-                ezz = numpy.dot(g1, a)
-                term3 = ezz.copy()
-                ae = numpy.dot(em[:,t].reshape([em[:,t].shape[0],1]), \
-                                     alpha.reshape([alpha.shape[0],1]).T)
-                gk = self.KV.precompute(xt)
-                g1 = numpy.multiply(gk, ae)
-                term4 = numpy.dot(g1, zt)
-                zem = numpy.multiply(zt, em[:,t].reshape([em[:,t].shape[0],1]))
+                ezx = 2*(-numpy.dot(ez[:,:,t],xt.T) + \
+                                    numpy.multiply(ez[:,:,t],xt)\
+                                    .sum(axis=1).reshape(xshape))
+                gezx = numpy.multiply(dKV, ezx)
+                term2 = numpy.dot(gezx, a)
+                zx = 2*(-numpy.dot(xt, ez[:,:,t].T) + \
+                                    numpy.multiply(ez[:,:,t],xt)\
+                                    .sum(axis=1))
+                gezx = numpy.multiply(dKV, zx)
+                term3 = numpy.multiply(numpy.dot(gezx, zt), ralpha)
+
+                ka = self.KV.applyK(xt,a)
+                term4 = numpy.multiply(em[:,t].reshape(xshape), ka)
+
+                zem = numpy.multiply(zt, em[:,t].reshape(xshape))
                 kzem = self.KV.applyK(xt, zem)
-                term5 = numpy.multiply(alpha.reshape([alpha.shape[0],1]), kzem)
-                Je = numpy.multiply(Jt, eJ[:,t]).reshape([Jt.shape[0],1])
-                ra = self.alpha.reshape([self.alpha.shape[0],1])
-                aJe = numpy.dot(ra, Je.T)
-                g1 = numpy.multiply(g, aJe)
+                term5 = numpy.multiply(ralpha, kzem)
+
+                Je = numpy.multiply(Jt, eJ[:,t]).reshape(xshape)
+                aJe = numpy.dot(ralpha, Je.T)
+                g1 = numpy.multiply(dKV, aJe)
                 term6 = 2*(-numpy.multiply(xt, g1.sum(axis=1).reshape( \
-                                    [xt.shape[0],1])) + numpy.dot(g1, xt))
+                                    xshape)) + numpy.dot(g1, xt))
                 ez[:,:,t-1] = ez[:,:,t] - self.dt * self.sfactor * (-term1 + \
-                                    term2 + term3 + (-term4 - term5) - term6)
+                                    term2 + term3 -term4 - term5 - term6)
 
                 rg.create_vtk_sg()
                 rg.add_vtk_point_data(term1, "term1")
@@ -485,32 +545,30 @@ class SmoothImageMeta(object):
                 #rg.add_vtk_point_data(term12, "term12")
                 rg.vtk_write(t, "ez_test", output_dir=self.output_dir)
 
+                gk = self.KV.precompute(xt)
                 # eta_alpha evolution
-                #ze = numpy.dot(zt, ex[:,:,t].T)
-                #g1 = numpy.multiply(gk, ze)
-                #term1 = g1.sum(axis=1)
-                ke = self.KV.applyK(xt, ex[:,:,t])
-                term1 = (ke * zt).sum(axis=1)
+                kex = self.KV.applyK(xt, ex[:,:,t])
+                term1 = numpy.multiply(zt, kex).sum(axis=1)
                 xe = 2 * (-numpy.dot(xt, ez[:,:,t].T) + numpy.multiply(xt, \
-                                    ez[:,:,t]).sum(axis=1) )
-                g1 = numpy.multiply(g, xe)
+                                    ez[:,:,t]).sum(axis=1))
+                g1 = numpy.multiply(dKV, xe)
                 zz = numpy.dot(zt, zt.T)
                 term2 = numpy.multiply(zz, g1).sum(axis=1)
-                gh = self.KH.precompute(xt, diff=True)
-                xe = 2* (-numpy.dot(xt, ez[:,:,t].T) + numpy.multiply(xt, \
+                dKH = self.KH.precompute(xt, diff=True)
+                xe = 2 * (-numpy.dot(xt, ez[:,:,t].T) + numpy.multiply(xt, \
                                     ez[:,:,t]).sum(axis=1) )
-                g1 = numpy.multiply(gh, xe)
+                g1 = numpy.multiply(dKH, xe)
                 term3 = g1.sum(axis=1)
+
                 zz = numpy.dot(zt, zt.T)
                 g1 = numpy.multiply(gk, zz)
-                g1 = numpy.multiply(g1, em[:,t])
-                term4 = g1.sum(axis=1)
-                #term5 = numpy.multiply(gh, em[:,t]).sum(axis=1)
+                term4 = numpy.dot(g1, em[:,t])
                 term5 = self.KH.applyK(xt, em[:,t])
+
                 Je = numpy.multiply(Jt, eJ[:,t])
-                zx = 2*(numpy.multiply(xt,zt).sum(axis=1) - numpy.dot( \
-                                    xt, zt.T) )
-                g1 = numpy.multiply(g, zx)
+                zx = 2*(-numpy.multiply(zt,xt).sum(axis=1).reshape(xshape) \
+                                     + numpy.dot(zt, xt.T) )
+                g1 = numpy.multiply(dKV, zx)
                 g1 = numpy.multiply(g1, Je)
                 term6 = g1.sum(axis=1)
                 ealpha[:,t-1] = ealpha[:,t] - self.dt * (self.sfactor * \
@@ -519,8 +577,6 @@ class SmoothImageMeta(object):
                                     self.sfactor * term6 )
 
                 rg.create_vtk_sg()
-                rg.add_vtk_point_data(ke, "ke")
-                rg.add_vtk_point_data(zt, "zt")
                 rg.add_vtk_point_data(term1, "term1")
                 rg.add_vtk_point_data(term2, "term2")
                 rg.add_vtk_point_data(term3, "term3")
@@ -536,11 +592,10 @@ class SmoothImageMeta(object):
                 rg.vtk_write(t, "ea_test", output_dir=self.output_dir)
 
                 # eta_J evolution
-                zx = 2*(numpy.multiply(zt,xt).sum(axis=1) - numpy.dot( \
-                                    zt, xt.T) )
-                g1 = numpy.multiply(g, zx)
-                aje = numpy.dot(eJ[:,t].reshape([eJ[:,t].shape[0],1]), \
-                                     alpha.reshape([alpha.shape[0],1]).T)
+                zx = 2*(-numpy.multiply(zt,xt).sum(axis=1) \
+                                     + numpy.dot(xt, zt.T) )
+                g1 = numpy.multiply(dKV, zx)
+                aje = numpy.dot(eJ[:,t].reshape(xshape), ralpha.T)
                 term1 = numpy.multiply(g1, aje).sum(axis=1)
                 eJ[:,t-1] = eJ[:,t] - self.dt * self.sfactor * -term1
 
@@ -573,7 +628,7 @@ class SmoothImageMeta(object):
 
     def computeMatching(self):
         conjugateGradient.cg(self, True, maxIter=1000, TestGradient=True, \
-                            epsInit=1e-5)
+                            epsInit=1e-2)
         return self
 
     def writeData(self, name):
