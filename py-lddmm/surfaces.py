@@ -294,6 +294,188 @@ class Surface:
         if (z > 0):
             self.faces = f[:, [0,2,1]]
 
+
+
+    def laplacianMatrix(self):
+        F = self.faces
+        V = self.vertices ;
+        nf = F.shape[0]
+        nv = V.shape[0]
+        # compute areas of faces and vertices
+        AF = np.zeros([nf,1])
+        AV = np.zeros([nv, 1])
+        for k in range(nf):
+            # determining if face is obtuse
+            x12 = V[F[k,1], :] - V[F[k,0], :]
+            x13 = V[F[k,2], :] - V[F[k,0], :]
+            n12 = np.sqrt((x12**2).sum())
+            n13 = np.sqrt((x13**2).sum())
+            c1 = (x12*x13).sum()/(n12*n13)
+            x23 = V[F[k,2], :] - V[F[k,1], :]
+            n13 = np.sqrt((x23**2).sum())
+            n23 = norm(x23) ;
+            c2 = -(x12*x23).sum()/(n12*n23)
+            c3 = (x13*x23).sum()/(n13*n23)
+            AF[k] = np.sqrt((np.cross(x12, x13)**2).sum())/2
+            if (c1 < 0):
+                #face obtuse at vertex 1
+                AV[F[k,0]] += AF[k]/2
+                AV[F[k,1]] += AF[k]/4
+                AV[F[k,2]] += AF[k]/4
+            elif (c2 < 0):
+                #face obuse at vertex 2
+                AV[F[k,0]] += AF[k]/4
+                AV[F[k,1]] += AF[k]/2
+                AV[F[k,2]] += AF[k]/4
+            elif (c3 < 0):
+                #face obtuse at vertex 3
+                AV[F[k,0]] += AF[k]/4
+                AV[F[k,1]] += AF[k]/4
+                AV[F[k,2]] += AF[k]/2
+            else:
+                #non obtuse face
+                cot1 = c1 / sqrt(1-c1^2) 
+                cot2 = c2 / sqrt(1-c2^2) 
+                cot3 = c3 / sqrt(1-c3^2) 
+                AV[F[k,0]] += ((x12**2).sum() * cot3 + (x13**2).sum() * cot2)/8 
+                AV[F[k,1]] += ((x12**2).sum() * cot3 + (x23**2).sum() * cot1)/8 
+                AV[F[k,2]] += ((x13**2).sum() * cot2 + (x23**2).sum() * cot1)/8 
+
+        for k in range(nv):
+            if (np.fabs(AV[k]) <1e-10):
+                print 'Warning: vertex ', k, 'has no face; use removeIsolated'
+
+
+        # compute edges and detect boundary
+        #edm = sp.lil_matrix((nv,nv))
+        edm = np.zeros([nv,nv])
+        E = np.zeros([3*nf, 2])
+        j = 0
+        for k in range(nf):
+            if (edm[F[k,0], F[k,1]]== 0):
+                j = j+1
+                edm[F[k,0], F[k,1]] = j
+                edm[F[k,1], F[k,0]] = j
+                E[j, :] = [F[k,0], F[k,1]]
+            if (edm[F[k,1], F[k,2]]== 0):
+                j = j+1
+                edm[F[k,1], F[k,2]] = j
+                edm[F[k,2], F[k,1]] = j
+                E[j, :] = [F[k,1], F[k,2]]
+            if (edm[F[k,0], F[k,2]]== 0):
+                j = j+1
+                edm[F[k,2], F[k,0]] = j
+                edm[F[k,0], F[k,2]] = j
+                E[j, :] = [F[k,2], F[k,0]]
+        E = E[1:j, :]
+        
+        edgeFace = np.zeros([j, nf])
+        ne = j
+        for k in range(nf):
+            edgeFace[edm[F[k,0], F[k,1]], k] = 1 
+            edgeFace[edm[F[k,1], F[k,2]], k] = 1 
+            edgeFace[edm[F[k,3], F[k,0]], k] = 1 
+    
+        bEdge = np.zeros([ne, 1])
+        bVert = np.zeros([nv, 1])
+        edgeAngles = np.zeros([ne, 2])
+        for k in range(ne):
+            I = np.flatnonzero(edgeFace[k, :])
+            for u in len(I):
+                f = I[u]
+                i1 = np.flatnonzero(F[f, :] == E[k,0])
+                i2 = np.flatnonzero(F[f, :] == E[k,1])
+                s = i1[0]+i2[0]
+                if s == 1:
+                    i3 = 2
+                elif s==2:
+                    i3 = 1
+                elif s==3:
+                    i3 = 0
+                x1 = V[F[f,i1], :] - V[F[f,i3], :]
+                x2 = V[F[f,i2], :] - V[F[f,i3], :]
+                a = (np.cross(x1, x2) * np.cross(V[F[f,1], :] - V[F[f,0], :], V[F[f, 2], :] - V[F[f, 0], :])).sum()
+                b = (x1*x2).sum()
+                if (a  > 0):
+                    edgeAngles[k, u] = b/np.sqrt(a)
+                else:
+                    edgeAngles[k, u] = b/np.sqrt(-a)
+            if (len(I) == 1):
+                # boundary edge
+                bEdge[k] = 1
+                bVert[E[k,0]] = 1
+                bVert[E[k,1]] = 1
+                edgeAngles[k,1] = 0 
+        
+
+        # Compute Laplacian matrix
+        L = np.zeros([nv, nv])
+
+        for k in range(ne):
+            L[E[k,0], E[k,1]] = (edgeAngles[k,0] + edgeAngles[k,1]) /2
+            L[E[k,1], E[k,0]] = L[E[k,0], E[k,1]]
+
+        for k in range(nv):
+            L[k,k] = - L[k, :].sum()
+
+        A = np.zeros([nv, nv])
+        for k in range(nv):
+            A[k, k] = AV[k]
+
+        return L,A
+
+
+    def laplacianSegmentation(self, k):
+        (L, AA) =  self.laplacianMatrix()
+        (D, y) = sp.linalg.eig(L, AA, eigvals= (1, k))
+        #V = real(V) ;
+        N = y.shape[0]
+        d = y.shape[1]
+        I = np.argsort(y.sum(axis=1))
+        I0 = floor(N*scipy.linspace(0, 1, num=k)) ;
+        C = y[I0[0:k], :].copy()
+
+        eps = 1e-20
+        Cold = C.copy()
+        u = ((C.reshape([k,1,d]) - y.reshape([1,N,d]))**2).sum(axis=2)
+        T = u.min(axis=0).sum()/(10.0*N)
+        j=0
+        while j< 5000:
+            u0 = u - u.min(axis=0).reshape([1, N])
+            w = exp(-u0/T) ;
+            w = w / (eps + w.sum(axis=0).reshape([1,N]))
+            cost = (u*w).sum() + T*(w*log(w+eps)).sum()
+            C = np.dot(w, y) / (eps + w.sum(axis=1).reshape([k,1]))
+
+            u = ((C.reshape([k,1,d]) - y.reshape([1,N,d]))**2).sum(axis=2)
+            cost = (u*w).sum() + T*(w*log(w+eps)).sum()
+            err = np.sqrt(((C-Cold)**2).sum(axis=1)).sum()
+            print j, 'cost ', cost, err, T
+            if ( j>100 & err < 1e-4 ):
+                break
+            j = j+1
+            Cold = C.copy()
+
+        d = ((C.reshape([k,1,d]) - y.reshape([1,N,d]))**2).sum(axis=2)
+        md = d.min(axis=0)
+        for j in range(N):
+            I = np.flatnonzero(d[:,j] < md[j] + 1e-10) 
+            idx[j] = I[0]
+        I = -ones([k,1])
+        kk=0
+        for j in range(k):
+            if True in (idx==j):
+                I[j] = kk
+                kk += 1
+        idx = I(idx)
+        if idx.max() < (k-1):
+            print 'Warning: kmeans convergence with', idx.max(), 'clusters instead of', k
+        ml = w.sum(axis=1)/N
+
+        return idx, ml
+
+
+
     # Computes surface volume
     def surfVolume(self):
         f = self.faces
