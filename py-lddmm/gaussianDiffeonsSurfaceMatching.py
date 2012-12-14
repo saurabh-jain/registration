@@ -105,7 +105,7 @@ class SurfaceMatching(surfaceMatching.SurfaceMatching):
                 self.S0 = np.zeros([self.x0.shape[0], self.x0.shape[1], self.x0.shape[1]])
             else:
                 (self.c0, self.S0) = gd.generateDiffeons(self.fv0, DiffeonRatio)
-                self.S0 *= self.param.sigmaKernel**2;
+                #self.S0 *= self.param.sigmaKernel**2;
         else:
             (self.c0, self.S0) = Diffeons
         if zeroVar:

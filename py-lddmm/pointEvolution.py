@@ -207,6 +207,10 @@ def gaussianDiffeonsCovector(x0, c0, S0,  at, px1, pc1, pS1, sigma, regweight, a
         dst = (diffc * betac).sum(axis=2)
         fc = np.exp(-dst/2)
 
+        Dv = -((fc.reshape([M,M,1])*betac).reshape([M, M, 1, dim])*a.reshape([1, M, dim, 1])).sum(axis=1)
+        IDv = np.eye(dim).reshape([1,dim,dim]) + timeStep * Dv ;
+        SpS = (S.reshape([M,dim,dim,1]) * (IDv.reshape([M,dim,dim, 1]) * pS.reshape([M, dim, 1 ,dim])).sum(axis=1).reshape([M,1,dim,dim])).sum(axis=2)
+
         aa = np.dot(a, a.T)
         pxa = np.dot(px, a.T)
         pca = np.dot(pc, a.T)
@@ -217,7 +221,8 @@ def gaussianDiffeonsCovector(x0, c0, S0,  at, px1, pc1, pS1, sigma, regweight, a
         dst = (betacc * diffc).sum(axis=2)
         gcc = np.sqrt((detR.reshape([M,1])*detR.reshape([1,M]))/((sig2**dim)*detR2))*np.exp(-dst/2)
         psa = (pS.reshape([M,1,dim, dim]) * a.reshape([1, M, 1, dim])).sum(axis=3)
-        spsa = (S.reshape([M, 1, dim, dim]) * psa.reshape([M, M, 1, dim])).sum(axis=3)
+        #spsa = (S.reshape([M, 1, dim, dim]) * psa.reshape([M, M, 1, dim])).sum(axis=3)
+        spsa = (SpS.reshape([M,1,dim,dim])*a.reshape([1, M, 1, dim])).sum(axis=3)
         #print np.fabs(betacc + betacc.transpose([1,0,2])).sum()
 
         u = (pxa * fx).reshape([N, M, 1]) * betax
@@ -233,10 +238,12 @@ def gaussianDiffeonsCovector(x0, c0, S0,  at, px1, pc1, pS1, sigma, regweight, a
 
         zpS = - 0.5 * (np.multiply(fx,pxa).reshape([N,M,1,1]) * (betax.reshape([N,M,dim,1]) * betax.reshape([N,M,1,dim]))).sum(axis=0)
         zpS -= 0.5 * (np.multiply(fc,pca).reshape([M,M,1,1]) * betaSym).sum(axis=0)
-        abeta = ((fc.reshape([M,M,1])*betac).reshape([M, M, 1, dim])*a.reshape([1, M, dim, 1])).sum(axis=1)
-        #abeta = (fc.reshape([M,M,1,1]) * (a.reshape([1, M, dim, 1]) * betac.reshape([M,M,1,dim]))).sum(axis=1)
-        abeta = (pS.reshape([M, dim, dim, 1])*abeta.reshape([M, 1, dim, dim])).sum(axis=2)
-        zpS += abeta + np.transpose(abeta, (0, 2, 1))
+        pSDv = (pS.reshape([M,dim, dim, 1]) * Dv.reshape([M, 1, dim, dim])).sum(axis=2)
+        #abeta = ((fc.reshape([M,M,1])*betac).reshape([M, M, 1, dim])*a.reshape([1, M, dim, 1])).sum(axis=1)
+        ##abeta = (fc.reshape([M,M,1,1]) * (a.reshape([1, M, dim, 1]) * betac.reshape([M,M,1,dim]))).sum(axis=1)
+        #abeta = (pS.reshape([M, dim, dim, 1])*abeta.reshape([M, 1, dim, dim])).sum(axis=2)
+        #zpS += abeta + np.transpose(abeta, (0, 2, 1))
+        zpS += -pSDv - pSDv.transpose((0,2,1)) - timeStep * (Dv.reshape([M,dim, dim, 1]) * pSDv.reshape([M, dim, 1, dim])).sum(axis=1)
         u = np.multiply(fc, (spsa * betac).sum(axis=2))
         zpS += (u.reshape([M,M,1,1])*betaSym).sum(axis=0)
         u = (fc.reshape([M,M,1,1]) * spsa.reshape([M, M, dim,1]) * betac.reshape([M,M,1,dim])).sum(axis=0)
@@ -273,7 +280,7 @@ def gaussianDiffeonsGradient(x0, c0, S0, at, px1, pc1, pS1, sigma, regweight, ge
         px = np.squeeze(pxt[t, :, :])
         pc = np.squeeze(pct[t, :, :])
         pS = np.squeeze(pSt[t, :, :])
-        [grx, grc, grS, gcc] = gd.gaussianDiffeonsGradientMatrices(x, c, S, px, pc, pS, sigma)
+        [grx, grc, grS, gcc] = gd.gaussianDiffeonsGradientMatrices(x, c, S, a, px, pc, pS, sigma, 1.0/at.shape[0])
         
         da = 2*np.dot(gcc,a) - grx - grc - grS
         if not (affine == None):

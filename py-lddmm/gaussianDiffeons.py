@@ -138,7 +138,7 @@ def computeProducts(c, S, sig):
     return gcc
 
 
-def gaussianDiffeonsGradientMatrices(x, c, S, px, pc, pS, sig):
+def gaussianDiffeonsGradientMatrices(x, c, S, a, px, pc, pS, sig, timeStep):
     N = x.shape[0]
     M = c.shape[0]
     dim = x.shape[1]
@@ -163,9 +163,12 @@ def gaussianDiffeonsGradientMatrices(x, c, S, px, pc, pS, sig):
     dst = (betacc * diffc).sum(axis=2)
     gcc = np.sqrt((detR.reshape([M,1])*detR.reshape([1,M]))/((sig2**dim)*detR2))*np.exp(-dst/2)
 
+    Dv = -((fc.reshape([M,M,1])*betac).reshape([M, M, 1, dim])*a.reshape([1, M, dim, 1])).sum(axis=1)
+    IDv = np.eye(dim).reshape([1,dim,dim]) + timeStep * Dv ;
+    pSS = (pS.reshape([M,dim,dim,1]) * (IDv.reshape([M,dim,dim, 1]) * S.reshape([M, 1, dim ,dim])).sum(axis=2).reshape([M,1,dim,dim])).sum(axis=2)
     
-    fS = (S.reshape([M, 1, dim, dim])*betac.reshape([M,M,1,dim])).sum(axis=3)
-    fS = (pS.reshape([M, 1, dim,dim])* fS.reshape([M,M,1,dim])).sum(axis=3)
+    fS = (pSS.reshape([M, 1, dim, dim])*betac.reshape([M,M,1,dim])).sum(axis=3)
+    #fS = (pS.reshape([M, 1, dim,dim])* fS.reshape([M,M,1,dim])).sum(axis=3)
     grx = np.dot(fx.T, px)
     grc = np.dot(fc.T, pc)
     grS = -2 * (fc.reshape([M,M,1]) * fS).sum(axis=0)

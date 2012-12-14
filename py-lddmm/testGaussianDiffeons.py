@@ -24,9 +24,9 @@ def compute():
     ## Object kernel
     K1 = Kernel(name='gauss', sigma = 100.0)
 
-    sm = SurfaceMatchingParam(timeStep=0.1, sigmaKernel=100.0, sigmaDist=20, sigmaError=10., errorType='current')
+    sm = SurfaceMatchingParam(timeStep=0.1, sigmaKernel=5.0, sigmaDist=20, sigmaError=10., errorType='current')
     f = SurfaceMatching(Template=fv1, Target=fv2, outputDir='/Users/younes/Development/Results',param=sm, testGradient=True, DiffeonRatio=0.025,
-                        maxIter=1000, affine=None, rotWeight=1., transWeight = 1., scaleWeight=10., affineWeight=100., zeroVar=False)
+                        maxIter=1000, affine=None, rotWeight=1., transWeight = 1., scaleWeight=10., affineWeight=100., zeroVar=True)
     # f = SurfaceMatching(Template=fv1, Target=fv2, outputDir='/Users/younes/Development/Results',param=sm, testGradient=True, Diffeons=(fv1.vertices.copy(),np.zeros([fv1.vertices.shape[0],3,3])),
     #                      maxIter=1000, affine='none', rotWeight=1., transWeight = 1., scaleWeight=10., affineWeight=100.)
 
