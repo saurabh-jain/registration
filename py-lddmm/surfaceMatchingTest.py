@@ -22,11 +22,11 @@ def compute():
     fv2.Isosurface(I1, value = 0, target=750, scales=[1, 1, 1])
 
     ## Object kernel
-    K1 = Kernel(name='gauss', sigma = 100.0)
+    K1 = Kernel(name='gauss', sigma = 10.0)
 
     sm = SurfaceMatchingParam(timeStep=0.1, KparDiff=K1, sigmaDist=20, sigmaError=10., errorType='current')
-    f = SurfaceTemplate(Template=fv1, Target=fv2, outputDir='Results/surfaceMatching',param=sm, testGradient=True,
-                         maxIter=1000, affine='none', rotWeight=1., transWeight = 1., scaleWeight=10., affineWeight=100.)
+    f = SurfaceMatching(Template=fv1, Target=fv2, outputDir='/Users/younes/Development/Results',param=sm, testGradient=True,
+                         maxIter=1000, affine= None, rotWeight=1., transWeight = 1., scaleWeight=10., affineWeight=100.)
 
     f.optimizeMatching()
 

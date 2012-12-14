@@ -213,6 +213,7 @@ class SurfaceMatching:
             self.atTry = atTry
             self.objTry = objTry
             self.AfftTry = AfftTry
+        print 'objTry=',objTry, dir.diff.sum()
 
         return objTry
 
@@ -235,6 +236,7 @@ class SurfaceMatching:
         foo = evol.landmarkHamiltonianGradient(self.fv0.vertices, self.at, px1, self.param.KparDiff, self.regweight, affine=A)
         grd = Direction()
         grd.diff = foo[0]/(coeff*self.Tsize)
+        print grd.diff.sum()
         grd.aff = np.zeros(self.Afft.shape)
         if self.affineDim > 0:
             dA = foo[1]
@@ -294,6 +296,7 @@ class SurfaceMatching:
         self.obj = self.objTry
         self.at = np.copy(self.atTry)
         self.Afft = np.copy(self.AfftTry)
+        #print self.at
 
     def endOfIteration(self):
         (obj1, self.xt, Jt) = self.objectiveFunDef(self.at, self.Afft, withTrajectory=True, withJacobian=True)

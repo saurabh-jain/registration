@@ -1,5 +1,6 @@
 import numpy as np
 import scipy as sp
+import scipy.linalg as spLA
 import os
 import glob
 from vtk import *
@@ -312,8 +313,8 @@ class Surface:
             n13 = np.sqrt((x13**2).sum())
             c1 = (x12*x13).sum()/(n12*n13)
             x23 = V[F[k,2], :] - V[F[k,1], :]
-            n13 = np.sqrt((x23**2).sum())
-            n23 = norm(x23) ;
+            n23 = np.sqrt((x23**2).sum())
+            #n23 = norm(x23) ;
             c2 = -(x12*x23).sum()/(n12*n23)
             c3 = (x13*x23).sum()/(n13*n23)
             AF[k] = np.sqrt((np.cross(x12, x13)**2).sum())/2
@@ -334,9 +335,9 @@ class Surface:
                 AV[F[k,2]] += AF[k]/2
             else:
                 #non obtuse face
-                cot1 = c1 / sqrt(1-c1^2) 
-                cot2 = c2 / sqrt(1-c2^2) 
-                cot3 = c3 / sqrt(1-c3^2) 
+                cot1 = c1 / np.sqrt(1-c1**2) 
+                cot2 = c2 / np.sqrt(1-c2**2) 
+                cot3 = c3 / np.sqrt(1-c3**2) 
                 AV[F[k,0]] += ((x12**2).sum() * cot3 + (x13**2).sum() * cot2)/8 
                 AV[F[k,1]] += ((x12**2).sum() * cot3 + (x23**2).sum() * cot1)/8 
                 AV[F[k,2]] += ((x13**2).sum() * cot2 + (x23**2).sum() * cot1)/8 
@@ -348,44 +349,52 @@ class Surface:
 
         # compute edges and detect boundary
         #edm = sp.lil_matrix((nv,nv))
-        edm = np.zeros([nv,nv])
+        edm = -np.ones([nv,nv])
         E = np.zeros([3*nf, 2])
         j = 0
         for k in range(nf):
-            if (edm[F[k,0], F[k,1]]== 0):
-                j = j+1
+            if (edm[F[k,0], F[k,1]]== -1):
                 edm[F[k,0], F[k,1]] = j
                 edm[F[k,1], F[k,0]] = j
                 E[j, :] = [F[k,0], F[k,1]]
-            if (edm[F[k,1], F[k,2]]== 0):
                 j = j+1
+            if (edm[F[k,1], F[k,2]]== -1):
                 edm[F[k,1], F[k,2]] = j
                 edm[F[k,2], F[k,1]] = j
                 E[j, :] = [F[k,1], F[k,2]]
-            if (edm[F[k,0], F[k,2]]== 0):
                 j = j+1
+            if (edm[F[k,0], F[k,2]]== -1):
                 edm[F[k,2], F[k,0]] = j
                 edm[F[k,0], F[k,2]] = j
                 E[j, :] = [F[k,2], F[k,0]]
-        E = E[1:j, :]
+                j = j+1
+        E = E[0:j, :]
         
         edgeFace = np.zeros([j, nf])
         ne = j
+        #print E
         for k in range(nf):
             edgeFace[edm[F[k,0], F[k,1]], k] = 1 
             edgeFace[edm[F[k,1], F[k,2]], k] = 1 
-            edgeFace[edm[F[k,3], F[k,0]], k] = 1 
+            edgeFace[edm[F[k,2], F[k,0]], k] = 1 
     
         bEdge = np.zeros([ne, 1])
         bVert = np.zeros([nv, 1])
         edgeAngles = np.zeros([ne, 2])
         for k in range(ne):
             I = np.flatnonzero(edgeFace[k, :])
-            for u in len(I):
+            #print 'I=', I, F[I, :], E.shape
+            #print 'E[k, :]=', k, E[k, :]
+            #print k, edgeFace[k, :]
+            for u in range(len(I)):
                 f = I[u]
-                i1 = np.flatnonzero(F[f, :] == E[k,0])
-                i2 = np.flatnonzero(F[f, :] == E[k,1])
-                s = i1[0]+i2[0]
+                i1l = np.flatnonzero(F[f, :] == E[k,0])
+                i2l = np.flatnonzero(F[f, :] == E[k,1])
+                #print f, F[f, :]
+                #print i1l, i2l
+                i1 = i1l[0]
+                i2 = i2l[0]
+                s = i1+i2
                 if s == 1:
                     i3 = 2
                 elif s==2:
@@ -424,55 +433,109 @@ class Surface:
 
         return L,A
 
+    def graphLaplacianMatrix(self):
+        F = self.faces
+        V = self.vertices
+        nf = F.shape[0]
+        nv = V.shape[0]
+
+        # compute edges and detect boundary
+        #edm = sp.lil_matrix((nv,nv))
+        edm = -np.ones([nv,nv])
+        E = np.zeros([3*nf, 2])
+        j = 0
+        for k in range(nf):
+            if (edm[F[k,0], F[k,1]]== -1):
+                edm[F[k,0], F[k,1]] = j
+                edm[F[k,1], F[k,0]] = j
+                E[j, :] = [F[k,0], F[k,1]]
+                j = j+1
+            if (edm[F[k,1], F[k,2]]== -1):
+                edm[F[k,1], F[k,2]] = j
+                edm[F[k,2], F[k,1]] = j
+                E[j, :] = [F[k,1], F[k,2]]
+                j = j+1
+            if (edm[F[k,0], F[k,2]]== -1):
+                edm[F[k,2], F[k,0]] = j
+                edm[F[k,0], F[k,2]] = j
+                E[j, :] = [F[k,2], F[k,0]]
+                j = j+1
+        E = E[0:j, :]
+        
+        edgeFace = np.zeros([j, nf])
+        ne = j
+        #print E
+
+        # Compute Laplacian matrix
+        L = np.zeros([nv, nv])
+
+        for k in range(ne):
+            L[E[k,0], E[k,1]] = 1
+            L[E[k,1], E[k,0]] = 1
+
+        for k in range(nv):
+            L[k,k] = - L[k, :].sum()
+
+        return L
+
 
     def laplacianSegmentation(self, k):
         (L, AA) =  self.laplacianMatrix()
-        (D, y) = sp.linalg.eig(L, AA, eigvals= (1, k))
+        print (L.shape[0]-k-1, L.shape[0]-2)
+        (D, y) = spLA.eigh(L, AA, eigvals= (L.shape[0]-k, L.shape[0]-1))
         #V = real(V) ;
+        #print D
         N = y.shape[0]
         d = y.shape[1]
         I = np.argsort(y.sum(axis=1))
-        I0 = floor(N*scipy.linspace(0, 1, num=k)) ;
-        C = y[I0[0:k], :].copy()
+        I0 =np.floor((N-1)*sp.linspace(0, 1, num=k)).astype(int)
+        #print y.shape, L.shape, N, k, d
+        C = y[I0, :].copy()
 
         eps = 1e-20
         Cold = C.copy()
         u = ((C.reshape([k,1,d]) - y.reshape([1,N,d]))**2).sum(axis=2)
-        T = u.min(axis=0).sum()/(10.0*N)
+        T = u.min(axis=0).sum()/(N)
+        #print T
         j=0
         while j< 5000:
             u0 = u - u.min(axis=0).reshape([1, N])
-            w = exp(-u0/T) ;
+            w = np.exp(-u0/T) ;
             w = w / (eps + w.sum(axis=0).reshape([1,N]))
-            cost = (u*w).sum() + T*(w*log(w+eps)).sum()
+            #print w.min(), w.max()
+            cost = (u*w).sum() + T*(w*np.log(w+eps)).sum()
             C = np.dot(w, y) / (eps + w.sum(axis=1).reshape([k,1]))
+            #print j, 'cost0 ', cost
 
             u = ((C.reshape([k,1,d]) - y.reshape([1,N,d]))**2).sum(axis=2)
-            cost = (u*w).sum() + T*(w*log(w+eps)).sum()
+            cost = (u*w).sum() + T*(w*np.log(w+eps)).sum()
             err = np.sqrt(((C-Cold)**2).sum(axis=1)).sum()
-            print j, 'cost ', cost, err, T
-            if ( j>100 & err < 1e-4 ):
+            #print j, 'cost ', cost, err, T
+            if ( j>100) & (err < 1e-4 ):
                 break
             j = j+1
             Cold = C.copy()
+            T = T*0.95
 
-        d = ((C.reshape([k,1,d]) - y.reshape([1,N,d]))**2).sum(axis=2)
-        md = d.min(axis=0)
+            #print k, d, C.shape
+        dst = ((C.reshape([k,1,d]) - y.reshape([1,N,d]))**2).sum(axis=2)
+        md = dst.min(axis=0)
+        idx = np.zeros(N).astype(int)
         for j in range(N):
-            I = np.flatnonzero(d[:,j] < md[j] + 1e-10) 
+            I = np.flatnonzero(dst[:,j] < md[j] + 1e-10) 
             idx[j] = I[0]
-        I = -ones([k,1])
+        I = -np.ones(k).astype(int)
         kk=0
         for j in range(k):
             if True in (idx==j):
                 I[j] = kk
                 kk += 1
-        idx = I(idx)
+        idx = I[idx]
         if idx.max() < (k-1):
             print 'Warning: kmeans convergence with', idx.max(), 'clusters instead of', k
         ml = w.sum(axis=1)/N
 
-        return idx, ml
+        return idx, C
 
 
 
