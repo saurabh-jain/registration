@@ -356,11 +356,11 @@ class SurfaceWithIsometries(surfaceMatching.SurfaceMatching):
         #self.testConstraintTerm(self.xt)
         if self.nconstr > 0:
             print 'mean constraint', np.sqrt((self.cval**2).sum()/self.cval.size), np.fabs(self.cval).sum() / self.cval.size
-        a0 = self.fv0.computeVertexArea()
+        a0, foo = self.fv0.computeVertexArea()
         for kk in range(self.Tsize+1):
             #print self.xt[kk, :, :]
             self.fvDef.updateVertices(np.squeeze(self.xt[kk, :, :]))
-            ak = self.fvDef.computeVertexArea()
+            ak, foo = self.fvDef.computeVertexArea()
             JJ = np.log(np.divide(ak,a0))
             self.fvDef.saveVTK(self.outputDir +'/'+ self.saveFile+str(kk)+'.vtk', scalars = JJ, scal_name='Jacobian')
 

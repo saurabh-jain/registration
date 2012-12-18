@@ -220,7 +220,7 @@ def gaussianDiffeonsCovector(x0, c0, S0,  at, px1, pc1, pS1, sigma, regweight, a
         betaSymcc = betacc.reshape([M, M, dim, 1]) * betacc.reshape([M, M, 1, dim])
         dst = (betacc * diffc).sum(axis=2)
         gcc = np.sqrt((detR.reshape([M,1])*detR.reshape([1,M]))/((sig2**dim)*detR2))*np.exp(-dst/2)
-        psa = (pS.reshape([M,1,dim, dim]) * a.reshape([1, M, 1, dim])).sum(axis=3)
+        #psa = (pS.reshape([M,1,dim, dim]) * a.reshape([1, M, 1, dim])).sum(axis=3)
         #spsa = (S.reshape([M, 1, dim, dim]) * psa.reshape([M, M, 1, dim])).sum(axis=3)
         spsa = (SpS.reshape([M,1,dim,dim])*a.reshape([1, M, 1, dim])).sum(axis=3)
         #print np.fabs(betacc + betacc.transpose([1,0,2])).sum()
@@ -288,8 +288,8 @@ def gaussianDiffeonsGradient(x0, c0, S0, at, px1, pc1, pS1, sigma, regweight, ge
             db[t] = px.sum(axis=0) + pc.sum(axis=0)
 
         (L, W) = LA.eigh(gcc)
-        #dat[t, :, :] = LA.solve(gcc+(L.max()/10000)*np.eye(M), da)
-        dat[t, :, :] = LA.solve(gcc, da)
+        dat[t, :, :] = LA.solve(gcc+(L.max()/1000)*np.eye(M), da)
+        #dat[t, :, :] = LA.solve(gcc, da)
 
     if affine == None:
         if getCovector == False:
