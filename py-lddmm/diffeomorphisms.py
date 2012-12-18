@@ -4,6 +4,7 @@ import numpy as np
 import vtk
 import array
 from PIL import Image
+import struct
 
 class gridScalars:
    def __init__(self, data=None, fileName = None, dim = 3):
@@ -79,22 +80,30 @@ class gridScalars:
       with open(nm+'.hdr', 'r') as ff:
          frmt = 28*'c'+'i'+'h'+2*'c'+8*'h'+12*'c'+4*'h'+16*'f'+2*'i'+168*'c'+8*'i'
          lend = '<'
-         ls = struct.unpack(lend+'i', ff.read())
+         ls = struct.unpack(lend+'i', ff.read(4))
          x = ls[0]
          if not (x == 348):
             lend = '>'
-         ls = struct.unpack(lend+frmt, ff.read())
-         self.header = ls
+         ff.read(36)
+         out = struct.unpack(lend+8*'h', ff.read(16))
+         sz = out[1:4]
+         ff.read(14)
+         out = struct.unpack(lend+'h', ff.read(2))
+         datatype = out[0]
 
-         sz = ls[7:10]
-         datatype = ls[17]
-         print  "Datatype: ", datatype
+         #out = struct.unpack(lend+8*'f', ff.read(32))
 
+         #ls = struct.unpack(lend+frmt, ff.read())
+         #self.header = ls
+
+         #sz = ls[7:10]
+         #datatype = ls[17]
+         #print  "Datatype: ", datatype
 
       with open(nm+'.img', 'r') as ff:
          nbVox = sz[0]*sz[1]*sz[2]
          if datatype == 2:
-            ls = struct.unpack(lend+nbVox*'c', ff.read())
+            ls = struct.unpack(lend+nbVox*'B', ff.read())
          elif datatype == 4:
             ls = struct.unpack(lend+nbVox*'h', ff.read())
          elif datatype == 8:
@@ -110,8 +119,8 @@ class gridScalars:
             print 'Unknown datatype'
             return
 
-      self.data = np.float_(np.array(ls)).resize(sz)
-
+      #self.data = np.float_(np.array(ls)).resize(sz)
+      self.data = np.reshape(np.array(ls), sz).astype(float)
 
 
 class Diffeomorphism:

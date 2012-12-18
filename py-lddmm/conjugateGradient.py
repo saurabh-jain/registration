@@ -71,15 +71,17 @@ def cg(opt, verb = True, maxIter=1000, TestGradient = False, epsInit=10.):
             if hasattr(opt, 'randomDir'):
                 dirfoo = opt.randomDir()
             else:
-                dirfoo = np.random.randn(grd.shape[0], grd.shape[1], grd.shape[2])
-            epsfoo = 1e-7
+                #dirfoo = np.random.randn(grd.shape[0], grd.shape[1], grd.shape[2])
+                dirfoo = np.random.randn(grd.shape[0])
+            epsfoo = 1e-8
             objfoo = opt.updateTry(dirfoo, epsfoo, obj-1e10)
             if hasattr(opt, 'dotProduct'):
                 [grdfoo] = opt.dotProduct(grd, [dirfoo])
             else:
                 grdfoo = np.multiply(grd, dirfoo).sum()
-            print 'Test Gradient: ', (objfoo - obj)/epsfoo, -grdfoo * gradCoeff 
-
+            print 'Test Gradient: ', (objfoo - obj)/epsfoo, -grdfoo * gradCoeff
+            #import pdb
+            #pdb.set_trace()
         if it == 0:
             if hasattr(opt, 'dotProduct'):
                 [grdOld2] = opt.dotProduct(grd, [grd])
@@ -159,7 +161,7 @@ def cg(opt, verb = True, maxIter=1000, TestGradient = False, epsInit=10.):
                 else:
                     contt=0
 
-       
+
         # increasing step if improves
             contt = 1
             #eps0 = eps / 4
@@ -182,7 +184,7 @@ def cg(opt, verb = True, maxIter=1000, TestGradient = False, epsInit=10.):
                     if verb:
                         print 'Disabling CG: small variation'
                     skipCG = 1
-                    eps = 1.0
+                    eps = epsInit
             else:
                 skipCG = 0
 
@@ -193,7 +195,7 @@ def cg(opt, verb = True, maxIter=1000, TestGradient = False, epsInit=10.):
 
             if np.sqrt(grd2) <gradEps:
                 print 'Stopping Gradient Descent: small gradient'
-                opt.converged = True 
+                opt.converged = True
                 break
             eps = 2*eps
 

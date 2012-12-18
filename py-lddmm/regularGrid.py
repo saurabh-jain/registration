@@ -22,7 +22,7 @@ def meshgrid2(arrs):
     for i, arr in enumerate(arrs):
         slc = [1]*dim
         slc[i] = lens[i]
-        arr2 = numpy.asarray(arr).reshape(slc)
+        arr2 = numpy.asarray(arr).reshape(slc).astype(int)
         for j, sz in enumerate(lens):
             if j!=i:
                 arr2 = arr2.repeat(sz, axis=j)
@@ -76,6 +76,7 @@ class RegularGrid(object):
         self.corner_nodes = None
         self.interior_nodes = None
         self.elements_of_node = None
+        self.__grid_neighbors = None
         self.create(mesh_only)
 
     def __getGridZeros(self):
@@ -186,6 +187,11 @@ class RegularGrid(object):
             self.element_volumes = numpy.ones(len(self.elements))
             for d in range(self.dim):
                 self.element_volumes *= self.dx[d]
+
+        if self.dim==3:
+            self.interp_mesh = meshgrid2((range(self.num_points[0]), \
+                                range(self.num_points[1]), \
+                                range(self.num_points[2])))
         logging.info("Mesh %s created." % (self.mesh_name))
         logging.info("dx: %s." % (self.dx))
 
@@ -236,25 +242,27 @@ class RegularGrid(object):
 
     def grid_neighbors(self):
         # return neighbor lists at interior nodes
-        interior = self.interior_nodes
-        w = numpy.zeros(len(self.nodes)).astype(int)
-        e = numpy.zeros(len(self.nodes)).astype(int)
-        s = numpy.zeros(len(self.nodes)).astype(int)
-        n = numpy.zeros(len(self.nodes)).astype(int)
-        d = numpy.zeros(len(self.nodes)).astype(int)
-        u = numpy.zeros(len(self.nodes)).astype(int)
-        w[interior] = interior - 1
-        e[interior] = interior + 1
-        s[interior] = interior - self.num_points[0]
-        n[interior] = interior + self.num_points[0]
-        c = numpy.arange(self.num_nodes)
-        if self.dim==2:
-            return [w, e, s, n, c, c]
-        elif self.dim==3:
-            nsqr = self.num_points[0] * self.num_points[1]
-            d[interior] = interior - nsqr
-            u[interior] = interior + nsqr
-            return [w, e, s, n, d, u]
+        if self.__grid_neighbors == None:
+            interior = self.interior_nodes
+            w = numpy.zeros(len(self.nodes)).astype(int)
+            e = numpy.zeros(len(self.nodes)).astype(int)
+            s = numpy.zeros(len(self.nodes)).astype(int)
+            n = numpy.zeros(len(self.nodes)).astype(int)
+            d = numpy.zeros(len(self.nodes)).astype(int)
+            u = numpy.zeros(len(self.nodes)).astype(int)
+            w[interior] = interior - 1
+            e[interior] = interior + 1
+            s[interior] = interior - self.num_points[0]
+            n[interior] = interior + self.num_points[0]
+            c = numpy.arange(self.num_nodes)
+            if self.dim==2:
+                self.__grid_neighbors = [w, e, s, n, c, c]
+            elif self.dim==3:
+                nsqr = self.num_points[0] * self.num_points[1]
+                d[interior] = interior - nsqr
+                u[interior] = interior + nsqr
+                self.__grid_neighbors = [w, e, s, n, d, u]
+        return self.__grid_neighbors
 
     def barycentric_coordinates(self, point):
         x = point[0]
@@ -271,6 +279,14 @@ class RegularGrid(object):
         bary[0] = (x - el_nodes[0,0])/self.dx
         bary[1] = (y - el_nodes[0,1])/self.dx
         return [el, bary]
+
+    def sync_filter(self, mults):
+        max1 = numpy.array(self.domain_max) / (numpy.pi * numpy.array(mults))
+        a = (numpy.abs(self.xsi_1) <= max1[0]).astype(int)
+        b = (numpy.abs(self.xsi_2) <= max1[1]).astype(int)
+        c = (numpy.abs(self.xsi_3) <= max1[2]).astype(int)
+        filt = a*b*c
+        return filt
 
     def raised_cosine(self, mf, beta):
         f_x = 1./(2.0*numpy.pi) * self.xsi_1
@@ -412,11 +428,7 @@ class RegularGrid(object):
         z = diffpts[:,2]
         N = self.num_points
 
-        (indexx, indexy, indexz) = meshgrid2( \
-                            (range(N[0]), range(N[1]), range(N[2])))
-        indexx = indexx.astype(int)
-        indexy = indexy.astype(int)
-        indexz = indexz.astype(int)
+        (indexx, indexy, indexz) = self.interp_mesh
 
         F = numpy.reshape(f.copy(), self.dims)
         X = numpy.reshape(x, self.dims)

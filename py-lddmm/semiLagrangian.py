@@ -3,15 +3,60 @@
 import numpy
 import logging
 
+import scipy.integrate
+
+
+#class Derivative_Evaluator(object):
+#
+#    def __init__(self, rg, v):
+#        self.v = v
+#        self.rg = rg
+#
+#    def evaluate(self, f_in, t0):
+#        rg = self.rg
+#        v = self.v
+#        f = f_in.reshape((rg.num_nodes, 3))
+#        import pdb
+#        pdb.set_trace()
+#        dvv = numpy.empty((rg.num_nodes,3))
+#        for k in range(3):
+#            dvv[:,k] = -1 * numpy.multiply( \
+#                            rg.gradient(f[:,k]).real, v[:,:,t0]).sum(axis=1)
+#        return dvv.reshape(rg.num_nodes * 3)
+#
+#def integrate(rg, N, T, v, Nlagrange, dt):
+#    de = Derivative_Evaluator(rg, v)
+#    y = rg.nodes.reshape(rg.num_nodes * 3)
+#    f = scipy.integrate.odeint(de.evaluate, y, range(T))
+#    fout = numpy.empty((rg.num_nodes, 3, T))
+#    for t in range(T):
+#        fout[...,t] = f[t,...].reshape((rg.num_nodes,3))
+#    return fout
+
 def integrate(rg, N, T, v, Nlagrange, dt):
+    f = numpy.empty((rg.num_nodes, 3, T))
+    f[:,:,0] = rg.nodes.copy()
+    [w, e, s, n, d, u] = rg.grid_neighbors()
+    for t in range(1,T):
+        dvv = numpy.empty((rg.num_nodes,3))
+        for k in range(3):
+            dvv[:,k] = -1 * numpy.multiply( \
+                            rg.gradient(f[:,k,t-1]).real, v[:,:,t-1]).sum(axis=1)
+        f[:,:,t] = f[:,:,t-1] + dt * dvv
+    return f
+
+
+def integrate_upwind(rg, N, T, v, Nlagrange, dt):
     f = numpy.zeros((rg.num_nodes, 3, T))
     f[:,:,0] = rg.nodes.copy()
     [w, e, s, n, d, u] = rg.grid_neighbors()
     maxc = -1
+    rhs = numpy.empty(len(rg.nodes))
+    c = numpy.empty(len(rg.nodes))
     for t in range(1,T):
         for outer_dim in range(rg.dim):
-            rhs = numpy.zeros(len(rg.nodes))
-            c = numpy.zeros(len(rg.nodes))
+            rhs = 0.
+            c = 0.
             for dim in range(rg.dim):
                 c +=  numpy.abs(v[:,dim,t-1] * dt / rg.dx[dim])
                 ap = numpy.maximum(v[:,dim,t-1], 0)

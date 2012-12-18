@@ -7,41 +7,209 @@ import optparse
 import os
 import shutil
 import logging
-import pdb
+
+import pyfftw
+import time
 
 class ImageTimeSeries(object):
 
     def __init__(self, output_dir):
         self.output_dir = output_dir
-        self.initialize_test_2d()
+        self.initialize_lung()
+        #self.initialize_biocard()
         self.mu = numpy.zeros((self.rg.num_nodes, 3, self.num_times))
         self.mu_state = numpy.zeros((self.rg.num_nodes, 3, self.num_times))
         self.v = numpy.zeros((self.rg.num_nodes, 3, self.num_times))
-        self.k_mu()
         self.objTry = 0.
         self.mu_state = self.mu.copy()
+        self.optimize_iteration = 0
+
+        # initialize fftw information
+        self.fft_thread_count = 16
+        self.fft_vec_shape = self.rg.dims
+        self.in_vec = pyfftw.n_byte_align_empty(self.fft_vec_shape, 16, \
+                            dtype=numpy.complex)
+        self.fft_vec = pyfftw.n_byte_align_empty(self.fft_vec_shape, 16, \
+                            dtype=numpy.complex)
+        self.out_vec = pyfftw.n_byte_align_empty(self.fft_vec_shape, 16, \
+                            dtype=numpy.complex)
+        self.wfor = pyfftw.FFTW(self.in_vec, self.fft_vec, \
+                            axes=range(self.dim), \
+                            threads=self.fft_thread_count)
+        self.wback = pyfftw.FFTW(self.in_vec, self.fft_vec, \
+                            axes=range(self.dim), \
+                            direction='FFTW_BACKWARD', \
+                            threads=self.fft_thread_count)
+
+        #self.pool_size = 16
+        #self.pool = multiprocessing.Pool(self.pool_size)
+
         self.update_evolutions()
-        # initialize some test images
-#        gs = diffeomorphisms.gridScalars()
-#        gs.loadAnalyze("monkey1_80_80.img")
-#        gs_data = numpy.squeeze(gs.data.ravel())
-#        gs2 = diffeomorphisms.gridScalars()
-#        gs2.loadAnalyze("monkey2_80_80.img")
-#        gs_data2 = numpy.squeeze(gs2.data.ravel())
-        #self.I[:,0] = gs_data
-        #self.I[:,self.num_times-1] = gs_data2
+
+    def initialize_lung(self):
+        self.dim = 3
+        self.num_target_times = 5
+        self.num_times_disc = 10
+        self.num_times = self.num_times_disc * self.num_target_times + 1
+        self.times = numpy.linspace(0, 1, self.num_times)
+        self.dt = 1. / (self.num_times - 1)
+        self.sigma = .1
+        self.num_points_data = numpy.array([256, 184, 160])
+        #self.num_points_data = numpy.array([64,64,64])
+        #self.num_points_data = numpy.array([2,4,6])
+        self.mults = numpy.array([2,2,2]).astype(int)
+        self.num_points = (self.num_points_data/self.mults).astype(int)
+        #self.num_points = (32,32,32)
+        self.dx_data = (1., 1., 1.)
+        self.domain_max_data = None
+        self.dx = None # (1.,1.,1.)
+        self.domain_max = numpy.array([128., 92., 80.])
+        #self.domain_max = (domain_max, domain_max, domain_max)
+        self.gradEps = 1e-8
+        self.rg = regularGrid.RegularGrid(self.dim, \
+                            num_points=self.num_points, \
+                            domain_max=self.domain_max, \
+                            dx=self.dx, mesh_name="lddmm")
+        self.rg_data = regularGrid.RegularGrid(self.dim, \
+                            num_points=self.num_points_data, \
+                            domain_max=self.domain_max_data, \
+                            dx=self.dx_data, mesh_name="lddmm_data")
+        #import pdb
+        #pdb.set_trace()
+        self.I = numpy.zeros((self.rg.num_nodes, self.num_times))
+        self.I_interp = numpy.zeros((self.rg.num_nodes, self.num_times))
+        self.p = numpy.zeros((self.rg.num_nodes, self.num_times))
+
+        sc = diffeomorphisms.gridScalars()
+        sc.loadAnalyze("/cis/home/clr/cawork/lung/test007.hdr")
+        #test_data = sc.data[:,0:184,:].copy()
+        #test_data = numpy.zeros((256,192,160))
+        #test_data = numpy.zeros((64,64,64))
+        #test_data[0:256,0:190,0:160] = sc.data.copy()
+        #test_data.shape = test_data.size
+
+        #test_data = sc.data.copy()
+        #test_data.shape = self.rg_data.num_nodes
+
+        #self.rg_data.create_vtk_sg()
+        #self.rg_data.add_vtk_point_data(test_data,"I")
+        #self.rg_data.vtk_write(0,"test", output_dir=self.output_dir)
+
+        #import pdb
+        #pdb.set_trace()
+
+        self.I[:,0.*self.num_times_disc] = self.apply_sync_filter( \
+                            sc.data.reshape(self.rg_data.num_nodes),self.mults)
+        sc.loadAnalyze("/cis/home/clr/cawork/lung/test009.hdr")
+        self.I[:,1.*self.num_times_disc] = self.apply_sync_filter( \
+                            sc.data.reshape(self.rg_data.num_nodes),self.mults)
+        sc.loadAnalyze("/cis/home/clr/cawork/lung/test011.hdr")
+        self.I[:,2.*self.num_times_disc] = self.apply_sync_filter( \
+                            sc.data.reshape(self.rg_data.num_nodes),self.mults)
+        sc.loadAnalyze("/cis/home/clr/cawork/lung/test013.hdr")
+        self.I[:,3.*self.num_times_disc] = self.apply_sync_filter( \
+                            sc.data.reshape(self.rg_data.num_nodes),self.mults)
+        sc.loadAnalyze("/cis/home/clr/cawork/lung/test015.hdr")
+        self.I[:,4.*self.num_times_disc] = self.apply_sync_filter( \
+                            sc.data.reshape(self.rg_data.num_nodes),self.mults)
+
+        self.I /= 255.
+
+        for t in range(self.num_target_times):
+            self.rg.create_vtk_sg()
+            self.rg.add_vtk_point_data(self.I[:,t*self.num_times_disc], "I")
+            self.rg.vtk_write(t, "targets", output_dir=self.output_dir)
+
+        logging.info("lung data image parameters: ")
+        logging.info("dimension: %d" % (self.dim))
+        logging.info("num_points: %s" % (str(self.rg.num_points)))
+        logging.info("domain_max: %s" % (str(self.rg.domain_max)))
+        logging.info("dx: %s" % (str(self.rg.dx)))
+        logging.info("sigma: %f" % (self.sigma))
+        logging.info("dt: %f" % (self.dt))
+
+    def initialize_biocard(self):
+        self.dim = 3
+        self.num_target_times = 3
+        self.num_times_disc = 10
+        self.num_times = self.num_times_disc * self.num_target_times + 1
+        self.times = numpy.linspace(0, 1, self.num_times)
+        self.dt = 1. / (self.num_times - 1)
+        self.sigma = .01
+        self.num_points = (40, 32, 40)
+        self.dx = (.9375, 2., .9375)
+        self.domain_max = None
+        self.gradEps = 1e-8
+        self.rg = regularGrid.RegularGrid(self.dim, \
+                            num_points=self.num_points, \
+                            domain_max=self.domain_max, \
+                            dx=self.dx, mesh_name="lddmm")
+        self.I = numpy.zeros((self.rg.num_nodes, self.num_times))
+        self.I_interp = numpy.zeros((self.rg.num_nodes, self.num_times))
+        self.p = numpy.zeros((self.rg.num_nodes, self.num_times))
+
+        sc = diffeomorphisms.gridScalars()
+        sc.loadAnalyze("/cis/home/clr/cawork/biocard/regR2_cut.hdr")
+        self.I[:,0.*self.num_times_disc] = sc.data.reshape(self.rg.num_nodes)
+        sc.loadAnalyze("/cis/home/clr/cawork/biocard/regR3_cut.hdr")
+        self.I[:,1.*self.num_times_disc] = sc.data.reshape(self.rg.num_nodes)
+        sc.loadAnalyze("/cis/home/clr/cawork/biocard/regR4_cut.hdr")
+        self.I[:,2.*self.num_times_disc] = sc.data.reshape(self.rg.num_nodes)
+        sc.loadAnalyze("/cis/home/clr/cawork/biocard/regR5_cut.hdr")
+        self.I[:,3.*self.num_times_disc] = sc.data.reshape(self.rg.num_nodes)
+        logging.info("Biocard image parameters: ")
+        logging.info("dimension: %d" % (self.dim))
+        logging.info("num_points: %s" % (str(self.rg.num_points)))
+        logging.info("domain_max: %s" % (str(self.rg.domain_max)))
+        logging.info("dx: %s" % (str(self.rg.dx)))
+        logging.info("sigma: %f" % (self.sigma))
+        logging.info("dt: %f" % (self.dt))
+
+    def initialize_lddmm(self):
+        self.dim = 3
+        self.num_target_times = 1
+        self.num_times_disc = 10
+        self.num_times = self.num_times_disc * self.num_target_times + 1
+        self.times = numpy.linspace(0, 1, self.num_times)
+        self.dt = 1. / (self.num_times - 1)
+        self.sigma = .01
+        self.num_points = (32, 32, 32)
+        self.dx = (.9375, 2., .9375)
+        self.domain_max = None
+        #self.domain_max = (domain_max, domain_max, domain_max)
+        self.gradEps = 1e-8
+        self.rg = regularGrid.RegularGrid(self.dim, \
+                            num_points=self.num_points, \
+                            domain_max=self.domain_max, \
+                            dx=self.dx, mesh_name="lddmm")
+        self.I = numpy.zeros((self.rg.num_nodes, self.num_times))
+        self.I_interp = numpy.zeros((self.rg.num_nodes, self.num_times))
+        self.p = numpy.zeros((self.rg.num_nodes, self.num_times))
+
+        sc = diffeomorphisms.gridScalars()
+        sc.loadAnalyze("/cis/home/clr/cawork/biocard/reg2_cut.hdr")
+        self.I[:,0.*self.num_times_disc] = sc.data.reshape(self.rg.num_nodes)
+        sc.loadAnalyze("/cis/home/clr/cawork/biocard/reg5_cut.hdr")
+        self.I[:,1.*self.num_times_disc] = sc.data.reshape(self.rg.num_nodes)
+        logging.info("Biocard image parameters: ")
+        logging.info("dimension: %d" % (self.dim))
+        logging.info("num_points: %s" % (str(self.rg.num_points)))
+        logging.info("domain_max: %s" % (str(self.rg.domain_max)))
+        logging.info("dx: %s" % (str(self.rg.dx)))
+        logging.info("sigma: %f" % (self.sigma))
+        logging.info("dt: %f" % (self.dt))
 
     def initialize_test_3d(self):
         self.dim = 3
         self.num_target_times = 4
         num_points = 64
         domain_max = 40
-        self.num_times_disc = 10
+        self.num_times_disc = 20
         self.num_times = self.num_times_disc * self.num_target_times + 1
         self.times = numpy.linspace(0, 1, self.num_times)
         self.dt = 1. / (self.num_times - 1)
         self.sigma = .1
-        self.num_points = (num_points, num_points, num_points/2)
+        self.num_points = (num_points, num_points, num_points)
         self.dx = None
         self.domain_max = (domain_max, domain_max, domain_max)
         self.gradEps = 1e-8
@@ -55,7 +223,7 @@ class ImageTimeSeries(object):
         for t in range(self.num_times):
             loc = -1. + 0 * self.dt * (t -(t % self.num_times_disc))
             x_sqr = numpy.power(self.rg.nodes[:,0]-loc, 2)
-            y_sqr = numpy.power(self.rg.nodes[:,1], 2)
+            #y_sqr = numpy.power(self.rg.nodes[:,1], 2)
             z_sqr = numpy.power(self.rg.nodes[:,2], 2)
             r = 13 - 8 * self.dt * (t - (t % self.num_times_disc))
             nodes = numpy.where(x_sqr + y_sqr + z_sqr < r**2)[0]
@@ -121,6 +289,45 @@ class ImageTimeSeries(object):
         Kv = 1.0 / numpy.power(1 + alpha*(r_sqr_xsi),2)
         return Kv
 
+    def apply_sync_filter(self, right, mults):
+        rg, N, T = self.get_sim_data()
+        sf = self.rg_data.sync_filter(mults)
+        sf = numpy.fft.fftshift(sf)
+        rr = right.copy().astype(complex)
+        fr = numpy.reshape(rr, self.rg_data.dims)
+        fr = numpy.fft.fftshift(fr)
+        fr = numpy.fft.fft2(fr * self.rg_data.element_volumes[0])
+        fr = fr * sf
+        out = numpy.fft.ifft2(fr) * 1./self.rg_data.element_volumes[0]
+        out = numpy.fft.fftshift(out)
+        out = out[range(0,self.num_points_data[2],mults[2]),:,:]
+        out = out[:,range(0,self.num_points_data[1],mults[1]), :]
+        out = out[:,:,range(0,self.num_points_data[0],mults[0])]
+        out = out.real.ravel()
+        return out
+
+    def apply_kernel_V_fftw(self, right):
+        rg, N, T = self.get_sim_data()
+        krho = numpy.zeros((rg.num_nodes, 3))
+        for j in range(self.dim):
+            rr = right[:,j].copy().astype(complex)
+            fr = numpy.reshape(rr, rg.dims)
+            fr = numpy.fft.fftshift(fr)
+            fr *= rg.element_volumes[0]
+            self.in_vec[...] = fr[...]
+            self.wfor.execute()
+            fr[...] = self.fft_vec[...]
+            Kv = self.get_kernelv()
+            Kv = numpy.fft.fftshift(Kv)
+            fr = fr * Kv
+            self.fft_vec[...] = fr[...]
+            self.wback.execute()
+            out = self.out_vec[...] / self.in_vec.size
+            out *= 1/rg.element_volumes[0]
+            out = numpy.fft.fftshift(out)
+            krho[:,j] = out.real.ravel()
+        return krho
+
     def apply_kernel_V(self, right):
         rg, N, T = self.get_sim_data()
         krho = numpy.zeros((rg.num_nodes, 3))
@@ -161,39 +368,53 @@ class ImageTimeSeries(object):
 
     def k_mu(self):
         rg, N, T = self.get_sim_data()
+        start = time.time()
         for t in range(T):
           self.v[:,:,t] = self.apply_kernel_V(self.mu[:,:,t])
         self.v = self.v.real
+        logging.info("k_mu time: %f" % (time.time()-start))
 
     def update_evolutions(self):
         rg, N, T = self.get_sim_data()
         self.k_mu()
+        start = time.time()
         self.v[rg.edge_nodes,:,:] = 0.
         # compute the flows needed to update evolutions
         intv = semiLagrangian.integrate(rg, N, T, self.v, 3, self.dt)
+        logging.info("outer integrate: %f" % (time.time()-start))
         self.h = intv.copy()
         self.h2 = numpy.zeros((rg.num_nodes, 3, T))
         # compute image and covector push-forwards
         dj = numpy.zeros((rg.num_nodes, T))
-        for t in range(T):
-            self.I_interp[:,t] = self.rg.grid_interpolate(self.I[:,0],
-                            self.h[:,:,t]).real
+        #for t in range(T):
+        #    self.I_interp[:,t] = self.rg.grid_interpolate(self.I[:,0],
+        #                    self.h[:,:,t]).real
+        logging.info("i interp: %f" % (time.time()-start))
         for targ in range(self.num_target_times-1, -1, -1):
             t1 = targ * self.num_times_disc
             t2 = (targ + 1) * self.num_times_disc + 1
             flip = numpy.flipud(range(t1,t2))
+            start_i = time.time()
             intv = semiLagrangian.integrate(rg, N, len(flip), \
                                 self.v[:,:,flip], 3, self.dt)
+            logging.info("inner integrate: %f" % (time.time()-start_i))
+            start_i = time.time()
             h2 = intv
             flip2 = numpy.flipud(range(len(flip)))
             h2 = h2[:,:,flip2]
             self.h2[:,:,t1:t2] = h2[:,:]
             if t2==T:
+                self.I_interp[:,T-1] = self.rg.grid_interpolate(self.I[:,0], \
+                                    self.h[:,:,T-1]).real
                 p1 = 2./numpy.power(self.sigma,2) * \
                                 (self.I_interp[:,T-1]-self.I[:,T-1])
             else:
+                self.I_interp[:,t2-1] = self.rg.grid_interpolate(self.I[:,0], \
+                                    self.h[:,:,t2-1]).real
                 p1 = self.p[:, t2-1] - 2./numpy.power(self.sigma,2) * \
                                 (self.I[:,t2-1] - self.I_interp[:,t2-1])
+            logging.info("other stuff: %f" % (time.time()-start_i))
+            start_i = time.time()
             for t in range(t1, t2-1):
                 if self.dim==2:
                     gh1 = rg.gradient(self.h2[:,0,t])
@@ -209,6 +430,8 @@ class ImageTimeSeries(object):
                     dj[:,t] = gh1[:,0]*m1 - gh1[:,1]*m2 + gh1[:,2]*m3
                 self.p[:,t] = dj[:,t] * self.rg.grid_interpolate(p1, \
                                 self.h2[:,:,t]).real
+            logging.info("inner loop: %f" % (time.time()-start_i))
+        logging.info("update evo: %f" % (time.time() - start))
         #self.writeData("debug")
 
     def writeData(self, name):
@@ -247,7 +470,7 @@ class ImageTimeSeries(object):
                     rg.integrate_dual(self.I[:,(t+1)*self.num_times_disc]
                     - self.I_interp[:,(t+1)*self.num_times_disc]))
         total_fun = obj + 1./numpy.power(self.sigma,2) * term2
-        logging.info("term1: %d, term2: %d, tot: %d" % (obj, term2, total_fun))
+        logging.info("term1: %f, term2: %f, tot: %f" % (obj, term2, total_fun))
         return total_fun
 
     def updateTry(self, direction, eps, objRef=None):
@@ -290,10 +513,10 @@ class ImageTimeSeries(object):
             grad[:,2,t] = rg.integrate_dual((2*self.mu[:,2,t] - self.p[:,t] * \
                                 gI_interp[:,2]))
 
-            rg.create_vtk_sg()
-            rg.add_vtk_point_data(grad[:,:,t], "grad")
-            rg.add_vtk_point_data(gI_interp, "gI_interp")
-            rg.vtk_write(t, "grad_test", output_dir=self.output_dir)
+            #rg.create_vtk_sg()
+            #rg.add_vtk_point_data(grad[:,:,t], "grad")
+            #rg.add_vtk_point_data(gI_interp, "gI_interp")
+            #rg.vtk_write(t, "grad_test", output_dir=self.output_dir)
         return coeff * self.dt * grad
 
     def computeMatching(self):
@@ -317,7 +540,8 @@ class ImageTimeSeries(object):
         return res
 
     def endOfIteration(self):
-        self.writeData("iter")
+        self.optimize_iteration += 1
+        self.writeData("iter%d" % (self.optimize_iteration))
 
 def initialize_v(rg, N, T):
     dt = 1./(T-1)
