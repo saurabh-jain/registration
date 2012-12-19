@@ -57,8 +57,8 @@ class SmoothImageMeta(object):
         self.dim = 2
         self.sigma = 1.
         self.sfactor = 1./numpy.power(self.sigma, 2)
-        self.num_points = (20,20)
-        self.domain_max = (20.,20.)
+        self.num_points = (40,40)
+        self.domain_max = (1.,1.)
         self.dx = None
         self.rg = regularGrid.RegularGrid(self.dim, self.num_points, \
                              self.domain_max, self.dx, "meta")
@@ -70,7 +70,7 @@ class SmoothImageMeta(object):
         self.dt = (self.time_max - self.time_min) / (self.num_times - 1)
         self.optimize_iteration = 0
         self.gradEps = 1e-20
-        self.g_eps = 1e-2
+        self.g_eps = 1
 
         logging.info("sigma: %f" % self.sigma)
         logging.info("num_points: %s" % str(self.rg.num_points))
@@ -90,17 +90,24 @@ class SmoothImageMeta(object):
         self.m = numpy.zeros((rg.num_nodes, self.num_times))
         #self.KV = kfun.Kernel(name = 'gauss', sigma = 4)
         #self.KH= kfun.Kernel(name = 'gauss', sigma = 2)
-        self.KV = kfun.Kernel(name = 'laplacian', sigma=1.25, order=3)
-        self.KH = kfun.Kernel(name = 'laplacian', sigma=.75, order=3)
+
+        kvs = .09
+        khs = .025
+        kvo = 3
+        kho = 3
+        logging.info("KV params: sigma=%f, order=%f" % (kvs, kvo))
+        logging.info("KH params: sigma=%f, order=%f" % (khs, kho))
+        self.KV = kfun.Kernel(name = 'laplacian', sigma=kvs, order=kvo)
+        self.KH = kfun.Kernel(name = 'laplacian', sigma=khs, order=kho)
         self.alpha = numpy.ones(rg.num_nodes) * 0.
         self.alpha_state = numpy.zeros_like(self.alpha)
 
         # initialize some test images
-        self.dual_target = numpy.zeros(rg.num_nodes)
-        self.dual_template = numpy.zeros(rg.num_nodes)
-        val = 10
-        self.dual_template[210] = 1 * val
-        self.dual_target[211] = 1 * val
+#        self.dual_target = numpy.zeros(rg.num_nodes)
+#        self.dual_template = numpy.zeros(rg.num_nodes)
+#        val = 1
+#        self.dual_template[210] = 1 * val
+#        self.dual_target[211] = 1 * val
         #self.dual_template[979] = 1
         #self.dual_target[980] = 1
         #self.dual_template[4272] = 1
@@ -110,11 +117,11 @@ class SmoothImageMeta(object):
         #self.dual_template[h_list] = .5 * val
         #self.dual_target[h_list+1] = .5 * val
 
-        self.template = self.KH.applyK(rg.nodes, self.dual_template)
-        self.target = self.KH.applyK(rg.nodes, self.dual_target)
-        rdt = self.dual_template.reshape([self.dual_template.shape[0],1])
-        self.D_template = self.KH.applyDiffKT(rg.nodes, \
-                            [numpy.ones_like(rdt)], [rdt])
+#        self.template = self.KH.applyK(rg.nodes, self.dual_template)
+#        self.target = self.KH.applyK(rg.nodes, self.dual_target)
+#        rdt = self.dual_template.reshape([self.dual_template.shape[0],1])
+#        self.D_template = self.KH.applyDiffKT(rg.nodes, \
+#                            [numpy.ones_like(rdt)], [rdt])
 
 #        size = (32, 32)
 #        ims = [Image.open("eight_1.png").rotate(-90).resize(size), \
@@ -132,25 +139,25 @@ class SmoothImageMeta(object):
 #        self.template = tp1.ravel()
 #        self.target = tr1.ravel()
 
-#        size = self.num_points
-#        ims = [Image.open("test_images/eight_1a.png").rotate(-90).resize(size), \
-#                            Image.open("test_images/eight_2a.png").rotate(-90).resize(size)]
-#        tp = numpy.zeros(size)
-#        tr = numpy.zeros(size)
-#        for j in range(size[0]):
-#            for k in range(size[0]):
-#                tp[j,k] = ims[0].getpixel((j,k)) / 25.5
-#                tr[j,k] = ims[1].getpixel((j,k)) / 25.5
-#        self.template = tp.ravel()
-#        self.target = tr.ravel()
-#
-#        si = SplineInterp(rg, self.KH, self.template)
-#        self.dual_template = si.minimize()
-#        si = SplineInterp(rg, self.KH, self.target)
-#        self.dual_target = si.minimize()
-#        rdt = self.dual_template.reshape([self.dual_template.shape[0],1])
-#        self.D_template = self.KH.applyDiffKT(rg.nodes, \
-#                            [numpy.ones_like(rdt)], [rdt])
+        size = self.num_points
+        ims = [Image.open("test_images/eight_1a.png").rotate(-90).resize(size), \
+                            Image.open("test_images/eight_2a.png").rotate(-90).resize(size)]
+        tp = numpy.zeros(size)
+        tr = numpy.zeros(size)
+        for j in range(size[0]):
+            for k in range(size[0]):
+                tp[j,k] = ims[0].getpixel((j,k)) / 255.
+                tr[j,k] = ims[1].getpixel((j,k)) / 255.
+        self.template = tp.ravel()
+        self.target = tr.ravel()
+
+        si = SplineInterp(rg, self.KH, self.template)
+        self.dual_template = si.minimize()
+        si = SplineInterp(rg, self.KH, self.target)
+        self.dual_target = si.minimize()
+        rdt = self.dual_template.reshape([self.dual_template.shape[0],1])
+        self.D_template = self.KH.applyDiffKT(rg.nodes, \
+                            [numpy.ones_like(rdt)], [rdt])
 
 #        loc = -2.5
 #        x_sqr = numpy.power(self.rg.nodes[:,0]-loc, 2)
@@ -173,7 +180,7 @@ class SmoothImageMeta(object):
     def getVariable(self):
         return self
 
-    def objectiveFun2(self):
+    def objectiveFun(self):
         rg, N, T = self.get_sim_data()
         self.shoot()
         interp_loc = self.xt[:,:,T-1].copy()
@@ -199,7 +206,7 @@ class SmoothImageMeta(object):
             sys.exit()
         return objFun
 
-    def objectiveFun(self):
+    def objectiveFun2(self):
         rg, N, T = self.get_sim_data()
         self.shoot()
         interp_loc = self.xt[:,:,T-1].copy()
@@ -207,7 +214,8 @@ class SmoothImageMeta(object):
         interp_target = self.KH.applyK(interp_loc, self.dual_target, y=rg.nodes)
         diff = self.m[:,T-1] - interp_target.real
         sqrtJ = numpy.sqrt(self.J[:,T-1])
-        objFun = numpy.dot(diff*sqrtJ, sqrtJ*diff) * self.g_eps
+        #objFun = numpy.dot(diff*sqrtJ, sqrtJ*diff) * self.g_eps
+        objFun = (numpy.multiply(diff, diff) * self.J[:,T-1]).sum()
         rg.create_vtk_sg()
         rg.add_vtk_point_data(self.xt[:,:,T-1].real, "x")
         rg.add_vtk_point_data(interp_target.real, "i_target")
@@ -280,17 +288,17 @@ class SmoothImageMeta(object):
                              [rdt], y=rg.nodes)
 
         sJ = numpy.sqrt(self.J[:,T-1])
-        #dm = 2*sJ*rg.integrate_dual(sJ * diff).real
+        dm = 2*sJ*rg.integrate_dual(sJ * diff).real
         dx = numpy.zeros((rg.num_nodes, 3))
-        dm = 2*diff*self.J[:,T-1]
+        #dm = 2*diff*self.J[:,T-1]
         for k in range(3):
-            #dx[:,k] = 2.*sJ*rg.integrate_dual(sJ*diff).real \
-            #                    *(-1)*d_interp[:,k].real
-            dx[:,k] = 2.*diff*self.J[:,T-1] \
+            dx[:,k] = 2.*sJ*rg.integrate_dual(sJ*diff).real \
                                 *(-1)*d_interp[:,k].real
+            #dx[:,k] = 2.*diff*self.J[:,T-1] \
+            #                    *(-1)*d_interp[:,k].real
 
-        #dJ = rg.integrate_dual(sJ*diff).real * diff * (1./sJ)
-        dJ = diff * diff
+        dJ = rg.integrate_dual(sJ*diff).real * diff * (1./sJ)
+        #dJ = diff * diff
         dx *= self.g_eps
         dm *= self.g_eps
         dJ *= self.g_eps
@@ -316,8 +324,8 @@ class SmoothImageMeta(object):
         interp_target = self.KH.applyK(x1, self.dual_target, y=rg.nodes)
         diff = m1 - interp_target.real
         sqrtJ = numpy.sqrt(J1)
-        objFun = numpy.dot(diff*sqrtJ, sqrtJ*diff) * self.g_eps
-        #objFun = numpy.dot(diff*sqrtJ, rg.integrate_dual(sqrtJ*diff))
+        #objFun = numpy.dot(diff*sqrtJ, sqrtJ*diff) * self.g_eps
+        objFun = numpy.dot(diff*sqrtJ, rg.integrate_dual(sqrtJ*diff))
 
         ip = numpy.multiply(dx, xr).sum(axis=1).sum() \
                     + numpy.dot(dm, mr)  \
@@ -437,6 +445,10 @@ class SmoothImageMeta(object):
                 term3 = self.KV.applyDDiffK11(xt, zt, a, ez[:,:,t])
                 term4 = self.KV.applyDDiffK12(xt, a, zt, ez[:,:,t])
                 term5 = self.KH.applyDDiffK11(xt, oa, ralpha, ez[:,:,t])
+
+                if t==19 and False:
+                    import pdb
+                    pdb.set_trace()
                 term6 = self.KH.applyDDiffK12(xt, ralpha, oa, ez[:,:,t])
 
                 zz = numpy.dot(zt, a.T)
@@ -628,7 +640,7 @@ class SmoothImageMeta(object):
 
     def computeMatching(self):
         conjugateGradient.cg(self, True, maxIter=1000, TestGradient=True, \
-                            epsInit=1e-2)
+                            epsInit=1e-5)
         return self
 
     def writeData(self, name):

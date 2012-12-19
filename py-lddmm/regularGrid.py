@@ -22,7 +22,7 @@ def meshgrid2(arrs):
     for i, arr in enumerate(arrs):
         slc = [1]*dim
         slc[i] = lens[i]
-        arr2 = numpy.asarray(arr).reshape(slc).astype(int)
+        arr2 = numpy.asarray(arr).reshape(slc)
         for j, sz in enumerate(lens):
             if j!=i:
                 arr2 = arr2.repeat(sz, axis=j)
@@ -192,6 +192,9 @@ class RegularGrid(object):
             self.interp_mesh = meshgrid2((range(self.num_points[0]), \
                                 range(self.num_points[1]), \
                                 range(self.num_points[2])))
+            for l in self.interp_mesh:
+                l = l.astype(int)
+            self.interp_data = None
         logging.info("Mesh %s created." % (self.mesh_name))
         logging.info("dx: %s." % (self.dx))
 
@@ -420,6 +423,128 @@ class RegularGrid(object):
 
         F[:,:] = f[pindex]*(1-ax)*(1-ay) + f[pindex_x]*(ax)*(1-ay) + f[pindex_y]*(1-ax)*(ay) + f[pindex_xy]*(ax)*(ay)
         return numpy.reshape(F[:,:], N[0]*N[1])
+
+    def compute_interpolation_data(self, w):
+        self.interp_data = []
+        N = self.num_points
+        for t in range(w.shape[-1]):
+            (indexx, indexy, indexz) = self.interp_mesh
+            X = numpy.reshape(w[:,0,t], self.dims)
+            Y = numpy.reshape(w[:,1,t], self.dims)
+            Z = numpy.reshape(w[:,2,t], self.dims)
+
+            stepsx = X / self.dx[0]
+            stepsy = Y / self.dx[1]
+            stepsz = Z / self.dx[2]
+
+            px = numpy.floor(stepsx)
+            py = numpy.floor(stepsy)
+            pz = numpy.floor(stepsz)
+
+            ax = stepsx - px
+            ay = stepsy - py
+            az = stepsz - pz
+
+            pxindex = (indexx + px).astype(int)
+            pyindex = (indexy + py).astype(int)
+            pzindex = (indexz + pz).astype(int)
+            pxindex_x = (pxindex + 1).astype(int)
+            pyindex_y = (pyindex + 1).astype(int)
+            pzindex_z = (pzindex + 1).astype(int)
+
+            pxindex[(pxindex<0)] = 0
+            pyindex[(pyindex<0)] = 0
+            pxindex_x[(pxindex_x<0)] = 0
+            pyindex_y[(pyindex_y<0)] = 0
+            pzindex[(pzindex<0)] = 0
+            pzindex_z[(pzindex_z<0)] = 0
+
+            pxindex[(pxindex>N[0]-1)] = N[0]-1
+            pyindex[(pyindex>N[1]-1)] = N[1]-1
+            pxindex_x[(pxindex_x>N[0]-1)] = N[0]-1
+            pyindex_y[(pyindex_y>N[1]-1)] = N[1]-1
+            pzindex[(pzindex>N[2]-1)] = N[2]-1
+            pzindex_z[(pzindex_z>N[2]-1)] = N[2]-1
+
+            nsqr = N[0] * N[1]
+            pindex = (pxindex + (N[0])*(pyindex) + nsqr*pzindex).astype(int)
+            pindex_x = (pxindex_x + (N[0])*(pyindex) + nsqr*pzindex).astype(int)
+            pindex_y = (pxindex + (N[0])*(pyindex_y) + nsqr*pzindex).astype(int)
+            pindex_xy = (pxindex_x + (N[0])*(pyindex_y) + nsqr*pzindex).astype(int)
+
+            pindex_z = (pxindex + (N[0])*(pyindex) + nsqr*pzindex_z).astype(int)
+            pindex_z_x = (pxindex_x + (N[0])*(pyindex) + nsqr*pzindex_z).astype(int)
+            pindex_z_y = (pxindex + (N[0])*(pyindex_y) + nsqr*pzindex_z).astype(int)
+            pindex_z_xy = (pxindex_x + (N[0])*(pyindex_y) + nsqr*pzindex_z).astype(int)
+            self.interp_data.append([ax,ay,az,pindex,pindex_x, pindex_y, \
+                                pindex_xy, pindex_z, pindex_z_x, pindex_z_y, \
+                                pindex_z_xy])
+
+    def grid_interpolate_3d_cached(self, f, t):
+        F = numpy.reshape(f.copy(), self.dims)
+        (ax,ay,az,pindex,pindex_x, pindex_y, \
+                pindex_xy, pindex_z, pindex_z_x, \
+                pindex_z_y, pindex_z_xy) = self.interp_data[t]
+        F[:,:] = f[pindex]*(1-ax)*(1-ay)*(1-az) + \
+                         f[pindex_x]*(ax)*(1-ay)*(1-az) + \
+                         f[pindex_y]*(1-ax)*(ay)*(1-az) + \
+                         f[pindex_xy]*(ax)*(ay)*(1-az)
+        F[:,:] += f[pindex_z]*(1-ax)*(1-ay)*(az) + \
+                         f[pindex_z_x]*(ax)*(1-ay)*(az) + \
+                         f[pindex_z_y]*(1-ax)*(ay)*(az) + \
+                         f[pindex_z_xy]*(ax)*(ay)*(az)
+        return numpy.reshape(F[:,:], self.num_nodes)
+
+    def grid_interpolate_gradient_3d_cached(self, f, t):
+        (ax,ay,az,pindex,pindex_x, pindex_y, \
+                pindex_xy, pindex_z, pindex_z_x, \
+                pindex_z_y, pindex_z_xy) = self.interp_data[t]
+
+        F1 = f[pindex]*(-1)*(1-ay)*(1-az) + \
+                        f[pindex_x]*(1)*(1-ay)*(1-az) + \
+                        f[pindex_y]*(-1)*(ay)*(1-az) + \
+                        f[pindex_xy]*(1)*(ay)*(1-az) + \
+                        f[pindex_z]*(-1)*(1-ay)*(az) + \
+                        f[pindex_z_x]*(1)*(1-ay)*(az) + \
+                        f[pindex_z_y]*(-1)*(ay)*(az) + \
+                        f[pindex_z_xy]*(1)*(ay)*(az)
+        F2 = f[pindex]*(1-ax)*(-1)*(1-az) + \
+                        f[pindex_x]*(ax)*(-1)*(1-az) + \
+                        f[pindex_y]*(1-ax)*(1)*(1-az) + \
+                        f[pindex_xy]*(ax)*(1)*(1-az) + \
+                        f[pindex_z]*(1-ax)*(-1)*(az) + \
+                        f[pindex_z_x]*(ax)*(-1)*(az) + \
+                        f[pindex_z_y]*(1-ax)*(1)*(az) + \
+                        f[pindex_z_xy]*(ax)*(1)*(az)
+        F3 = f[pindex]*(1-ax)*(1-ay)*(-1) + \
+                        f[pindex_x]*(ax)*(1-ay)*(-1) + \
+                        f[pindex_y]*(1-ax)*(ay)*(-1) + \
+                        f[pindex_xy]*(ax)*(ay)*(-1) + \
+                        f[pindex_z]*(1-ax)*(1-ay)*(1) + \
+                        f[pindex_z_x]*(ax)*(1-ay)*(1) + \
+                        f[pindex_z_y]*(1-ax)*(ay)*(1) + \
+                        f[pindex_z_xy]*(ax)*(ay)*(1)
+        gf = numpy.zeros((self.num_nodes, 3))
+        gf[:,0] = numpy.reshape(F1, self.num_nodes)
+        gf[:,1] = numpy.reshape(F2, self.num_nodes)
+        gf[:,2] = numpy.reshape(F3, self.num_nodes)
+        return gf
+
+    def grid_interpolate_dual_3d_cached(self, f, t):
+        (ax,ay,az,pindex,pindex_x, pindex_y, \
+                pindex_xy, pindex_z, pindex_z_x, \
+                pindex_z_y, pindex_z_xy) = self.interp_data[t]
+        F = numpy.reshape(f.copy(), self.dims)
+
+        f_interp = self.spread(F*(1-ax)*(1-ay)*(1-az), pindex)
+        f_interp += self.spread(F*(ax)*(1-ay)*(1-az), pindex_x)
+        f_interp += self.spread(F*(1-ax)*(ay)*(1-az), pindex_y)
+        f_interp += self.spread(F*(ax)*(ay)*(1-az), pindex_xy)
+        f_interp += self.spread(F*(1-ax)*(1-ay)*(az), pindex_z)
+        f_interp += self.spread(F*(ax)*(1-ay)*(az), pindex_z_x)
+        f_interp += self.spread(F*(1-ax)*(ay)*(az), pindex_z_y)
+        f_interp += self.spread(F*(ax)*(ay)*(az), pindex_z_xy)
+        return f_interp
 
     def grid_interpolate3d(self, f, pts):
         diffpts = pts - self.nodes
