@@ -15,7 +15,8 @@ class ImageTimeSeries(object):
 
     def __init__(self, output_dir):
         self.output_dir = output_dir
-        self.initialize_lung()
+        #self.initialize_lung()
+        self.initialize_lung_downsample()
         #self.initialize_biocard()
         #self.initialize_test_3d()
         self.mu = numpy.zeros((self.rg.num_nodes, 3, self.num_times))
@@ -440,14 +441,18 @@ class ImageTimeSeries(object):
         term2 = 0.
         for t in range(T):
             if t<T-1:
+                start2 = time.time()
                 kn = 0.
                 kn += numpy.dot(self.mu[:,0,t], rg.integrate_dual(self.v[:,0,t]))
                 kn += numpy.dot(self.mu[:,1,t], rg.integrate_dual(self.v[:,1,t]))
                 kn += numpy.dot(self.mu[:,2,t], rg.integrate_dual(self.v[:,2,t]))
                 obj += self.dt * kn
+                logging.info("obj fun inner %f" % (time.time()-start2))
             if t in range(0, self.num_times, self.num_times_disc):
+                start2 = time.time()
                 term2 += numpy.dot(self.I[:,t]- self.I_interp[:,t], \
                         rg.integrate_dual(self.I[:,t]- self.I_interp[:,t]))
+                logging.info("obj fun inner (2) %f" % (time.time()-start2))
         total_fun = obj + 1./numpy.power(self.sigma,2) * term2
         logging.info("term1: %f, term2: %f, tot: %f" % (obj, term2, total_fun))
         logging.info("objFun time: %f" % (time.time() - start))
