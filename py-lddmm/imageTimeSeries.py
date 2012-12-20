@@ -10,15 +10,31 @@ import logging
 
 #import pyfftw
 import time
+import multiprocessing
+
+def apply_kernel_V_for_async(right, dims, num_nodes, Kv, el_vol):
+    krho = numpy.zeros((num_nodes, 3))
+    # for now assume 3 dimensions
+    for j in range(3):
+      rr = right[:,j].copy().astype(complex)
+      fr = numpy.reshape(rr, dims)
+      fr = numpy.fft.fftshift(fr)
+      fr = numpy.fft.fftn(fr * el_vol)
+      Kv = numpy.fft.fftshift(Kv)
+      fr = fr * Kv
+      out = numpy.fft.ifftn(fr) * 1./el_vol
+      out = numpy.fft.fftshift(out)
+      krho[:,j] = numpy.reshape(out.real, (num_nodes))
+    return krho
+
 
 class ImageTimeSeries(object):
 
     def __init__(self, output_dir):
         self.output_dir = output_dir
-        #self.initialize_lung()
-        self.initialize_lung_downsample()
+        self.initialize_lung()
+        #self.initialize_lung_downsample()
         #self.initialize_biocard()
-        #self.initialize_test_3d()
         self.mu = numpy.zeros((self.rg.num_nodes, 3, self.num_times))
         self.mu_state = numpy.zeros((self.rg.num_nodes, 3, self.num_times))
         self.v = numpy.zeros((self.rg.num_nodes, 3, self.num_times))
@@ -43,8 +59,8 @@ class ImageTimeSeries(object):
 #                            direction='FFTW_BACKWARD', \
 #                            threads=self.fft_thread_count)
 
-        #self.pool_size = 16
-        #self.pool = multiprocessing.Pool(self.pool_size)
+        self.pool_size = 16
+        self.pool = multiprocessing.Pool(self.pool_size)
 
         self.update_evolutions()
 
@@ -391,10 +407,26 @@ class ImageTimeSeries(object):
         rg, N, T = self.get_sim_data()
         kright = self.apply_kernel_V(right)
         kn = 0.
-        kn += numpy.dot(right[:,0], rg.integrate_dual(kright[:,0]))
-        kn += numpy.dot(right[:,1], rg.integrate_dual(kright[:,1]))
-        kn += numpy.dot(right[:,2], rg.integrate_dual(kright[:,2]))
+        kn += numpy.dot(right[:,0], kright[:,0])
+        kn += numpy.dot(right[:,1], kright[:,1])
+        kn += numpy.dot(right[:,2], kright[:,2])
         return kn
+
+    def k_mu_async(self):
+        rg, N, T = self.get_sim_data()
+        start = time.time()
+        Kv = self.get_kernelv()
+        res = []
+        for t in range(T):
+            res.append(self.pool.apply_async(apply_kernel_V_for_async, \
+                            args=(self.mu[:,:,t].copy(), rg.dims, rg.num_nodes,\
+                            Kv, rg.element_volumes[0])))
+
+        for t in range(T):
+            self.v[:,:,t] = res[t].get(timeout=100)
+
+        self.v = self.v.real
+        logging.info("k_mu time: %f" % (time.time()-start))
 
     def k_mu(self):
         rg, N, T = self.get_sim_data()
@@ -406,9 +438,10 @@ class ImageTimeSeries(object):
 
     def update_evolutions(self):
         rg, N, T = self.get_sim_data()
-        self.k_mu()
+        self.k_mu_async()
         self.v[rg.edge_nodes,:,:] = 0.
         start = time.time()
+        #rg.compute_interpolation_data_async(-1 * self.v * self.dt, self.pool)
         rg.compute_interpolation_data(-1 * self.v * self.dt)
         self.I_interp[:,0] = self.I[:,0].copy()
         for t in range(T-1):
@@ -441,18 +474,14 @@ class ImageTimeSeries(object):
         term2 = 0.
         for t in range(T):
             if t<T-1:
-                start2 = time.time()
                 kn = 0.
-                kn += numpy.dot(self.mu[:,0,t], rg.integrate_dual(self.v[:,0,t]))
-                kn += numpy.dot(self.mu[:,1,t], rg.integrate_dual(self.v[:,1,t]))
-                kn += numpy.dot(self.mu[:,2,t], rg.integrate_dual(self.v[:,2,t]))
+                kn += numpy.dot(self.mu[:,0,t], self.v[:,0,t])
+                kn += numpy.dot(self.mu[:,1,t], self.v[:,1,t])
+                kn += numpy.dot(self.mu[:,2,t], self.v[:,2,t])
                 obj += self.dt * kn
-                logging.info("obj fun inner %f" % (time.time()-start2))
             if t in range(0, self.num_times, self.num_times_disc):
-                start2 = time.time()
                 term2 += numpy.dot(self.I[:,t]- self.I_interp[:,t], \
-                        rg.integrate_dual(self.I[:,t]- self.I_interp[:,t]))
-                logging.info("obj fun inner (2) %f" % (time.time()-start2))
+                        self.I[:,t]- self.I_interp[:,t])
         total_fun = obj + 1./numpy.power(self.sigma,2) * term2
         logging.info("term1: %f, term2: %f, tot: %f" % (obj, term2, total_fun))
         logging.info("objFun time: %f" % (time.time() - start))
@@ -494,12 +523,9 @@ class ImageTimeSeries(object):
         for t in range(T):
             gI_interp = rg.grid_interpolate_gradient_3d_cached( \
                                 self.I_interp[:,t], t)
-            grad[:,0,t] = rg.integrate_dual((2*self.mu[:,0,t] - self.p[:,t] * \
-                                gI_interp[:,0]))
-            grad[:,1,t] = rg.integrate_dual((2*self.mu[:,1,t] - self.p[:,t] * \
-                                gI_interp[:,1]))
-            grad[:,2,t] = rg.integrate_dual((2*self.mu[:,2,t] - self.p[:,t] * \
-                                gI_interp[:,2]))
+            grad[:,0,t] = (2*self.mu[:,0,t] - self.p[:,t] * gI_interp[:,0])
+            grad[:,1,t] = (2*self.mu[:,1,t] - self.p[:,t] * gI_interp[:,1])
+            grad[:,2,t] = (2*self.mu[:,2,t] - self.p[:,t] * gI_interp[:,2])
 #            rg.create_vtk_sg()
 #            rg.add_vtk_point_data(grad[:,:,t], "grad")
 #            rg.add_vtk_point_data(self.p[:,t], "p")
@@ -519,12 +545,9 @@ class ImageTimeSeries(object):
             for ll in range(len(g2)):
                 gr = g2[ll]
                 kgr = self.apply_kernel_V(gr[:,:,t])
-                res[ll] += self.dt * numpy.dot(g1[:,0,t], \
-                                    rg.integrate_dual(kgr[:,0]))
-                res[ll] += self.dt * numpy.dot(g1[:,1,t], \
-                                    rg.integrate_dual(kgr[:,1]))
-                res[ll] += self.dt * numpy.dot(g1[:,2,t], \
-                                    rg.integrate_dual(kgr[:,2]))
+                res[ll] += self.dt * numpy.dot(g1[:,0,t], kgr[:,0])
+                res[ll] += self.dt * numpy.dot(g1[:,1,t], kgr[:,1])
+                res[ll] += self.dt * numpy.dot(g1[:,2,t], kgr[:,2])
         return res
 
     def endOfIteration(self):

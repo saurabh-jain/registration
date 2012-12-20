@@ -8,7 +8,6 @@ import scipy.sparse
 import scipy.interpolate
 from tvtk.api import tvtk
 
-
 def meshgrid2(arrs):
     arrs = tuple(reversed(arrs))
     lens = map(len, arrs)
@@ -29,6 +28,59 @@ def meshgrid2(arrs):
         ans.append(arr2)
 
     return tuple(ans[::-1])
+
+def interp_data_for_async(w, N, interp_mesh, dims, dx):
+    (indexx, indexy, indexz) = interp_mesh
+    X = numpy.reshape(w[:,0], dims)
+    Y = numpy.reshape(w[:,1], dims)
+    Z = numpy.reshape(w[:,2], dims)
+
+    stepsx = X / dx[0]
+    stepsy = Y / dx[1]
+    stepsz = Z / dx[2]
+
+    px = numpy.floor(stepsx)
+    py = numpy.floor(stepsy)
+    pz = numpy.floor(stepsz)
+
+    ax = stepsx - px
+    ay = stepsy - py
+    az = stepsz - pz
+
+    pxindex = (indexx + px).astype(int)
+    pyindex = (indexy + py).astype(int)
+    pzindex = (indexz + pz).astype(int)
+    pxindex_x = (pxindex + 1).astype(int)
+    pyindex_y = (pyindex + 1).astype(int)
+    pzindex_z = (pzindex + 1).astype(int)
+
+    pxindex[(pxindex<0)] = 0
+    pyindex[(pyindex<0)] = 0
+    pxindex_x[(pxindex_x<0)] = 0
+    pyindex_y[(pyindex_y<0)] = 0
+    pzindex[(pzindex<0)] = 0
+    pzindex_z[(pzindex_z<0)] = 0
+
+    pxindex[(pxindex>N[0]-1)] = N[0]-1
+    pyindex[(pyindex>N[1]-1)] = N[1]-1
+    pxindex_x[(pxindex_x>N[0]-1)] = N[0]-1
+    pyindex_y[(pyindex_y>N[1]-1)] = N[1]-1
+    pzindex[(pzindex>N[2]-1)] = N[2]-1
+    pzindex_z[(pzindex_z>N[2]-1)] = N[2]-1
+
+    nsqr = N[0] * N[1]
+    pindex = (pxindex + (N[0])*(pyindex) + nsqr*pzindex).astype(int)
+    pindex_x = (pxindex_x + (N[0])*(pyindex) + nsqr*pzindex).astype(int)
+    pindex_y = (pxindex + (N[0])*(pyindex_y) + nsqr*pzindex).astype(int)
+    pindex_xy = (pxindex_x + (N[0])*(pyindex_y) + nsqr*pzindex).astype(int)
+
+    pindex_z = (pxindex + (N[0])*(pyindex) + nsqr*pzindex_z).astype(int)
+    pindex_z_x = (pxindex_x + (N[0])*(pyindex) + nsqr*pzindex_z).astype(int)
+    pindex_z_y = (pxindex + (N[0])*(pyindex_y) + nsqr*pzindex_z).astype(int)
+    pindex_z_xy = (pxindex_x + (N[0])*(pyindex_y) + nsqr*pzindex_z).astype(int)
+    return [ax,ay,az,pindex,pindex_x, pindex_y, \
+                                pindex_xy, pindex_z, pindex_z_x, pindex_z_y, \
+                                pindex_z_xy]
 
 
 class RegularGrid(object):
@@ -423,6 +475,16 @@ class RegularGrid(object):
 
         F[:,:] = f[pindex]*(1-ax)*(1-ay) + f[pindex_x]*(ax)*(1-ay) + f[pindex_y]*(1-ax)*(ay) + f[pindex_xy]*(ax)*(ay)
         return numpy.reshape(F[:,:], N[0]*N[1])
+
+    def compute_interpolation_data_async(self, w, pool):
+        self.interp_data = []
+        N = self.num_points
+        res = []
+        for t in range(w.shape[-1]):
+            res.append(pool.apply_async(interp_data_for_async, (w[:,:,t], N, \
+                                self.interp_mesh, self.dims, self.dx)))
+        for t in range(w.shape[-1]):
+            self.interp_data.append(res[t].get(timeout=100))
 
     def compute_interpolation_data(self, w):
         self.interp_data = []
