@@ -96,8 +96,9 @@ SOURCES.o = $(SOURCES.cpp:%.cpp=%.o)
 %.d: %.cpp $(SOURCES.h)
 	$(SHELL) -ec '$(CC) -M  $(IPATH)  $(CFLAGS) $< > $@'
 
-include $(SOURCES.cpp:.cpp=.d)
-include $(MAINS.cpp:.cpp=.d)
+included: 
+	include $(SOURCES.cpp:.cpp=.d)
+	include $(MAINS.cpp:.cpp=.d)
 
 
 %.o: %.cpp 
