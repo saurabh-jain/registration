@@ -32,8 +32,8 @@ class ImageTimeSeries(object):
 
     def __init__(self, output_dir):
         self.output_dir = output_dir
-        self.initialize_lung()
-        #self.initialize_lung_downsample()
+        #self.initialize_lung()
+        self.initialize_lung_downsample()
         #self.initialize_biocard()
         self.mu = numpy.zeros((self.rg.num_nodes, 3, self.num_times))
         self.mu_state = numpy.zeros((self.rg.num_nodes, 3, self.num_times))
@@ -59,8 +59,9 @@ class ImageTimeSeries(object):
 #                            direction='FFTW_BACKWARD', \
 #                            threads=self.fft_thread_count)
 
-        self.pool_size = 16
+        self.pool_size = 15
         self.pool = multiprocessing.Pool(self.pool_size)
+        self.pool_timeout = 5000
 
         self.update_evolutions()
 
@@ -423,7 +424,7 @@ class ImageTimeSeries(object):
                             Kv, rg.element_volumes[0])))
 
         for t in range(T):
-            self.v[:,:,t] = res[t].get(timeout=100)
+            self.v[:,:,t] = res[t].get(timeout=self.pool_timeout)
 
         self.v = self.v.real
         logging.info("k_mu time: %f" % (time.time()-start))
@@ -442,11 +443,14 @@ class ImageTimeSeries(object):
         self.v[rg.edge_nodes,:,:] = 0.
         start = time.time()
         #rg.compute_interpolation_data_async(-1 * self.v * self.dt, self.pool)
-        rg.compute_interpolation_data(-1 * self.v * self.dt)
+        #rg.compute_interpolation_data(-1 * self.v * self.dt)
         self.I_interp[:,0] = self.I[:,0].copy()
         for t in range(T-1):
-            self.I_interp[:,t+1] = rg.grid_interpolate_3d_cached( \
-                                self.I_interp[:,t], t)
+            #self.I_interp[:,t+1] = rg.grid_interpolate_3d_cached( \
+            #            self.I_interp[:,t], t)
+            w = -1. * self.v[:,:,t] * self.dt
+            self.I_interp[:,t+1] = rg.grid_interpolate_3d_image( \
+                        self.I_interp[:,t], w)
         logging.info("update evo: %f" % (time.time() - start))
         #self.writeData("debug%d" % (self.optimize_iteration))
 
@@ -509,6 +513,8 @@ class ImageTimeSeries(object):
 
     def getGradient(self, coeff=1.0):
         rg, N, T = self.get_sim_data()
+        start = time.time()
+        #rg.compute_interpolation_data(-1 * self.v * self.dt)
         self.p[...] = 0.
         self.p[:,T-1] = 2./numpy.power(self.sigma, 2) * \
                                     (-self.I[:,T-1]+self.I_interp[:,T-1])
@@ -518,11 +524,19 @@ class ImageTimeSeries(object):
                 if t!=T-1:
                     p1 -= 2./numpy.power(self.sigma, 2) * \
                                     (self.I[:,t]-self.I_interp[:,t])
-            self.p[:,t-1] = rg.grid_interpolate_dual_3d_cached(p1, t)
+            #self.p[:,t-1] = rg.grid_interpolate_dual_3d_cached(p1, t)
+            w = -1. * self.v[:,:,t] * self.dt
+            self.p[:,t-1] = rg.grid_interpolate_dual_3d(p1, w)
+
+        res = []
+        for t in range(T):
+            w = -1. * self.v[:,:,t] * self.dt
+            res.append(self.pool.apply_async(regularGrid.grid_interpolate_gradient_3d_for_async, \
+                        (self.I_interp[:,t], w, N, rg.num_nodes, \
+                        rg.interp_mesh, rg.dims, rg.dx) ))
         grad = numpy.zeros((rg.num_nodes, 3, T))
         for t in range(T):
-            gI_interp = rg.grid_interpolate_gradient_3d_cached( \
-                                self.I_interp[:,t], t)
+            gI_interp = res[t].get(timeout=self.pool_timeout)
             grad[:,0,t] = (2*self.mu[:,0,t] - self.p[:,t] * gI_interp[:,0])
             grad[:,1,t] = (2*self.mu[:,1,t] - self.p[:,t] * gI_interp[:,1])
             grad[:,2,t] = (2*self.mu[:,2,t] - self.p[:,t] * gI_interp[:,2])
@@ -531,6 +545,7 @@ class ImageTimeSeries(object):
 #            rg.add_vtk_point_data(self.p[:,t], "p")
 #            rg.add_vtk_point_data(gI_interp, "gI_interp")
 #            rg.vtk_write(t, "grad_test", output_dir=self.output_dir)
+        logging.info("getGradient: %f" % (time.time()-start))
         return coeff * self.dt * grad
 
     def computeMatching(self):
@@ -540,15 +555,21 @@ class ImageTimeSeries(object):
 
     def dotProduct(self, g1, g2):
         rg, N, T = self.get_sim_data()
-        res = numpy.zeros(len(g2))
-        for t in range(T):
-            for ll in range(len(g2)):
-                gr = g2[ll]
-                kgr = self.apply_kernel_V(gr[:,:,t])
-                res[ll] += self.dt * numpy.dot(g1[:,0,t], kgr[:,0])
-                res[ll] += self.dt * numpy.dot(g1[:,1,t], kgr[:,1])
-                res[ll] += self.dt * numpy.dot(g1[:,2,t], kgr[:,2])
-        return res
+        prod = numpy.zeros(len(g2))
+        Kv = self.get_kernelv()
+        for ll in range(len(g2)):
+            gr = g2[ll]
+            res = []
+            for t in range(T):
+                res.append(self.pool.apply_async(apply_kernel_V_for_async, \
+                        args=(gr[:,:,t].copy(), rg.dims, rg.num_nodes,\
+                        Kv, rg.element_volumes[0])))
+            for t in range(T):
+                kgr = res[t].get(timeout=self.pool_timeout)
+                prod[ll] += self.dt * numpy.dot(g1[:,0,t], kgr[:,0])
+                prod[ll] += self.dt * numpy.dot(g1[:,1,t], kgr[:,1])
+                prod[ll] += self.dt * numpy.dot(g1[:,2,t], kgr[:,2])
+        return prod
 
     def endOfIteration(self):
         self.optimize_iteration += 1

@@ -6,6 +6,7 @@ import scipy.integrate
 import scipy.linalg
 import scipy.sparse
 import scipy.interpolate
+import scipy.ndimage.interpolation
 from tvtk.api import tvtk
 
 def meshgrid2(arrs):
@@ -81,6 +82,87 @@ def interp_data_for_async(w, N, interp_mesh, dims, dx):
     return [ax,ay,az,pindex,pindex_x, pindex_y, \
                                 pindex_xy, pindex_z, pindex_z_x, pindex_z_y, \
                                 pindex_z_xy]
+
+
+def grid_interpolate_3d_for_async(f, w, N, num_nodes, interp_mesh, dims, dx):
+    F = numpy.reshape(f.copy(), dims)
+    (ax,ay,az,pindex,pindex_x, pindex_y, \
+            pindex_xy, pindex_z, pindex_z_x, \
+            pindex_z_y, pindex_z_xy) = interp_data_for_async(w, N, interp_mesh,\
+                                 dims, dx)
+    F[:,:] = f[pindex]*(1-ax)*(1-ay)*(1-az) + \
+                     f[pindex_x]*(ax)*(1-ay)*(1-az) + \
+                     f[pindex_y]*(1-ax)*(ay)*(1-az) + \
+                     f[pindex_xy]*(ax)*(ay)*(1-az)
+    F[:,:] += f[pindex_z]*(1-ax)*(1-ay)*(az) + \
+                     f[pindex_z_x]*(ax)*(1-ay)*(az) + \
+                     f[pindex_z_y]*(1-ax)*(ay)*(az) + \
+                     f[pindex_z_xy]*(ax)*(ay)*(az)
+    return numpy.reshape(F[:,:], num_nodes)
+
+def grid_interpolate_gradient_3d_for_async(f, w, N, num_nodes, interp_mesh, \
+                                                    dims, dx):
+    (ax,ay,az,pindex,pindex_x, pindex_y, \
+            pindex_xy, pindex_z, pindex_z_x, \
+            pindex_z_y, pindex_z_xy) = interp_data_for_async(w, N, \
+                                interp_mesh, dims, dx)
+
+    F1 = f[pindex]*(-1)*(1-ay)*(1-az) + \
+                    f[pindex_x]*(1)*(1-ay)*(1-az) + \
+                    f[pindex_y]*(-1)*(ay)*(1-az) + \
+                    f[pindex_xy]*(1)*(ay)*(1-az) + \
+                    f[pindex_z]*(-1)*(1-ay)*(az) + \
+                    f[pindex_z_x]*(1)*(1-ay)*(az) + \
+                    f[pindex_z_y]*(-1)*(ay)*(az) + \
+                    f[pindex_z_xy]*(1)*(ay)*(az)
+    F2 = f[pindex]*(1-ax)*(-1)*(1-az) + \
+                    f[pindex_x]*(ax)*(-1)*(1-az) + \
+                    f[pindex_y]*(1-ax)*(1)*(1-az) + \
+                    f[pindex_xy]*(ax)*(1)*(1-az) + \
+                    f[pindex_z]*(1-ax)*(-1)*(az) + \
+                    f[pindex_z_x]*(ax)*(-1)*(az) + \
+                    f[pindex_z_y]*(1-ax)*(1)*(az) + \
+                    f[pindex_z_xy]*(ax)*(1)*(az)
+    F3 = f[pindex]*(1-ax)*(1-ay)*(-1) + \
+                    f[pindex_x]*(ax)*(1-ay)*(-1) + \
+                    f[pindex_y]*(1-ax)*(ay)*(-1) + \
+                    f[pindex_xy]*(ax)*(ay)*(-1) + \
+                    f[pindex_z]*(1-ax)*(1-ay)*(1) + \
+                    f[pindex_z_x]*(ax)*(1-ay)*(1) + \
+                    f[pindex_z_y]*(1-ax)*(ay)*(1) + \
+                    f[pindex_z_xy]*(ax)*(ay)*(1)
+    gf = numpy.zeros((num_nodes, 3))
+    gf[:,0] = numpy.reshape(F1, num_nodes)
+    gf[:,1] = numpy.reshape(F2, num_nodes)
+    gf[:,2] = numpy.reshape(F3, num_nodes)
+    return gf
+
+def spread(data, pindex, num_nodes):
+    idxi = numpy.reshape(pindex, (num_nodes))
+    idxj = numpy.zeros(num_nodes)
+    idx = numpy.vstack((idxi,idxj))
+    rdata = numpy.reshape(data, (num_nodes))
+    f_interp1 = scipy.sparse.csc_matrix((rdata, idx), (num_nodes,1))
+    return numpy.reshape(f_interp1.toarray(), (num_nodes))
+
+def grid_interpolate_dual_3d_for_async(f, w, N, num_nodes, interp_mesh, \
+                                                dims, dx):
+    (ax,ay,az,pindex,pindex_x, pindex_y, \
+            pindex_xy, pindex_z, pindex_z_x, \
+            pindex_z_y, pindex_z_xy) = interp_data_for_async(w, N, \
+                                interp_mesh, dims, dx)
+    F = numpy.reshape(f, dims)
+
+    f_interp = spread(F*(1-ax)*(1-ay)*(1-az), pindex, num_nodes)
+    f_interp += spread(F*(ax)*(1-ay)*(1-az), pindex_x, num_nodes)
+    f_interp += spread(F*(1-ax)*(ay)*(1-az), pindex_y, num_nodes)
+    f_interp += spread(F*(ax)*(ay)*(1-az), pindex_xy, num_nodes)
+    f_interp += spread(F*(1-ax)*(1-ay)*(az), pindex_z, num_nodes)
+    f_interp += spread(F*(ax)*(1-ay)*(az), pindex_z_x, num_nodes)
+    f_interp += spread(F*(1-ax)*(ay)*(az), pindex_z_y, num_nodes)
+    f_interp += spread(F*(ax)*(ay)*(az), pindex_z_xy, num_nodes)
+    return f_interp
+
 
 
 class RegularGrid(object):
@@ -484,7 +566,7 @@ class RegularGrid(object):
             res.append(pool.apply_async(interp_data_for_async, (w[:,:,t], N, \
                                 self.interp_mesh, self.dims, self.dx)))
         for t in range(w.shape[-1]):
-            self.interp_data.append(res[t].get(timeout=100))
+            self.interp_data.append(res[t].get(timeout=5000))
 
     def compute_interpolation_data(self, w):
         self.interp_data = []
@@ -543,7 +625,7 @@ class RegularGrid(object):
                                 pindex_z_xy])
 
     def grid_interpolate_3d_cached(self, f, t):
-        F = numpy.reshape(f.copy(), self.dims)
+        F = numpy.reshape(f, self.dims)
         (ax,ay,az,pindex,pindex_x, pindex_y, \
                 pindex_xy, pindex_z, pindex_z_x, \
                 pindex_z_y, pindex_z_xy) = self.interp_data[t]
@@ -556,6 +638,35 @@ class RegularGrid(object):
                          f[pindex_z_y]*(1-ax)*(ay)*(az) + \
                          f[pindex_z_xy]*(ax)*(ay)*(az)
         return numpy.reshape(F[:,:], self.num_nodes)
+
+    def grid_interpolate_3d_image(self, f, w):
+        f_rs = numpy.reshape(f, self.dims)
+        pts = numpy.empty((3, self.dims[0], self.dims[1], self.dims[2]))
+        im = self.interp_mesh
+        pts[2,...] = im[0] + (w[:,0]/self.dx[0]).reshape(self.dims)
+        pts[1,...] = im[1] + (w[:,1]/self.dx[1]).reshape(self.dims)
+        pts[0,...] = im[2] + (w[:,2]/self.dx[2]).reshape(self.dims)
+        F = scipy.ndimage.interpolation.map_coordinates(f_rs, pts, order=1)
+        F.shape = self.num_nodes
+        return F
+
+    def grid_interpolate_dual_3d(self, f, w):
+        (ax,ay,az,pindex,pindex_x, pindex_y, \
+                pindex_xy, pindex_z, pindex_z_x, \
+                pindex_z_y, pindex_z_xy) = \
+                         interp_data_for_async(w, self.num_points,
+                         self.interp_mesh, self.dims, self.dx)
+        F = numpy.reshape(f, self.dims)
+        f_interp = self.spread(F*(1-ax)*(1-ay)*(1-az), pindex)
+        f_interp += self.spread(F*(ax)*(1-ay)*(1-az), pindex_x)
+        f_interp += self.spread(F*(1-ax)*(ay)*(1-az), pindex_y)
+        f_interp += self.spread(F*(ax)*(ay)*(1-az), pindex_xy)
+        f_interp += self.spread(F*(1-ax)*(1-ay)*(az), pindex_z)
+        f_interp += self.spread(F*(ax)*(1-ay)*(az), pindex_z_x)
+        f_interp += self.spread(F*(1-ax)*(ay)*(az), pindex_z_y)
+        f_interp += self.spread(F*(ax)*(ay)*(az), pindex_z_xy)
+        return f_interp
+
 
     def grid_interpolate_gradient_3d_cached(self, f, t):
         (ax,ay,az,pindex,pindex_x, pindex_y, \
@@ -596,7 +707,7 @@ class RegularGrid(object):
         (ax,ay,az,pindex,pindex_x, pindex_y, \
                 pindex_xy, pindex_z, pindex_z_x, \
                 pindex_z_y, pindex_z_xy) = self.interp_data[t]
-        F = numpy.reshape(f.copy(), self.dims)
+        F = numpy.reshape(f, self.dims)
 
         f_interp = self.spread(F*(1-ax)*(1-ay)*(1-az), pindex)
         f_interp += self.spread(F*(ax)*(1-ay)*(1-az), pindex_x)
@@ -608,7 +719,7 @@ class RegularGrid(object):
         f_interp += self.spread(F*(ax)*(ay)*(az), pindex_z_xy)
         return f_interp
 
-    def grid_interpolate3d(self, f, pts):
+    def grid_interpolate_3d(self, f, pts):
         diffpts = pts - self.nodes
         x = diffpts[:,0]
         y = diffpts[:,1]
@@ -804,6 +915,4 @@ class RegularGrid(object):
                 int_b[self.elements[:,j]] += numpy.power(.5,3) * \
                                     b[self.elements[:,j]] * self.element_volumes
         return int_b
-
-
 
