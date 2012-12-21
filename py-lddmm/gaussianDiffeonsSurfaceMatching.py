@@ -103,11 +103,12 @@ class SurfaceMatching(surfaceMatching.SurfaceMatching):
             if DiffeonRatio==None:
                 self.c0 = np.copy(self.x0) ;
                 self.S0 = np.zeros([self.x0.shape[0], self.x0.shape[1], self.x0.shape[1]])
+                self.idx = None
             else:
-                (self.c0, self.S0) = gd.generateDiffeons(self.fv0, DiffeonRatio)
+                (self.c0, self.S0, self.idx) = gd.generateDiffeons(self.fv0, DiffeonRatio)
                 #self.S0 *= self.param.sigmaKernel**2;
         else:
-            (self.c0, self.S0) = Diffeons
+            (self.c0, self.S0, self.idx) = Diffeons
         if zeroVar:
             self.S0 = np.zeros(self.S0.shape)
 
@@ -127,9 +128,9 @@ class SurfaceMatching(surfaceMatching.SurfaceMatching):
         self.fv0.saveVTK(self.outputDir+'/Template.vtk')
         self.fv1.saveVTK(self.outputDir+'/Target.vtk')
 
-    def dataTerm(self, _fvDef):
-        obj = self.param.fun_obj(_fvDef, self.fv1, self.param.KparDist) / (self.param.sigmaError**2)
-        return obj
+    # def dataTerm(self, _fvDef):
+    #     obj = self.param.fun_obj(_fvDef, self.fv1, self.param.KparDist) / (self.param.sigmaError**2)
+    #     return obj
 
     def  objectiveFunDef(self, at, Afft, withTrajectory = False, withJacobian=False, initial = None):
         if initial == None:
@@ -180,6 +181,7 @@ class SurfaceMatching(surfaceMatching.SurfaceMatching):
             (self.obj, self.xt, self.ct, self.St) = self.objectiveFunDef(self.at, self.Afft, withTrajectory=True)
             self.fvDef.updateVertices(np.squeeze(self.xt[-1, :, :]))
             self.obj += self.obj0 + self.dataTerm(self.fvDef)
+            #print self.obj0,  self.dataTerm(self.fvDef)
             #print self.obj0, self.obj
 
         return self.obj
@@ -275,7 +277,7 @@ class SurfaceMatching(surfaceMatching.SurfaceMatching):
             gg = np.squeeze(g1.diff[t, :, :])
             rcc = gd.computeProducts(c, S, self.param.sigmaKernel)
             (L, W) = LA.eigh(rcc)
-            #rcc += (L.max()/10000)*np.eye(rcc.shape[0])
+            rcc += (L.max()/1000)*np.eye(rcc.shape[0])
             u = np.dot(rcc, gg)
             uu = np.multiply(g1.aff[t], self.affineWeight.reshape(g1.aff[t].shape))
             ll = 0
@@ -299,7 +301,11 @@ class SurfaceMatching(surfaceMatching.SurfaceMatching):
         (obj1, self.xt, self.ct, self.St, Jt) = self.objectiveFunDef(self.at, self.Afft, withTrajectory=True, withJacobian=True)
         for kk in range(self.Tsize+1):
             self.fvDef.updateVertices(np.squeeze(self.xt[kk, :, :]))
-            self.fvDef.saveVTK(self.outputDir +'/'+ self.saveFile+str(kk)+'.vtk', scalars = Jt[kk, :], scal_name='Jacobian')
+            if self.idx == None:
+                self.fvDef.saveVTK(self.outputDir +'/'+ self.saveFile+str(kk)+'.vtk', scalars = Jt[kk, :], scal_name='Jacobian')
+            else:
+                self.fvDef.saveVTK(self.outputDir +'/'+ self.saveFile+str(kk)+'.vtk', scalars = self.idx, scal_name='Labels')
+            gd.saveDiffeons(self.outputDir +'/'+ self.saveFile+'Diffeons'+str(kk)+'.vtk', self.ct[kk,:,:], self.St[kk,:,:,:])
 
     def optimizeMatching(self):
         grd = self.getGradient(self.gradCoeff)

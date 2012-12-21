@@ -185,7 +185,7 @@ class SurfaceMatching:
             (self.obj, self.xt) = self.objectiveFunDef(self.at, self.Afft, withTrajectory=True)
             self.fvDef.updateVertices(np.squeeze(self.xt[-1, :, :]))
             self.obj += self.obj0 + self.dataTerm(self.fvDef)
-            print self.obj0, self.obj
+            #print self.obj0,  self.dataTerm(self.fvDef)
 
         return self.obj
 
@@ -213,7 +213,7 @@ class SurfaceMatching:
             self.atTry = atTry
             self.objTry = objTry
             self.AfftTry = AfftTry
-        print 'objTry=',objTry, dir.diff.sum()
+            #print 'objTry=',objTry, dir.diff.sum()
 
         return objTry
 
@@ -236,7 +236,7 @@ class SurfaceMatching:
         foo = evol.landmarkHamiltonianGradient(self.fv0.vertices, self.at, px1, self.param.KparDiff, self.regweight, affine=A)
         grd = Direction()
         grd.diff = foo[0]/(coeff*self.Tsize)
-        print grd.diff.sum()
+        #print grd.diff.sum()
         grd.aff = np.zeros(self.Afft.shape)
         if self.affineDim > 0:
             dA = foo[1]
@@ -309,7 +309,7 @@ class SurfaceMatching:
         [grd2] = self.dotProduct(grd, [grd])
 
         self.gradEps = max(0.001, np.sqrt(grd2) / 10000)
-        print self.gradEps
+        print 'Gradient lower bound:', self.gradEps
         cg.cg(self, verb = self.verb, maxIter = self.maxIter, TestGradient=self.testGradient)
         #return self.at, self.xt
 

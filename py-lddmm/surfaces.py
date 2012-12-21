@@ -56,16 +56,54 @@ class Surface:
         self.surfel =  np.cross(xDef2-xDef1, xDef3-xDef1)
 
     def computeVertexArea(self):
-        a = np.zeros(self.vertices.shape[0])
-        n = np.zeros(self.vertices.shape[0])
-        af = np.sqrt((self.surfel**2).sum(axis=1))
-        for jj in range(3):
-            I = self.faces[:,jj]
-            for k in range(I.size):
-                a[I[k]] += af[k]
-                n[I[k]] += 1
-        a = np.divide(a,n)
-        return a
+        # compute areas of faces and vertices
+        V = self.vertices
+        F = self.faces
+        nv = V.shape[0]
+        nf = F.shape[0]
+        AF = np.zeros([nf,1])
+        AV = np.zeros([nv, 1])
+        for k in range(nf):
+            # determining if face is obtuse
+            x12 = V[F[k,1], :] - V[F[k,0], :]
+            x13 = V[F[k,2], :] - V[F[k,0], :]
+            n12 = np.sqrt((x12**2).sum())
+            n13 = np.sqrt((x13**2).sum())
+            c1 = (x12*x13).sum()/(n12*n13)
+            x23 = V[F[k,2], :] - V[F[k,1], :]
+            n23 = np.sqrt((x23**2).sum())
+            #n23 = norm(x23) ;
+            c2 = -(x12*x23).sum()/(n12*n23)
+            c3 = (x13*x23).sum()/(n13*n23)
+            AF[k] = np.sqrt((np.cross(x12, x13)**2).sum())/2
+            if (c1 < 0):
+                #face obtuse at vertex 1
+                AV[F[k,0]] += AF[k]/2
+                AV[F[k,1]] += AF[k]/4
+                AV[F[k,2]] += AF[k]/4
+            elif (c2 < 0):
+                #face obuse at vertex 2
+                AV[F[k,0]] += AF[k]/4
+                AV[F[k,1]] += AF[k]/2
+                AV[F[k,2]] += AF[k]/4
+            elif (c3 < 0):
+                #face obtuse at vertex 3
+                AV[F[k,0]] += AF[k]/4
+                AV[F[k,1]] += AF[k]/4
+                AV[F[k,2]] += AF[k]/2
+            else:
+                #non obtuse face
+                cot1 = c1 / np.sqrt(1-c1**2) 
+                cot2 = c2 / np.sqrt(1-c2**2) 
+                cot3 = c3 / np.sqrt(1-c3**2) 
+                AV[F[k,0]] += ((x12**2).sum() * cot3 + (x13**2).sum() * cot2)/8 
+                AV[F[k,1]] += ((x12**2).sum() * cot3 + (x23**2).sum() * cot1)/8 
+                AV[F[k,2]] += ((x13**2).sum() * cot2 + (x23**2).sum() * cot1)/8 
+
+        for k in range(nv):
+            if (np.fabs(AV[k]) <1e-10):
+                print 'Warning: vertex ', k, 'has no face; use removeIsolated'
+        return AV, AF
 
          
 
@@ -120,6 +158,56 @@ class Surface:
                 res[p[0],p[1], p[2]] =- min(cube[np.nonzero(d2[bmin[0]:bmax[0], bmin[1]:bmax[1], bmin[2]:bmax[2]] > 0)])-.25
                 
         return res                
+
+    def Simplify(self, target=1000.0):
+        points = vtkPoints()
+        for k in range(self.vertices.shape[0]):
+            points.InsertNextPoint(self.vertices[k,0], self.vertices[k,1], self.vertices[k,2])
+        polys = vtkCellArray()
+        for k in range(self.faces.shape[0]):
+            polys.InsertNextCell(3)
+            for kk in range(3):
+                polys.InsertCellPoint(self.faces[k,kk])
+        polydata = vtkPolyData()
+        polydata.SetPoints(points)
+        polydata.SetPolys(polys)
+        dc = vtkDecimatePro()
+        red = 1 - min(np.float(target)/polydata.GetNumberOfPoints(), 1)
+        dc.SetTargetReduction(red)
+        dc.PreserveTopologyOn()
+        #dc.SetSplitting(0)
+        dc.SetInput(polydata)
+        #print dc
+        dc.Update()
+        g = dc.GetOutput()
+        # #print 'points:', g.GetNumberOfPoints()
+        # cp = vtkCleanPolyData()
+        # cp.SetInput(dc.GetOutput())
+        # #cp.SetPointMerging(1)
+        # cp.ConvertPolysToLinesOn()
+        # cp.SetAbsoluteTolerance(1e-5)
+        # cp.Update()
+        # g = cp.GetOutput()
+        # #print g
+        npoints = int(g.GetNumberOfPoints())
+        nfaces = int(g.GetNumberOfPolys())
+        print 'Dimensions after Reduction:', npoints, nfaces, g.GetNumberOfCells()
+        V = np.zeros([npoints, 3])
+        for kk in range(npoints):
+            V[kk, :] = np.array(g.GetPoint(kk))
+        F = np.zeros([nfaces, 3])
+        gf = 0
+        for kk in range(g.GetNumberOfCells()):
+            c = g.GetCell(kk)
+            if(c.GetNumberOfPoints() == 3):
+                for ll in range(3):
+                    F[gf,ll] = c.GetPointId(ll)
+                gf += 1
+
+        self.vertices = V
+        self.faces = np.int_(F[0:gf, :])
+        self.computeCentersAreas()
+
             
     # Computes isosurfaces using vtk               
     def Isosurface(self, data, value=0.5, target=1000.0, scales = [1., 1., 1.], smooth = -1, fill_holes = 1.):
@@ -302,50 +390,8 @@ class Surface:
         V = self.vertices ;
         nf = F.shape[0]
         nv = V.shape[0]
-        # compute areas of faces and vertices
-        AF = np.zeros([nf,1])
-        AV = np.zeros([nv, 1])
-        for k in range(nf):
-            # determining if face is obtuse
-            x12 = V[F[k,1], :] - V[F[k,0], :]
-            x13 = V[F[k,2], :] - V[F[k,0], :]
-            n12 = np.sqrt((x12**2).sum())
-            n13 = np.sqrt((x13**2).sum())
-            c1 = (x12*x13).sum()/(n12*n13)
-            x23 = V[F[k,2], :] - V[F[k,1], :]
-            n23 = np.sqrt((x23**2).sum())
-            #n23 = norm(x23) ;
-            c2 = -(x12*x23).sum()/(n12*n23)
-            c3 = (x13*x23).sum()/(n13*n23)
-            AF[k] = np.sqrt((np.cross(x12, x13)**2).sum())/2
-            if (c1 < 0):
-                #face obtuse at vertex 1
-                AV[F[k,0]] += AF[k]/2
-                AV[F[k,1]] += AF[k]/4
-                AV[F[k,2]] += AF[k]/4
-            elif (c2 < 0):
-                #face obuse at vertex 2
-                AV[F[k,0]] += AF[k]/4
-                AV[F[k,1]] += AF[k]/2
-                AV[F[k,2]] += AF[k]/4
-            elif (c3 < 0):
-                #face obtuse at vertex 3
-                AV[F[k,0]] += AF[k]/4
-                AV[F[k,1]] += AF[k]/4
-                AV[F[k,2]] += AF[k]/2
-            else:
-                #non obtuse face
-                cot1 = c1 / np.sqrt(1-c1**2) 
-                cot2 = c2 / np.sqrt(1-c2**2) 
-                cot3 = c3 / np.sqrt(1-c3**2) 
-                AV[F[k,0]] += ((x12**2).sum() * cot3 + (x13**2).sum() * cot2)/8 
-                AV[F[k,1]] += ((x12**2).sum() * cot3 + (x23**2).sum() * cot1)/8 
-                AV[F[k,2]] += ((x13**2).sum() * cot2 + (x23**2).sum() * cot1)/8 
 
-        for k in range(nv):
-            if (np.fabs(AV[k]) <1e-10):
-                print 'Warning: vertex ', k, 'has no face; use removeIsolated'
-
+        AV, AF = self.computeVertexArea()
 
         # compute edges and detect boundary
         #edm = sp.lil_matrix((nv,nv))
@@ -644,7 +690,7 @@ class Surface:
                     j=0
 
     # Saves in .vtk format
-    def saveVTK(self, fileName, scalars = None, normals = None, scal_name='scalars'):
+    def saveVTK(self, fileName, scalars = None, normals = None, tensors=None, scal_name='scalars'):
         F = self.faces ;
         V = self.vertices ;
 
@@ -666,6 +712,11 @@ class Surface:
                 fvtkout.write('\nNORMALS normals float')
                 for ll in range(V.shape[0]):
                     fvtkout.write('\n {0: .5f} {1: .5f} {2: .5f}'.format(normals[ll, 0], normals[ll, 1], normals[ll, 2]))
+            if not (tensors == None):
+                fvtkout.write('\nTENSORS tensors float')
+                for ll in range(V.shape[0]):
+                    for kk in range(2):
+                        fvtkout.write('\n {0: .5f} {1: .5f} {2: .5f}'.format(tensors[ll, kk, 0], tensors[ll, kk, 1], tensors[ll, kk, 2]))
             fvtkout.write('\n')
 
 
