@@ -32,8 +32,8 @@ class ImageTimeSeries(object):
 
     def __init__(self, output_dir):
         self.output_dir = output_dir
-        #self.initialize_lung()
-        self.initialize_lung_downsample()
+        self.initialize_lung()
+        #self.initialize_lung_downsample()
         #self.initialize_biocard()
         self.mu = numpy.zeros((self.rg.num_nodes, 3, self.num_times))
         self.mu_state = numpy.zeros((self.rg.num_nodes, 3, self.num_times))
@@ -443,20 +443,20 @@ class ImageTimeSeries(object):
         self.v[rg.edge_nodes,:,:] = 0.
         start = time.time()
         #rg.compute_interpolation_data_async(-1 * self.v * self.dt, self.pool)
-        #rg.compute_interpolation_data(-1 * self.v * self.dt)
+        rg.compute_interpolation_data(-1 * self.v * self.dt)
         self.I_interp[:,0] = self.I[:,0].copy()
         for t in range(T-1):
-            #self.I_interp[:,t+1] = rg.grid_interpolate_3d_cached( \
-            #            self.I_interp[:,t], t)
-            w = -1. * self.v[:,:,t] * self.dt
-            self.I_interp[:,t+1] = rg.grid_interpolate_3d_image( \
-                        self.I_interp[:,t], w)
+            self.I_interp[:,t+1] = rg.grid_interpolate_3d_cached( \
+                        self.I_interp[:,t], t)
+            #w = -1. * self.v[:,:,t] * self.dt
+            #self.I_interp[:,t+1] = rg.grid_interpolate_3d_image( \
+            #            self.I_interp[:,t], w)
         logging.info("update evo: %f" % (time.time() - start))
         #self.writeData("debug%d" % (self.optimize_iteration))
 
     def writeData(self, name):
         rg, N, T = self.get_sim_data()
-        grd = self.getGradient()
+        #grd = self.getGradient()
         for t in range(T):
             rg.create_vtk_sg()
             rg.add_vtk_point_data(self.v[:,:,t], "v")
@@ -464,7 +464,7 @@ class ImageTimeSeries(object):
             rg.add_vtk_point_data(self.I_interp[:,t], "I_interp")
             rg.add_vtk_point_data(self.I[:,t]-self.I_interp[:,t], "diff")
             rg.add_vtk_point_data(self.p[:,t], "p")
-            rg.add_vtk_point_data(grd[:,:,t], "grad")
+            #rg.add_vtk_point_data(grd[:,:,t], "grad")
             rg.add_vtk_point_data(self.mu[:,:,t], "mu")
             rg.vtk_write(t, name, output_dir=self.output_dir)
 
@@ -486,7 +486,9 @@ class ImageTimeSeries(object):
             if t in range(0, self.num_times, self.num_times_disc):
                 term2 += numpy.dot(self.I[:,t]- self.I_interp[:,t], \
                         self.I[:,t]- self.I_interp[:,t])
-        total_fun = obj + 1./numpy.power(self.sigma,2) * term2
+	obj *= rg.element_volumes[0]
+	term2 *= rg.element_volumes[0]
+	total_fun = obj + 1./numpy.power(self.sigma,2) * term2
         logging.info("term1: %f, term2: %f, tot: %f" % (obj, term2, total_fun))
         logging.info("objFun time: %f" % (time.time() - start))
         return total_fun
@@ -524,9 +526,9 @@ class ImageTimeSeries(object):
                 if t!=T-1:
                     p1 -= 2./numpy.power(self.sigma, 2) * \
                                     (self.I[:,t]-self.I_interp[:,t])
-            #self.p[:,t-1] = rg.grid_interpolate_dual_3d_cached(p1, t)
-            w = -1. * self.v[:,:,t] * self.dt
-            self.p[:,t-1] = rg.grid_interpolate_dual_3d(p1, w)
+            self.p[:,t-1] = rg.grid_interpolate_dual_3d_cached(p1, t)
+            #w = -1. * self.v[:,:,t] * self.dt
+            #self.p[:,t-1] = rg.grid_interpolate_dual_3d(p1, w)
 
         res = []
         for t in range(T):
