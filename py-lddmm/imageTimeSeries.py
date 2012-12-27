@@ -1,5 +1,4 @@
 import regularGrid
-import semiLagrangian
 import diffeomorphisms
 import conjugateGradient
 import numpy
@@ -7,10 +6,11 @@ import optparse
 import os
 import shutil
 import logging
-
-#import pyfftw
 import time
 import multiprocessing
+#import rg_fort
+#import pyfftw
+
 
 def apply_kernel_V_for_async(right, dims, num_nodes, Kv, el_vol):
     krho = numpy.zeros((num_nodes, 3))
@@ -32,8 +32,8 @@ class ImageTimeSeries(object):
 
     def __init__(self, output_dir):
         self.output_dir = output_dir
-        self.initialize_lung()
-        #self.initialize_lung_downsample()
+        #self.initialize_lung()
+        self.initialize_lung_downsample()
         #self.initialize_biocard()
         self.mu = numpy.zeros((self.rg.num_nodes, 3, self.num_times))
         self.mu_state = numpy.zeros((self.rg.num_nodes, 3, self.num_times))
@@ -59,7 +59,7 @@ class ImageTimeSeries(object):
 #                            direction='FFTW_BACKWARD', \
 #                            threads=self.fft_thread_count)
 
-        self.pool_size = 15
+        self.pool_size = 10
         self.pool = multiprocessing.Pool(self.pool_size)
         self.pool_timeout = 5000
 
@@ -72,7 +72,7 @@ class ImageTimeSeries(object):
         self.num_times = self.num_times_disc * self.num_target_times + 1
         self.times = numpy.linspace(0, 1, self.num_times)
         self.dt = 1. / (self.num_times - 1)
-        self.sigma = .01
+        self.sigma = .1
         self.num_points_data = numpy.array([256, 184, 160])
         self.mults = numpy.array([2,2,2]).astype(int)
         self.num_points = (self.num_points_data/self.mults).astype(int)
@@ -134,7 +134,7 @@ class ImageTimeSeries(object):
         self.num_times = self.num_times_disc * self.num_target_times + 1
         self.times = numpy.linspace(0, 1, self.num_times)
         self.dt = 1. / (self.num_times - 1)
-        self.sigma = .01
+        self.sigma = .1
         self.num_points = numpy.array([256,190,160])
         self.domain_max = None
         self.dx = numpy.array([1.,1.,1.])
@@ -332,7 +332,7 @@ class ImageTimeSeries(object):
         #r_sqr_xsi = (numpy.power(fnodes[:,:,0],2) + numpy.power(fnodes[:,:,1],2) + \
         #                    numpy.power(fnodes[:,:,2],2))
         #Kv = 2.*numpy.pi * b * numpy.exp(-b/2. * r_sqr_xsi)
-        alpha = 2
+        alpha = .5
         Kv = 1.0 / numpy.power(1 + alpha*(r_sqr_xsi),2)
         return Kv
 
@@ -443,12 +443,24 @@ class ImageTimeSeries(object):
         self.v[rg.edge_nodes,:,:] = 0.
         start = time.time()
         #rg.compute_interpolation_data_async(-1 * self.v * self.dt, self.pool)
-        rg.compute_interpolation_data(-1 * self.v * self.dt)
+        #rg.compute_interpolation_data(-1 * self.v * self.dt)
         self.I_interp[:,0] = self.I[:,0].copy()
+
         for t in range(T-1):
-            self.I_interp[:,t+1] = rg.grid_interpolate_3d_cached( \
-                        self.I_interp[:,t], t)
-            #w = -1. * self.v[:,:,t] * self.dt
+            #self.I_interp[:,t+1] = rg.grid_interpolate_3d_cached( \
+            #            self.I_interp[:,t], t)
+            w = -1. * self.v[:,:,t] * self.dt
+#            self.I_interp[:,t+1] = rg_fort.interpolate_3d(self.I_interp[:,t],\
+#                             w, \
+#                            rg.num_points[0], rg.num_points[1], \
+#                            rg.num_points[2], \
+#                            rg.interp_mesh[0], \
+#                            rg.interp_mesh[1], rg.interp_mesh[2], \
+#                            rg.dx[0], rg.dx[1], rg.dx[2])
+
+            self.I_interp[:,t+1] = regularGrid.grid_interpolate_3d_for_async( \
+                        self.I_interp[:,t], w, rg.num_points, rg.num_nodes, \
+                        rg.interp_mesh, rg.dims, rg.dx)
             #self.I_interp[:,t+1] = rg.grid_interpolate_3d_image( \
             #            self.I_interp[:,t], w)
         logging.info("update evo: %f" % (time.time() - start))
@@ -486,9 +498,9 @@ class ImageTimeSeries(object):
             if t in range(0, self.num_times, self.num_times_disc):
                 term2 += numpy.dot(self.I[:,t]- self.I_interp[:,t], \
                         self.I[:,t]- self.I_interp[:,t])
-	obj *= rg.element_volumes[0]
-	term2 *= rg.element_volumes[0]
-	total_fun = obj + 1./numpy.power(self.sigma,2) * term2
+        obj *= rg.element_volumes[0]
+        term2 *= rg.element_volumes[0]
+        total_fun = obj + 1./numpy.power(self.sigma,2) * term2
         logging.info("term1: %f, term2: %f, tot: %f" % (obj, term2, total_fun))
         logging.info("objFun time: %f" % (time.time() - start))
         return total_fun
@@ -526,8 +538,11 @@ class ImageTimeSeries(object):
                 if t!=T-1:
                     p1 -= 2./numpy.power(self.sigma, 2) * \
                                     (self.I[:,t]-self.I_interp[:,t])
-            self.p[:,t-1] = rg.grid_interpolate_dual_3d_cached(p1, t)
-            #w = -1. * self.v[:,:,t] * self.dt
+            #self.p[:,t-1] = rg.grid_interpolate_dual_3d_cached(p1, t)
+            w = -1. * self.v[:,:,t] * self.dt
+            self.p[:,t-1] = regularGrid.grid_interpolate_dual_3d_for_async( \
+                        p1, w, rg.num_points, rg.num_nodes, rg.interp_mesh, \
+                        rg.dims, rg.dx)
             #self.p[:,t-1] = rg.grid_interpolate_dual_3d(p1, w)
 
         res = []
