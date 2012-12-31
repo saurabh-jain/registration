@@ -300,6 +300,10 @@ class SurfaceMatching:
 
     def endOfIteration(self):
         (obj1, self.xt, Jt) = self.objectiveFunDef(self.at, self.Afft, withTrajectory=True, withJacobian=True)
+        xtEPDiff, atEPdiff = evol.landmarkEPDiff(self.at.shape[0], self.fv0.vertices, np.squeeze(self.at[0, :, :]), self.param.KparDiff)
+        self.fvDef.updateVertices(np.squeeze(xtEPDiff[-1, :, :]))
+        self.fvDef.saveVTK(self.outputDir +'/'+ self.saveFile+'EPDiff.vtk')
+        print 'EPDiff difference', np.fabs(self.xt[-1,:,:] - xtEPDiff[-1,:,:]).sum() 
         for kk in range(self.Tsize+1):
             self.fvDef.updateVertices(np.squeeze(self.xt[kk, :, :]))
             self.fvDef.saveVTK(self.outputDir +'/'+ self.saveFile+str(kk)+'.vtk', scalars = Jt[kk, :], scal_name='Jacobian')

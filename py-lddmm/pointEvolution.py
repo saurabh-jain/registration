@@ -304,6 +304,70 @@ def gaussianDiffeonsGradient(x0, c0, S0, at, px1, pc1, pS1, sigma, regweight, ge
 
 
 
+def landmarkEPDiff(T, x0, a0, KparDiff, affine = None, withJacobian=False, withNormals=None, withPointSet=None):
+    N = x0.shape[0]
+    dim = x0.shape[1]
+    timeStep = 1.0/T
+    at = np.zeros([T, N, dim])
+    xt = np.zeros([T+1, N, dim])
+    xt[0, :, :] = x0
+    at[0, :, :] = a0
+    simpleOutput = True
+    if not (withNormals==None):
+        simpleOutput = False
+        nt = np.zeros([T+1, N, dim])
+        nt[0, :, :] = withNormals
+    if withJacobian:
+        simpleOutput = False
+        Jt = np.zeros([T+1, N])
+    if not(affine == None):
+        A = affine[0]
+        b = affine[1]
+    if not (withPointSet==None):
+        simpleOutput = False
+        K = withPointSet.shape[0]
+        yt = np.zeros([T+1,K,dim])
+        yt[0, :, :] = withPointSet
+
+    for k in range(T):
+        z = np.squeeze(xt[k, :, :])
+        a = np.mat(np.squeeze(at[k, :, :]))
+        xt[k+1, :, :] = z + timeStep * KparDiff.applyK(z, a)
+        #print 'test', px.sum()
+        if k < (T-1):
+            at[k+1, :, :] = a - timeStep * KparDiff.applyDiffKT(z, [a], [a])
+        if not (affine == None):
+            xt[k+1, :, :] += timeStep * (np.dot(z, A[k].T) + b[k])
+        if not (withPointSet == None):
+            zy = np.squeeze(yt[k, :, :])
+            yt[k+1, :, :] = zy + timeStep * KparDiff.applyK(zy, a, y=z)
+            if not (affine == None):
+                yt[k+1, :, :] += timeStep * (np.dot(zy, A[k].T) + b[k])
+
+        if not (withNormals==None):
+            zn = np.squeeze(nt[k, :, :])        
+            nt[k+1, :, :] = zn - timeStep * KparDiff.applyDiffKT(z, [np.mat(zn)], [a]) 
+            if not (affine == None):
+                nt[k+1, :, :] += timeStep * np.dot(zn, A[k])
+        if withJacobian:
+            Jt[k+1, :] = Jt[k, :] + timeStep * KparDiff.applyDivergence(z, a)
+            if not (affine == None):
+                Jt[k+1, :] += timeStep * (np.trace(A[k]))
+    if simpleOutput:
+        return xt, at
+    else:
+        output = [xt, at]
+        if not (withPointSet==None):
+            output.append(yt)
+        if not (withNormals==None):
+            output.append(nt)
+        if withJacobian:
+            output.append(Jt)
+        return output
+
+
+
+
 def landmarkHamiltonianCovector(x0, at, px1, KparDiff, regweight, affine = None):
     N = x0.shape[0]
     dim = x0.shape[1]

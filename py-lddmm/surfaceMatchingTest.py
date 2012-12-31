@@ -13,14 +13,14 @@ def compute():
 
     I1 = .06 - ((x-.50)**2 + 0.5*y**2 + z**2)  
     fv1 = Surface() ;
-    fv1.Isosurface(I1, value = 0, target=2000, scales=[1, 1, 1])
+    fv1.Isosurface(I1, value = 0, target=500, scales=[1, 1, 1])
 
     u = (z + y)/s2
     v = (z - y)/s2
     I1 = .05 - np.minimum((x-.7)**2 + 0.5*y**2 + z**2, (x-.30)**2 + 0.5*y**2 + z**2)  
     #I1 = .095 - ((x-.7)**2 + v**2 + 0.5*u**2) 
     fv2 = Surface() ;
-    fv2.Isosurface(I1, value = 0, target=2000, scales=[1, 1, 1])
+    fv2.Isosurface(I1, value = 0, target=500, scales=[1, 1, 1])
 
     ## Object kernel
     K1 = Kernel(name='gauss', sigma = 10.0)

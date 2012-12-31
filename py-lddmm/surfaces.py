@@ -157,9 +157,9 @@ class Surface:
             else:
                 res[p[0],p[1], p[2]] =- min(cube[np.nonzero(d2[bmin[0]:bmax[0], bmin[1]:bmax[1], bmin[2]:bmax[2]] > 0)])-.25
                 
-        return res                
+        return res
 
-    def Simplify(self, target=1000.0):
+    def toPolyData(self):
         points = vtkPoints()
         for k in range(self.vertices.shape[0]):
             points.InsertNextPoint(self.vertices[k,0], self.vertices[k,1], self.vertices[k,2])
@@ -171,6 +171,45 @@ class Surface:
         polydata = vtkPolyData()
         polydata.SetPoints(points)
         polydata.SetPolys(polys)
+        return polydata
+
+    def fromPolyData(self, g, scales=[1.,1.,1.]):
+        npoints = int(g.GetNumberOfPoints())
+        nfaces = int(g.GetNumberOfPolys())
+        print 'Dimensions:', npoints, nfaces, g.GetNumberOfCells()
+        V = np.zeros([npoints, 3])
+        for kk in range(npoints):
+            V[kk, :] = np.array(g.GetPoint(kk))
+            #print kk, V[kk]
+            #print kk, np.array(g.GetPoint(kk))
+        F = np.zeros([nfaces, 3])
+        gf = 0
+        for kk in range(g.GetNumberOfCells()):
+            c = g.GetCell(kk)
+            if(c.GetNumberOfPoints() == 3):
+                for ll in range(3):
+                    F[gf,ll] = c.GetPointId(ll)
+                    #print kk, gf, F[gf]
+                gf += 1
+
+                #self.vertices = np.multiply(data.shape-V-1, scales)
+        self.vertices = np.multiply(V, scales)
+        self.faces = np.int_(F[0:gf, :])
+        self.computeCentersAreas()
+
+
+    def Simplify(self, target=1000.0):
+        # points = vtkPoints()
+        # for k in range(self.vertices.shape[0]):
+        #     points.InsertNextPoint(self.vertices[k,0], self.vertices[k,1], self.vertices[k,2])
+        # polys = vtkCellArray()
+        # for k in range(self.faces.shape[0]):
+        #     polys.InsertNextCell(3)
+        #     for kk in range(3):
+        #         polys.InsertCellPoint(self.faces[k,kk])
+        polydata = self.toPolyData()
+        # polydata.SetPoints(points)
+        # polydata.SetPolys(polys)
         dc = vtkDecimatePro()
         red = 1 - min(np.float(target)/polydata.GetNumberOfPoints(), 1)
         dc.SetTargetReduction(red)
@@ -189,24 +228,39 @@ class Surface:
         # cp.Update()
         # g = cp.GetOutput()
         # #print g
-        npoints = int(g.GetNumberOfPoints())
-        nfaces = int(g.GetNumberOfPolys())
-        print 'Dimensions after Reduction:', npoints, nfaces, g.GetNumberOfCells()
-        V = np.zeros([npoints, 3])
-        for kk in range(npoints):
-            V[kk, :] = np.array(g.GetPoint(kk))
-        F = np.zeros([nfaces, 3])
-        gf = 0
-        for kk in range(g.GetNumberOfCells()):
-            c = g.GetCell(kk)
-            if(c.GetNumberOfPoints() == 3):
-                for ll in range(3):
-                    F[gf,ll] = c.GetPointId(ll)
-                gf += 1
+        self.fromPolyData(g)
+        # npoints = int(g.GetNumberOfPoints())
+        # nfaces = int(g.GetNumberOfPolys())
+        # print 'Dimensions after Reduction:', npoints, nfaces, g.GetNumberOfCells()
+        # V = np.zeros([npoints, 3])
+        # for kk in range(npoints):
+        #     V[kk, :] = np.array(g.GetPoint(kk))
+        # F = np.zeros([nfaces, 3])
+        # gf = 0
+        # for kk in range(g.GetNumberOfCells()):
+        #     c = g.GetCell(kk)
+        #     if(c.GetNumberOfPoints() == 3):
+        #         for ll in range(3):
+        #             F[gf,ll] = c.GetPointId(ll)
+        #         gf += 1
 
-        self.vertices = V
-        self.faces = np.int_(F[0:gf, :])
-        self.computeCentersAreas()
+        # self.vertices = V
+        # self.faces = np.int_(F[0:gf, :])
+        # self.computeCentersAreas()
+
+    def smooth(self, n=30):
+        g = self.toPolyData()
+        smoother= vtkWindowedSincPolyDataFilter()
+        smoother.SetInput(g)
+        smoother.SetNumberOfIterations(n)
+        #smoother.SetPassBand(smooth)        #this increases the error a lot!
+        smoother.NonManifoldSmoothingOn()
+        smoother.NormalizeCoordinatesOn()
+        smoother.GenerateErrorScalarsOn() 
+        #smoother.GenerateErrorVectorsOn()
+        smoother.Update()
+        g = smoother.GetOutput()
+        self.fromPolyData(g)
 
             
     # Computes isosurfaces using vtk               
@@ -234,9 +288,6 @@ class Surface:
         connectivity.SetInput(cf.GetOutput())
         connectivity.Update()
         g = connectivity.GetOutput()
-
-            
-
 
         if smooth > 0:
             smoother= vtkWindowedSincPolyDataFilter()
@@ -274,29 +325,30 @@ class Surface:
         cp.SetAbsoluteTolerance(1e-5)
         cp.Update()
         g = cp.GetOutput()
+        self.fromPolyData(g,scales)
         #print g
-        npoints = int(g.GetNumberOfPoints())
-        nfaces = int(g.GetNumberOfPolys())
-        print 'Dimensions:', npoints, nfaces, g.GetNumberOfCells()
-        V = np.zeros([npoints, 3])
-        for kk in range(npoints):
-            V[kk, :] = np.array(g.GetPoint(kk))
-            #print kk, V[kk]
-            #print kk, np.array(g.GetPoint(kk))
-        F = np.zeros([nfaces, 3])
-        gf = 0
-        for kk in range(g.GetNumberOfCells()):
-            c = g.GetCell(kk)
-            if(c.GetNumberOfPoints() == 3):
-                for ll in range(3):
-                    F[gf,ll] = c.GetPointId(ll)
-                    #print kk, gf, F[gf]
-                gf += 1
+        # npoints = int(g.GetNumberOfPoints())
+        # nfaces = int(g.GetNumberOfPolys())
+        # print 'Dimensions:', npoints, nfaces, g.GetNumberOfCells()
+        # V = np.zeros([npoints, 3])
+        # for kk in range(npoints):
+        #     V[kk, :] = np.array(g.GetPoint(kk))
+        #     #print kk, V[kk]
+        #     #print kk, np.array(g.GetPoint(kk))
+        # F = np.zeros([nfaces, 3])
+        # gf = 0
+        # for kk in range(g.GetNumberOfCells()):
+        #     c = g.GetCell(kk)
+        #     if(c.GetNumberOfPoints() == 3):
+        #         for ll in range(3):
+        #             F[gf,ll] = c.GetPointId(ll)
+        #             #print kk, gf, F[gf]
+        #         gf += 1
 
-                #self.vertices = np.multiply(data.shape-V-1, scales)
-        self.vertices = np.multiply(V, scales)
-        self.faces = np.int_(F[0:gf, :])
-        self.computeCentersAreas()
+        #         #self.vertices = np.multiply(data.shape-V-1, scales)
+        # self.vertices = np.multiply(V, scales)
+        # self.faces = np.int_(F[0:gf, :])
+        # self.computeCentersAreas()
 
     # Ensures that orientation is correct
     def edgeRecover(self):
