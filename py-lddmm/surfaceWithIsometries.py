@@ -133,7 +133,7 @@ class SurfaceWithIsometries(surfaceMatching.SurfaceMatching):
         self.xt = np.tile(self.fv0.vertices, [self.Tsize+1, 1, 1])
         self.cval = np.zeros([self.Tsize+1, self.c.shape[0]])
         if self.nconstr > 0:
-            self.ntau0 = np.power(self.x0[self.c[:,0], :] - self.x0[self.c[:,1], :],2).sum(axis=1)
+            self.ntau0 = np.sqrt(np.power(self.x0[self.c[:,0], :] - self.x0[self.c[:,1], :],2).sum(axis=1))
         #self.lmb = 10*np.multiply(np.random.randn(self.Tsize, 1), np.ones([self.Tsize, self.c.shape[0]]))
         self.lmb = np.ones([self.Tsize+1, self.c.shape[0]])
         self.mu = mu
@@ -158,8 +158,8 @@ class SurfaceWithIsometries(surfaceMatching.SurfaceMatching):
         cval = np.zeros(self.cval.shape)
         for t in range(self.Tsize+1):
             z = np.squeeze(xt[t, :, :]) 
-            ntau2 = np.power(z[c[:,0], :] - z[c[:,1], :],2).sum(axis=1)
-            cval[t, :] = np.divide(ntau2, self.ntau0) - 1
+            ntau = np.sqrt(np.power(z[c[:,0], :] - z[c[:,1], :],2).sum(axis=1))
+            cval[t, :] = np.divide(ntau, self.ntau0) - 1
             obj += timeStep * (- np.multiply(self.lmb[t, :], cval[t,:]).sum() + np.multiply(cval[t, :], cval[t, :]).sum()/(2*self.mu))
         return obj, cval
 
@@ -172,10 +172,10 @@ class SurfaceWithIsometries(surfaceMatching.SurfaceMatching):
         for t in range(self.Tsize+1):
             z = np.squeeze(xt[t, :, :])
             tau = z[c[:,0], :] - z[c[:,1], :]
-            ntau2 = np.power(tau,2).sum(axis=1)
-            lmb[t, :] = self.lmb[t, :] - (np.divide(ntau2 , self.ntau0)-1)/self.mu
-            tau = np.divide(tau, self.ntau0.reshape([self.nconstr, 1]))
-            ltau = 2*np.multiply(lmb[t, :].reshape([tau.shape[0], 1]), tau)
+            ntau = np.sqrt(np.power(tau,2).sum(axis=1))
+            lmb[t, :] = self.lmb[t, :] - (np.divide(ntau , self.ntau0)-1)/self.mu
+            tau = np.divide(tau, (ntau*self.ntau0).reshape([self.nconstr, 1]))
+            ltau = np.multiply(lmb[t, :].reshape([tau.shape[0], 1]), tau)
             dxcval[t, :, :] = np.dot(self.I0, ltau)
         return lmb, dxcval
 
@@ -361,8 +361,9 @@ class SurfaceWithIsometries(surfaceMatching.SurfaceMatching):
             #print self.xt[kk, :, :]
             self.fvDef.updateVertices(np.squeeze(self.xt[kk, :, :]))
             ak, foo = self.fvDef.computeVertexArea()
-            JJ = np.log(np.divide(ak,a0))
-            self.fvDef.saveVTK(self.outputDir +'/'+ self.saveFile+str(kk)+'.vtk', scalars = JJ, scal_name='Jacobian')
+            JJ = np.log(np.maximum(1e-10, np.divide(ak,a0+1e-10)))
+            #print ak.shape, a0.shape, JJ.shape
+            self.fvDef.saveVTK(self.outputDir +'/'+ self.saveFile+str(kk)+'.vtk', scalars = JJ.flatten(), scal_name='Jacobian')
 
 
     def optimizeMatching(self):

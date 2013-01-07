@@ -27,9 +27,9 @@ def main():
         v = diffeo.gridScalars(fileName=name, force_axun = args.axun)
         #print v.resol
         if args.smooth:
-            sf.Isosurface(v.data, value=0.05, target = args.targetSize, scales = v.resol, smooth=.75)
+            sf.Isosurface(v.data, value=0.5, target = args.targetSize, scales = v.resol, smooth=.75)
         else:
-            sf.Isosurface(v.data, value=0.05, target = args.targetSize, scales = v.resol, smooth =-1)
+            sf.Isosurface(v.data, value=0.5, target = args.targetSize, scales = v.resol, smooth =-1)
         sf.edgeRecover()
         #print sf.surfVolume()
         sf.savebyu(args.dirOut+'/'+nm+'.byu')

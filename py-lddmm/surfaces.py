@@ -309,7 +309,7 @@ class Surface:
 
         dc = vtkDecimatePro()
         red = 1 - min(np.float(target)/g.GetNumberOfPoints(), 1)
-            #print 'Reduction: ', red
+        print 'Reduction: ', red
         dc.SetTargetReduction(red)
         dc.PreserveTopologyOn()
         #dc.SetSplitting(0)
@@ -757,8 +757,10 @@ class Surface:
             if (not (scalars == None)) | (not (normals==None)):
                 fvtkout.write(('\nPOINT_DATA {0: d}').format(V.shape[0]))
             if not (scalars == None):
+                #print scalars
                 fvtkout.write('\nSCALARS '+scal_name+' float 1\nLOOKUP_TABLE default')
                 for ll in range(V.shape[0]):
+                    #print scalars[ll]
                     fvtkout.write('\n {0: .5f}'.format(scalars[ll]))
             if not (normals == None):
                 fvtkout.write('\nNORMALS normals float')
