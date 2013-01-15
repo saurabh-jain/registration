@@ -60,22 +60,30 @@ class gridScalars:
          else:
             self.data.T.tofile(ff, order='F')
 
-   def saveAnalyze(self, filename):
+   def saveAnalyze(self, filename, sz):
       [nm, ext] = os.path.splitext(filename)
       with open(nm+'.hdr', 'w') as ff:
          x = 348
          ff.write(struct.pack('i', x))
-         self.header[8] = self.data.shape[0]
-         self.header[9] = self.data.shape[1]
-         self.header[10] = self.data.shape[2]
-         self.header[17] = 16
-         frmt = 28*'c'+'i'+'h'+2*'c'+8*'h'+12*'c'+4*'h'+16*'f'+2*'i'+168*'c'+8*'i'
-         ff.write(struct.pack(frmt, self.header))
-      with open(nm+'.img', 'r') as ff:
+         #self.header[8] = self.data.shape[0]
+         #self.header[9] = self.data.shape[1]
+         #self.header[10] = self.data.shape[2]
+         #self.header[17] = 16
+         temp_header = list(self.header)
+         temp_header[47] = 16
+         self.header = tuple(temp_header)
+         #frmt = 28*'c'+'i'+'h'+2*'c'+8*'h'+12*'c'+4*'h'+16*'f'+2*'i'+168*'c'+8*'i'
+         frmt = 28*'c'+'i'+'h'+2*'c'+8*'h'+10*'h'+16*'f'+2*'i'+200*'c'
+         ff.write(struct.pack(frmt, *self.header))
+      with open(nm+'.img', 'w') as ff:
          nbVox = sz[0]*sz[1]*sz[2]
-         array.array('f', self.data.resize(nbVox)).tofile(ff)
+         #array.array('f', self.data.resize(nbVox)).tofile(ff)
+         #array.array('f', self.data.reshape(nbVox)).tofile(ff)
+         array.array('f', self.data).tofile(ff)
 
-   def loadAnalyze(self, filename):
+
+
+   def loadAnalyze_bak(self, filename):
       [nm, ext] = os.path.splitext(filename)
       with open(nm+'.hdr', 'r') as ff:
          frmt = 28*'c'+'i'+'h'+2*'c'+8*'h'+12*'c'+4*'h'+16*'f'+2*'i'+168*'c'+8*'i'
@@ -92,13 +100,12 @@ class gridScalars:
          datatype = out[0]
 
          #out = struct.unpack(lend+8*'f', ff.read(32))
-
          #ls = struct.unpack(lend+frmt, ff.read())
          #self.header = ls
 
          #sz = ls[7:10]
          #datatype = ls[17]
-         #print  "Datatype: ", datatype
+         print  "Datatype: ", datatype
 
       with open(nm+'.img', 'r') as ff:
          nbVox = sz[0]*sz[1]*sz[2]
@@ -122,6 +129,42 @@ class gridScalars:
       #self.data = np.float_(np.array(ls)).resize(sz)
       self.data = np.reshape(np.array(ls), sz).astype(float)
 
+   def loadAnalyze(self, filename):
+      [nm, ext] = os.path.splitext(filename)
+      with open(nm+'.hdr', 'r') as ff:
+         #frmt = 28*'c'+'i'+'h'+2*'c'+8*'h'+12*'c'+4*'h'+16*'f'+2*'i'+168*'c'+8*'i'
+         frmt = 28*'c'+'i'+'h'+2*'c'+8*'h'+10*'h'+16*'f'+2*'i'+200*'c'
+         lend = '<'
+         ls = struct.unpack(lend+'i', ff.read(4))
+         x = ls[0]
+         if not (x == 348):
+            lend = '>'
+         ls = struct.unpack(lend+frmt, ff.read())
+         self.header = tuple(ls)
+         sz = ls[33:36]
+         datatype = ls[47]
+         print "Datatype: ", datatype
+
+      with open(nm+'.img', 'r') as ff:
+         nbVox = sz[0]*sz[1]*sz[2]
+         if datatype == 2:
+            ls = struct.unpack(lend+nbVox*'B', ff.read())
+         elif datatype == 4:
+            ls = struct.unpack(lend+nbVox*'h', ff.read())
+         elif datatype == 8:
+            ls = struct.unpack(lend+nbVox*'i', ff.read())
+         elif datatype == 16:
+            ls = struct.unpack(lend+nbVox*'f', ff.read())
+         elif datatype == 32:
+            ls = struct.unpack(lend+2*nbVox*'f', ff.read())
+            print 'Warning: complex input not handled'
+         elif datatype == 64:
+            ls = struct.unpack(lend+nbVox*'d', ff.read())
+         else:
+            print 'Unknown datatype'
+            return
+      #self.data = np.float_(np.array(ls)).resize(sz)
+      self.data = np.reshape(np.array(ls), sz).astype(float)
 
 class Diffeomorphism:
    def __init__(self, filename = None):

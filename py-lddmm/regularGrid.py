@@ -9,6 +9,8 @@ import scipy.interpolate
 import scipy.ndimage.interpolation
 from tvtk.api import tvtk
 
+#import numexpr as ne
+
 def meshgrid2(arrs):
     arrs = tuple(reversed(arrs))
     lens = map(len, arrs)
@@ -916,3 +918,80 @@ class RegularGrid(object):
                                     b[self.elements[:,j]] * self.element_volumes
         return int_b
 
+#    def advect(self, I_interp, wt, T):
+#        N = self.num_points
+#        for t in range(T-1):
+#            (indexx, indexy, indexz) = self.interp_mesh
+#            w = wt[...,t]
+#
+#            X = numpy.reshape(w[:,0], self.dims)
+#            Y = numpy.reshape(w[:,1], self.dims)
+#            Z = numpy.reshape(w[:,2], self.dims)
+#
+#            dx0 = self.dx[0]
+#            dx1 = self.dx[1]
+#            dx2 = self.dx[2]
+#            stepsx = ne.evaluate("X / dx0")
+#            stepsy = ne.evaluate("Y / dx1")
+#            stepsz = ne.evaluate("Z / dx2")
+#
+#            px = numpy.floor(stepsx)
+#            py = numpy.floor(stepsy)
+#            pz = numpy.floor(stepsz)
+#
+#            ax = ne.evaluate("stepsx - px")
+#            ay = ne.evaluate("stepsy - py")
+#            az = ne.evaluate("stepsz - pz")
+#
+#            pxindex = ne.evaluate("(indexx + px)").astype(int)
+#            pyindex = ne.evaluate("(indexy + py)").astype(int)
+#            pzindex = ne.evaluate("(indexz + pz)").astype(int)
+#            pxindex_x = ne.evaluate("(pxindex + 1)").astype(int)
+#            pyindex_y = ne.evaluate("(pyindex + 1)").astype(int)
+#            pzindex_z = ne.evaluate("(pzindex + 1)").astype(int)
+#
+#            #test = ne.evaluate("where(pxindex<0,1,0)")
+#            #pxindex[test] = 0
+#            pxindex[(pxindex<0)] = 0
+#            pyindex[(pyindex<0)] = 0
+#            pxindex_x[(pxindex_x<0)] = 0
+#            pyindex_y[(pyindex_y<0)] = 0
+#            pzindex[(pzindex<0)] = 0
+#            pzindex_z[(pzindex_z<0)] = 0
+#
+#            pxindex[(pxindex>N[0]-1)] = N[0]-1
+#            pyindex[(pyindex>N[1]-1)] = N[1]-1
+#            pxindex_x[(pxindex_x>N[0]-1)] = N[0]-1
+#            pyindex_y[(pyindex_y>N[1]-1)] = N[1]-1
+#            pzindex[(pzindex>N[2]-1)] = N[2]-1
+#            pzindex_z[(pzindex_z>N[2]-1)] = N[2]-1
+#
+#            nsqr = N[0] * N[1]
+#            N0 = N[0]
+#            N1 = N[1]
+#
+#            pindex = ne.evaluate("(pxindex + (N0)*(pyindex) + nsqr*pzindex)").astype(int)
+#            pindex_x = ne.evaluate("(pxindex_x + (N0)*(pyindex) + nsqr*pzindex)").astype(int)
+#            pindex_y = ne.evaluate("(pxindex + (N0)*(pyindex_y) + nsqr*pzindex)").astype(int)
+#            pindex_xy = ne.evaluate("(pxindex_x + (N0)*(pyindex_y) + nsqr*pzindex)").astype(int)
+#
+#            pindex_z = ne.evaluate("(pxindex + (N0)*(pyindex) + nsqr*pzindex_z)").astype(int)
+#            pindex_z_x = ne.evaluate("(pxindex_x + (N0)*(pyindex) + nsqr*pzindex_z)").astype(int)
+#            pindex_z_y = ne.evaluate("(pxindex + (N0)*(pyindex_y) + nsqr*pzindex_z)").astype(int)
+#            pindex_z_xy = ne.evaluate("(pxindex_x + (N0)*(pyindex_y) + nsqr*pzindex_z)").astype(int)
+#
+#            f = I_interp[:,t]
+#            F = numpy.reshape(f.copy(), self.dims)
+#            fp = f[pindex]
+#            fpx = f[pindex_x]
+#            fpy = f[pindex_y]
+#            fpxy = f[pindex_xy]
+#            fpz = f[pindex_z]
+#            fpzx = f[pindex_z_x]
+#            fpzy = f[pindex_z_y]
+#            fpzxy = f[pindex_z_xy]
+#            F[:,:] = ne.evaluate("fp*(1-ax)*(1-ay)*(1-az) + fpx*(ax)*(1-ay)*(1-az) + fpy*(1-ax)*(ay)*(1-az) + fpxy*(ax)*(ay)*(1-az)")
+#            F[:,:] += ne.evaluate("fpz*(1-ax)*(1-ay)*(az) + fpzx*(ax)*(1-ay)*(az) + fpzy*(1-ax)*(ay)*(az) + fpzxy*(ax)*(ay)*(az)")
+#            I_interp[:,t+1] = numpy.reshape(F[:,:], self.num_nodes)
+#
+#        return I_interp
