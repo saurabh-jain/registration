@@ -1,4 +1,5 @@
 #!/opt/local/bin/python2.7
+import os
 from os import path
 import glob
 import argparse
@@ -19,17 +20,21 @@ def main():
     if args.dirOut == '':
         args.dirOut = args.dirIn
 
+    if path.exists(args.dirOut)==False:
+        os.mkdir(args.dirOut)
+
     sf = surfaces.Surface()
     for name in glob.glob(args.dirIn+'/'+args.pattern):
         print 'Processing ', name
         u = path.split(name)
         [nm,ext] = path.splitext(u[1])
         v = diffeo.gridScalars(fileName=name, force_axun = args.axun)
+        t =  0.5 * (v.data.max() + v.data.min())
         #print v.resol
         if args.smooth:
-            sf.Isosurface(v.data, value=0.5, target = args.targetSize, scales = v.resol, smooth=.75)
+            sf.Isosurface(v.data, value=t, target = args.targetSize, scales = v.resol, smooth=.75)
         else:
-            sf.Isosurface(v.data, value=0.5, target = args.targetSize, scales = v.resol, smooth =-1)
+            sf.Isosurface(v.data, value=t, target = args.targetSize, scales = v.resol, smooth =-1)
         sf.edgeRecover()
         #print sf.surfVolume()
         sf.savebyu(args.dirOut+'/'+nm+'.byu')
