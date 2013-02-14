@@ -9,7 +9,9 @@ import logging
 import time
 import multiprocessing
 import rg_fort
-#import pyfftw
+import fftw3
+
+import gradientDescent
 
 import numexpr as ne
 
@@ -26,6 +28,37 @@ def apply_kernel_V_for_async(right, dims, num_nodes, Kv, el_vol):
       out = numpy.fft.ifftn(fr) * 1./el_vol
       out = numpy.fft.fftshift(out)
       krho[:,j] = numpy.reshape(out.real, (num_nodes))
+    return krho
+
+def apply_kernel_V_for_async_w(right, dims, num_nodes, Kv, el_vol):
+
+    in_vec = numpy.zeros(dims, dtype=complex)
+    fft_vec = numpy.zeros(dims, dtype=complex)
+    out_vec = numpy.zeros(dims, dtype=complex)
+
+    wfor = fftw3.Plan(in_vec, fft_vec, \
+                            direction='forward', flags=['estimate'], \
+                            )
+    wback = fftw3.Plan(fft_vec, out_vec, \
+                            direction='backward', flags=['estimate'], \
+                            )
+    krho = numpy.zeros((num_nodes, 3))
+    for j in range(3):
+        rr = right[:,j].copy().astype(complex)
+        fr = numpy.reshape(rr, dims)
+        fr = numpy.fft.fftshift(fr)
+        fr *= el_vol
+        in_vec[...] = fr[...]
+        wfor.execute()
+        fr[...] = fft_vec[...]
+        Kv = numpy.fft.fftshift(Kv)
+        fr = fr * Kv
+        fft_vec[...] = fr[...]
+        wback.execute()
+        out = out_vec[...] / in_vec.size
+        out *= 1/el_vol
+        out = numpy.fft.fftshift(out)
+        krho[:,j] = out.real.ravel()
     return krho
 
 
@@ -45,7 +78,7 @@ class ImageTimeSeries(object):
         self.write_iter = 25
 
         # initialize fftw information
-#        self.fft_thread_count = 16
+        self.fft_thread_count = 8
 #        self.fft_vec_shape = self.rg.dims
 #        self.in_vec = pyfftw.n_byte_align_empty(self.fft_vec_shape, 16, \
 #                            dtype=numpy.complex)
@@ -60,8 +93,18 @@ class ImageTimeSeries(object):
 #                            axes=range(self.dim), \
 #                            direction='FFTW_BACKWARD', \
 #                            threads=self.fft_thread_count)
+        self.in_vec = numpy.zeros(self.rg.dims, dtype=complex)
+        self.fft_vec = numpy.zeros(self.rg.dims, dtype=complex)
+        self.out_vec = numpy.zeros(self.rg.dims, dtype=complex)
+        self.wfor = fftw3.Plan(self.in_vec, self.fft_vec, \
+                                direction='forward', flags=['measure'], \
+                                )
+        self.wback = fftw3.Plan(self.fft_vec, self.out_vec, \
+                                direction='backward', flags=['measure'], \
+                                )
 
-        self.pool_size = 10
+
+        self.pool_size = 16
         self.pool = multiprocessing.Pool(self.pool_size)
         self.pool_timeout = 5000
 
@@ -421,10 +464,9 @@ class ImageTimeSeries(object):
         Kv = self.get_kernelv()
         res = []
         for t in range(T):
-            res.append(self.pool.apply_async(apply_kernel_V_for_async, \
+            res.append(self.pool.apply_async(apply_kernel_V_for_async_w, \
                             args=(self.mu[:,:,t].copy(), rg.dims, rg.num_nodes,\
                             Kv, rg.element_volumes[0])))
-
         for t in range(T):
             self.v[:,:,t] = res[t].get(timeout=self.pool_timeout)
 
@@ -510,13 +552,17 @@ class ImageTimeSeries(object):
         rg, N, T = self.get_sim_data()
         self.last_dir = eps * direction
         mu_old = self.mu.copy()
+        v_old = self.v.copy()
+        Ii_old = self.I_interp.copy()
         for t in range(T):
             self.mu[:,:,t] = self.mu_state[:,:,t] - direction[:,:,t] * eps
         self.update_evolutions()
         objTry = self.objectiveFun()
         if (objRef != None) and (objTry > objRef):
             self.mu = mu_old
-            self.update_evolutions()
+            self.v = v_old
+            self.I_interp = Ii_old
+            #self.update_evolutions()
         return objTry
 
     def acceptVarTry(self):
@@ -531,11 +577,16 @@ class ImageTimeSeries(object):
         dt = self.dt
         start = time.time()
         self.p[...] = 0.
-        self.p[:,T-1] = 2./numpy.power(self.sigma, 2) * \
+        #grad = numpy.empty((rg.num_nodes, 3, T))
+        gIi = numpy.empty((rg.num_nodes,3,T))
+        pr = numpy.empty((rg.num_nodes,1,T))
+        pr[:,0,T-1] = 2./numpy.power(self.sigma, 2) * \
                                     (-self.I[:,T-1]+self.I_interp[:,T-1])
-        grad = numpy.zeros((rg.num_nodes, 3, T))
+        tot = 0
+        tot2 = 0
+        tot3 = 0
         for t in range(T-1,-1,-1):
-            p1 = self.p[:,t]
+            p1 = pr[:,0,t]
             if (t in range(0, self.num_times, self.num_times_disc)):
                 if t!=T-1:
                     s = 2./numpy.power(self.sigma,2)
@@ -543,43 +594,43 @@ class ImageTimeSeries(object):
                     Iit = self.I_interp[:,t]
                     p1 = ne.evaluate("p1 - s * (It - Iit)")
             v = self.v[:,:,t]
-            w = ne.evaluate("-1*v*dt")
-            w.shape = ((rg.dims[0], rg.dims[1], rg.dims[2], 3))
+            v.shape = ((rg.dims[0], rg.dims[1], rg.dims[2], 3))
             (p_new, gI_interp) = rg_fort.interp_dual_and_grad( \
-                            p1.reshape(rg.dims), self.I_interp[:,t], w, \
+                            p1.reshape(rg.dims), self.I_interp[:,t], v, \
                             rg.num_points[0], rg.num_points[1], \
                             rg.num_points[2], \
                             rg.interp_mesh[0], \
                             rg.interp_mesh[1], rg.interp_mesh[2], \
-                            rg.dx[0], rg.dx[1], rg.dx[2], rg.num_nodes,
+                            rg.dx[0], rg.dx[1], rg.dx[2], dt, rg.num_nodes,
                             rg.dims[0], rg.dims[1], \
                             rg.dims[2])
             if t>0:
-                self.p[:,t-1] = p_new
-            gI_interp = gI_interp.reshape((rg.num_nodes,3))
-            p = self.p[:,t]
-            for k in range(3):
-                mu = self.mu[:,k,t]
-                gI = gI_interp[:,k]
-                grad[:,k,t] = ne.evaluate("2*mu - p * gI")
+                pr[:,0,t-1] += p_new[...]
+            gIi[...,t] += gI_interp[...]
+        mu = self.mu
+        grad = ne.evaluate("2*mu - pr * gIi")
+        self.p = pr[:,0,:]
         logging.info("getGradient: %f" % (time.time()-start))
         retGrad = ne.evaluate("coeff * dt * grad")
         return retGrad
 
     def computeMatching(self):
-        conjugateGradient.cg(self, True, maxIter = 500, TestGradient=False,
-                                epsInit=1e-3)
+        #conjugateGradient.cg(self, True, maxIter = 500, TestGradient=False,
+        #                        epsInit=1e-3)
+        gradientDescent.descend(self, True, maxIter=500, TestGradient=False, \
+                            epsInit=1)
         return self
 
     def dotProduct(self, g1, g2):
         rg, N, T = self.get_sim_data()
+        start = time.time()
         prod = numpy.zeros(len(g2))
         Kv = self.get_kernelv()
         for ll in range(len(g2)):
             gr = g2[ll]
             res = []
             for t in range(T):
-                res.append(self.pool.apply_async(apply_kernel_V_for_async, \
+                res.append(self.pool.apply_async(apply_kernel_V_for_async_w, \
                         args=(gr[:,:,t].copy(), rg.dims, rg.num_nodes,\
                         Kv, rg.element_volumes[0])))
             for t in range(T):
@@ -587,6 +638,7 @@ class ImageTimeSeries(object):
                 prod[ll] += self.dt * numpy.dot(g1[:,0,t], kgr[:,0])
                 prod[ll] += self.dt * numpy.dot(g1[:,1,t], kgr[:,1])
                 prod[ll] += self.dt * numpy.dot(g1[:,2,t], kgr[:,2])
+        logging.info("dot product time: %f" % (time.time()-start))
         return prod
 
     def endOfIteration(self):
