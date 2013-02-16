@@ -127,7 +127,7 @@ class gridScalars:
          s = ff.read()
          #print s[0:30]
          if datatype == 2:
-            ls2 = struct.unpack(lend+nbVox*'b', s)
+            ls2 = struct.unpack(lend+nbVox*'B', s)
          elif datatype == 4:
             ls2 = struct.unpack(lend+nbVox*'h', s)
          elif datatype == 8:
