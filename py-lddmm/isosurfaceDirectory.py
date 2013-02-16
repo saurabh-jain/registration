@@ -25,11 +25,12 @@ def main():
         u = path.split(name)
         [nm,ext] = path.splitext(u[1])
         v = diffeo.gridScalars(fileName=name, force_axun = args.axun)
+        v.zeroPad(1)
         #print v.resol
         if args.smooth:
-            sf.Isosurface(v.data, value=0.05, target = args.targetSize, scales = v.resol, smooth=.75)
+            sf.Isosurface(v.data, value=0.5, target = args.targetSize, scales = v.resol, smooth=.5)
         else:
-            sf.Isosurface(v.data, value=0.05, target = args.targetSize, scales = v.resol, smooth =-1)
+            sf.Isosurface(v.data, value=0.5, target = args.targetSize, scales = v.resol, smooth =-1)
         sf.edgeRecover()
         #print sf.surfVolume()
         sf.savebyu(args.dirOut+'/'+nm+'.byu')

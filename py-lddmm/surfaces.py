@@ -326,6 +326,10 @@ class Surface:
         cp.Update()
         g = cp.GetOutput()
         self.fromPolyData(g,scales)
+        z= self.surfVolume()
+        if (z > 0):
+            self.faces = self.faces[:, [0,2,1]]
+
         #print g
         # npoints = int(g.GetNumberOfPoints())
         # nfaces = int(g.GetNumberOfPolys())
