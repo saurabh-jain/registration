@@ -1,0 +1,646 @@
+subroutine interpolate_3d_gradient(f, w, num_points1, num_points2, num_points3,  &
+indexx, indexy, indexz, dx1, dx2, dx3, num_nodes, dim1, dim2, dim3, f_out)
+  implicit none
+  integer :: num_nodes
+  real(8) :: f(num_nodes)
+  integer :: num_points1, num_points2, num_points3
+  real(8) :: w(dim1, dim2, dim3, 3)
+  integer :: indexx(dim1, dim2, dim3)
+  integer :: indexy(dim1, dim2, dim3)
+  integer :: indexz(dim1, dim2, dim3)
+  integer :: dim1, dim2, dim3
+  real(8) :: f_out(dim1, dim2, dim3, 3)
+  real(8) :: dx1, dx2, dx3
+
+!f2py real(8), intent(in), dimension(num_nodes) :: f
+!f2py real(8), intent(in), dimension(dim1, dim2, dim3,3) :: w
+!f2py integer, intent(in)  :: num_points1, num_points2, num_points3
+!f2py integer, intent(in), dimension(dim1, dim2, dim3) :: indexx 
+!f2py integer, intent(in), dimension(dim1, dim2, dim3) :: indexy 
+!f2py integer, intent(in), dimension(dim1, dim2, dim3) :: indexz 
+!f2py real(8), intent(in) :: num_nodes
+!f2py real(8), intent(in) :: dx1, dx2, dx3 
+!f2py real(8), intent(out), dimension(dim1, dim2, dim3, 3) :: f_out
+
+  real(8) :: X(dim1, dim2, dim3), Y(dim1, dim2, dim3), Z(dim1, dim2, dim3)
+  real(8) :: stepsx, stepsy, stepsz
+  real(8) :: px, py, pz
+  integer :: pxindex
+  integer :: pyindex
+  integer :: pzindex
+  integer :: pxindex_x
+  integer :: pyindex_y
+  integer :: pzindex_z
+  integer :: nsqr
+  integer :: pindex
+  integer :: pindex_x
+  integer :: pindex_y
+  integer :: pindex_xy
+  integer :: pindex_z
+  integer :: pindex_z_x
+  integer :: pindex_z_y
+  integer :: pindex_z_xy
+  real(8) :: ax
+  real(8) :: ay
+  real(8) :: az
+  integer :: i,j,k
+
+  !X = reshape(w(:,1), [dim1,dim2,dim3])
+  !Y = reshape(w(:,2), [dim1,dim2,dim3])
+  !Z = reshape(w(:,3), [dim1,dim2,dim3])
+  X = w(:,:,:,1)
+  Y = w(:,:,:,2)
+  Z = w(:,:,:,3)
+
+  nsqr = num_points1 * num_points2
+  
+  !omp parallel do private(k,j,i)
+  do k = 1, dim3, 1
+  do j = 1, dim2, 1
+  do i = 1, dim1, 1
+
+  stepsx = X(i,j,k) / dx1
+  stepsy = Y(i,j,k) / dx2
+  stepsz = Z(i,j,k) / dx3
+
+  px = floor(stepsx)
+  py = floor(stepsy)
+  pz = floor(stepsz)
+
+  ax = stepsx - px
+  ay = stepsy - py
+  az = stepsz - pz
+
+  pxindex = int(indexx(i,j,k) + px) 
+  pyindex = int(indexy(i,j,k) + py) 
+  pzindex = int(indexz(i,j,k) + pz)
+  pxindex_x = int(pxindex + 1)
+  pyindex_y = int(pyindex + 1)
+  pzindex_z = int(pzindex + 1)
+  
+  if (pxindex<0) pxindex = 0
+  if (pyindex<0) pyindex = 0
+  if (pxindex_x<0) pxindex_x = 0
+  if (pyindex_y<0) pyindex_y = 0
+  if (pzindex<0) pzindex = 0
+  if (pzindex_z<0) pzindex_z = 0
+
+  if (pxindex>num_points1-1) pxindex = num_points1-1
+  if (pyindex>num_points2-1) pyindex = num_points2-1
+  if (pxindex_x>num_points1-1) pxindex_x = num_points1-1
+  if (pyindex_y>num_points2-1) pyindex_y = num_points2 -1
+  if (pzindex>num_points3-1) pzindex = num_points3-1
+  if (pzindex_z>num_points3-1) pzindex_z = num_points3-1
+
+  pindex = int(pxindex + (num_points1)*(pyindex) + nsqr*pzindex)+1
+  pindex_x = int(pxindex_x + (num_points1)*(pyindex) + nsqr*pzindex)+1
+  pindex_y = int(pxindex + (num_points1)*(pyindex_y) + nsqr*pzindex)+1
+  pindex_xy = int(pxindex_x + (num_points1)*(pyindex_y) + nsqr*pzindex)+1
+
+  pindex_z = int(pxindex + (num_points1)*(pyindex) + nsqr*pzindex_z)+1
+  pindex_z_x = int(pxindex_x + (num_points1)*(pyindex) + nsqr*pzindex_z)+1
+  pindex_z_y = int(pxindex + (num_points1)*(pyindex_y) + nsqr*pzindex_z)+1
+  pindex_z_xy = int(pxindex_x + (num_points1)*(pyindex_y) + nsqr*pzindex_z)+1
+
+  f_out(i,j,k,1) = f(pindex)*(-1)*(1-ay)*(1-az) + &
+                  f(pindex_x)*(1)*(1-ay)*(1-az) + &
+                  f(pindex_y)*(-1)*(ay)*(1-az) + &
+                  f(pindex_xy)*(1)*(ay)*(1-az) + &
+                  f(pindex_z)*(-1)*(1-ay)*(az) + &
+                  f(pindex_z_x)*(1)*(1-ay)*(az) + &
+                  f(pindex_z_y)*(-1)*(ay)*(az) + &
+                  f(pindex_z_xy)*(1)*(ay)*(az)
+  f_out(i,j,k,2) = f(pindex)*(1-ax)*(-1)*(1-az) + &
+                  f(pindex_x)*(ax)*(-1)*(1-az) + &
+                  f(pindex_y)*(1-ax)*(1)*(1-az) + &
+                  f(pindex_xy)*(ax)*(1)*(1-az) + &
+                  f(pindex_z)*(1-ax)*(-1)*(az) + &
+                  f(pindex_z_x)*(ax)*(-1)*(az) + &
+                  f(pindex_z_y)*(1-ax)*(1)*(az) + &
+                  f(pindex_z_xy)*(ax)*(1)*(az)
+  f_out(i,j,k,3) = f(pindex)*(1-ax)*(1-ay)*(-1) + &
+                  f(pindex_x)*(ax)*(1-ay)*(-1) + &
+                  f(pindex_y)*(1-ax)*(ay)*(-1) + &
+                  f(pindex_xy)*(ax)*(ay)*(-1) + &
+                  f(pindex_z)*(1-ax)*(1-ay)*(1) + &
+                  f(pindex_z_x)*(ax)*(1-ay)*(1) + &
+                  f(pindex_z_y)*(1-ax)*(ay)*(1) + &
+                  f(pindex_z_xy)*(ax)*(ay)*(1)
+  end do
+  end do
+  end do
+end subroutine interpolate_3d_gradient
+
+subroutine interpolate_3d(f, w, num_points1, num_points2, num_points3,  &
+indexx, indexy, indexz, dx1, dx2, dx3, num_nodes, dim1, dim2, dim3, f_out)
+  implicit none
+  integer :: num_nodes
+  real(8) :: f(num_nodes)
+  integer :: num_points1, num_points2, num_points3
+  real(8) :: w(dim1, dim2, dim3, 3)
+  integer :: indexx(dim1, dim2, dim3)
+  integer :: indexy(dim1, dim2, dim3)
+  integer :: indexz(dim1, dim2, dim3)
+  integer :: dim1, dim2, dim3
+  real(8) :: f_out(dim1, dim2, dim3)
+  real(8) :: dx1, dx2, dx3
+
+!f2py real(8), intent(in), dimension(num_nodes) :: f
+!f2py real(8), intent(in), dimension(dim1, dim2, dim3,3) :: w
+!f2py integer, intent(in)  :: num_points1, num_points2, num_points3
+!f2py integer, intent(in), dimension(dim1, dim2, dim3) :: indexx 
+!f2py integer, intent(in), dimension(dim1, dim2, dim3) :: indexy 
+!f2py integer, intent(in), dimension(dim1, dim2, dim3) :: indexz 
+!f2py real(8), intent(in) :: dx1, dx2, dx3 
+!f2py integer, intent(in) :: num_nodes
+!f2py integer, intent(in) :: dim1, dim2, dim3
+!f2py integer, intent(in), dimension(num_nodes,3) :: gnodes 
+!f2py real(8), intent(out), dimension(dim1, dim2, dim3) :: f_out
+
+  real(8) :: X(dim1, dim2, dim3), Y(dim1, dim2, dim3), Z(dim1, dim2, dim3)
+  real(8) :: stepsx, stepsy, stepsz
+  real(8) :: px, py, pz
+  integer :: pxindex
+  integer :: pyindex
+  integer :: pzindex
+  integer :: pxindex_x
+  integer :: pyindex_y
+  integer :: pzindex_z
+  integer :: nsqr
+  integer :: pindex
+  integer :: pindex_x
+  integer :: pindex_y
+  integer :: pindex_xy
+  integer :: pindex_z
+  integer :: pindex_z_x
+  integer :: pindex_z_y
+  integer :: pindex_z_xy
+  real(8) :: ax
+  real(8) :: ay
+  real(8) :: az
+  integer :: i,j,k
+  integer :: iter
+
+  !X = reshape(w(:,1), [dim1,dim2,dim3])
+  !Y = reshape(w(:,2), [dim1,dim2,dim3])
+  !Z = reshape(w(:,3), [dim1,dim2,dim3])
+  X = w(:,:,:,1)
+  Y = w(:,:,:,2)
+  Z = w(:,:,:,3)
+
+  nsqr = num_points1 * num_points2
+  
+  !$omp parallel do private(k,j,i,stepsx,stepsy,stepsz,px,py,pz,ax,ay, &
+  !$omp& az,pxindex,pyindex,pzindex,pxindex_x, &
+  !$omp& pyindex_y,pzindex_z,pindex,pindex_x,pindex_y,pindex_xy,pindex_z,pindex_z_x,pindex_z_y,pindex_z_xy) shared(f_out, f)
+  do k = 1, dim3, 1
+  do j = 1, dim2, 1
+  do i = 1, dim1, 1
+
+  stepsx = X(i,j,k) / dx1
+  stepsy = Y(i,j,k) / dx2
+  stepsz = Z(i,j,k) / dx3
+
+  px = floor(stepsx)
+  py = floor(stepsy)
+  pz = floor(stepsz)
+
+  ax = stepsx - px
+  ay = stepsy - py
+  az = stepsz - pz
+
+  pxindex = int(indexx(i,j,k) + px) 
+  pyindex = int(indexy(i,j,k) + py) 
+  pzindex = int(indexz(i,j,k) + pz)
+  pxindex_x = int(pxindex + 1)
+  pyindex_y = int(pyindex + 1)
+  pzindex_z = int(pzindex + 1)
+  
+  if (pxindex<0) pxindex = 0
+  if (pyindex<0) pyindex = 0
+  if (pxindex_x<0) pxindex_x = 0
+  if (pyindex_y<0) pyindex_y = 0
+  if (pzindex<0) pzindex = 0
+  if (pzindex_z<0) pzindex_z = 0
+
+  if (pxindex>num_points1-1) pxindex = num_points1-1
+  if (pyindex>num_points2-1) pyindex = num_points2-1
+  if (pxindex_x>num_points1-1) pxindex_x = num_points1-1
+  if (pyindex_y>num_points2-1) pyindex_y = num_points2 -1
+  if (pzindex>num_points3-1) pzindex = num_points3-1
+  if (pzindex_z>num_points3-1) pzindex_z = num_points3-1
+
+  pindex = int(pxindex + (num_points1)*(pyindex) + nsqr*pzindex)+1
+  pindex_x = int(pxindex_x + (num_points1)*(pyindex) + nsqr*pzindex)+1
+  pindex_y = int(pxindex + (num_points1)*(pyindex_y) + nsqr*pzindex)+1
+  pindex_xy = int(pxindex_x + (num_points1)*(pyindex_y) + nsqr*pzindex)+1
+
+  pindex_z = int(pxindex + (num_points1)*(pyindex) + nsqr*pzindex_z)+1
+  pindex_z_x = int(pxindex_x + (num_points1)*(pyindex) + nsqr*pzindex_z)+1
+  pindex_z_y = int(pxindex + (num_points1)*(pyindex_y) + nsqr*pzindex_z)+1
+  pindex_z_xy = int(pxindex_x + (num_points1)*(pyindex_y) + nsqr*pzindex_z)+1
+
+  f_out(i,j,k) = f(pindex)*(1-ax)*(1-ay)*(1-az) + &
+                    f(pindex_x)*(ax)*(1-ay)*(1-az) + &
+                    f(pindex_y)*(1-ax)*(ay)*(1-az) + &
+                    f(pindex_xy)*(ax)*(ay)*(1-az)
+  f_out(i,j,k) = f_out(i,j,k) + f(pindex_z)*(1-ax)*(1-ay)*(az) + &
+                    f(pindex_z_x)*(ax)*(1-ay)*(az) + &
+                    f(pindex_z_y)*(1-ax)*(ay)*(az) + &
+                    f(pindex_z_xy)*(ax)*(ay)*(az)
+  end do
+  end do
+  end do
+  !$omp end parallel do
+
+end subroutine interpolate_3d
+
+subroutine interpolate_3d_dual(f, w, num_points1, num_points2, num_points3,  &
+indexx, indexy, indexz, dx1, dx2, dx3, num_nodes, dim1, dim2, dim3, f_out)
+  implicit none
+  integer :: num_nodes
+  real(8) :: f(dim1,dim2,dim3)
+  integer :: num_points1, num_points2, num_points3
+  real(8) :: w(dim1, dim2, dim3, 3)
+  integer :: indexx(dim1, dim2, dim3)
+  integer :: indexy(dim1, dim2, dim3)
+  integer :: indexz(dim1, dim2, dim3)
+  integer :: dim1, dim2, dim3
+  real(8) :: f_out(num_nodes)
+  real(8) :: dx1, dx2, dx3
+
+!f2py real(8), intent(in), dimension(dim1,dim2,dim3) :: f
+!f2py real(8), intent(in), dimension(dim1, dim2, dim3,3) :: w
+!f2py integer, intent(in)  :: num_points1, num_points2, num_points3
+!f2py integer, intent(in), dimension(dim1, dim2, dim3) :: indexx 
+!f2py integer, intent(in), dimension(dim1, dim2, dim3) :: indexy 
+!f2py integer, intent(in), dimension(dim1, dim2, dim3) :: indexz 
+!f2py real(8), intent(in) :: num_nodes
+!f2py real(8), intent(in) :: dx1, dx2, dx3 
+!f2py real(8), intent(out), dimension(num_nodes) :: f_out
+
+  real(8) :: X(dim1, dim2, dim3), Y(dim1, dim2, dim3), Z(dim1, dim2, dim3)
+  real(8) :: stepsx, stepsy, stepsz
+  real(8) :: px, py, pz
+  integer :: pxindex
+  integer :: pyindex
+  integer :: pzindex
+  integer :: pxindex_x
+  integer :: pyindex_y
+  integer :: pzindex_z
+  integer :: nsqr
+  integer :: pindex
+  integer :: pindex_x
+  integer :: pindex_y
+  integer :: pindex_xy
+  integer :: pindex_z
+  integer :: pindex_z_x
+  integer :: pindex_z_y
+  integer :: pindex_z_xy
+  real(8) :: ax
+  real(8) :: ay
+  real(8) :: az
+  real(8) :: f_out_temp(dim1, dim2, dim3)
+  integer :: i,j,k
+
+  !X = reshape(w(:,1), [dim1,dim2,dim3])
+  !Y = reshape(w(:,2), [dim1,dim2,dim3])
+  !Z = reshape(w(:,3), [dim1,dim2,dim3])
+  X = w(:,:,:,1)
+  Y = w(:,:,:,2)
+  Z = w(:,:,:,3)
+
+  nsqr = num_points1 * num_points2
+  
+  !omp parallel do private(k,j,i)
+  do k = 1, dim3, 1
+  do j = 1, dim2, 1
+  do i = 1, dim1, 1
+
+  stepsx = X(i,j,k) / dx1
+  stepsy = Y(i,j,k) / dx2
+  stepsz = Z(i,j,k) / dx3
+
+  px = floor(stepsx)
+  py = floor(stepsy)
+  pz = floor(stepsz)
+
+  ax = stepsx - px
+  ay = stepsy - py
+  az = stepsz - pz
+
+  pxindex = int(indexx(i,j,k) + px) 
+  pyindex = int(indexy(i,j,k) + py) 
+  pzindex = int(indexz(i,j,k) + pz)
+  pxindex_x = int(pxindex + 1)
+  pyindex_y = int(pyindex + 1)
+  pzindex_z = int(pzindex + 1)
+  
+  if (pxindex<0) pxindex = 0
+  if (pyindex<0) pyindex = 0
+  if (pxindex_x<0) pxindex_x = 0
+  if (pyindex_y<0) pyindex_y = 0
+  if (pzindex<0) pzindex = 0
+  if (pzindex_z<0) pzindex_z = 0
+
+  if (pxindex>num_points1-1) pxindex = num_points1-1
+  if (pyindex>num_points2-1) pyindex = num_points2-1
+  if (pxindex_x>num_points1-1) pxindex_x = num_points1-1
+  if (pyindex_y>num_points2-1) pyindex_y = num_points2 -1
+  if (pzindex>num_points3-1) pzindex = num_points3-1
+  if (pzindex_z>num_points3-1) pzindex_z = num_points3-1
+
+  pindex = int(pxindex + (num_points1)*(pyindex) + nsqr*pzindex)+1
+  pindex_x = int(pxindex_x + (num_points1)*(pyindex) + nsqr*pzindex)+1
+  pindex_y = int(pxindex + (num_points1)*(pyindex_y) + nsqr*pzindex)+1
+  pindex_xy = int(pxindex_x + (num_points1)*(pyindex_y) + nsqr*pzindex)+1
+
+  pindex_z = int(pxindex + (num_points1)*(pyindex) + nsqr*pzindex_z)+1
+  pindex_z_x = int(pxindex_x + (num_points1)*(pyindex) + nsqr*pzindex_z)+1
+  pindex_z_y = int(pxindex + (num_points1)*(pyindex_y) + nsqr*pzindex_z)+1
+  pindex_z_xy = int(pxindex_x + (num_points1)*(pyindex_y) + nsqr*pzindex_z)+1
+
+  f_out(pindex) = f_out(pindex) + f(i,j,k)*(1-ax)*(1-ay)*(1-az)
+  f_out(pindex_x) = f_out(pindex_x) + f(i,j,k)*(ax)*(1-ay)*(1-az)
+  f_out(pindex_y) = f_out(pindex_y) + f(i,j,k)*(1-ax)*(ay)*(1-az)
+  f_out(pindex_xy) = f_out(pindex_xy) + f(i,j,k)*(ax)*(ay)*(1-az)
+  f_out(pindex_z) = f_out(pindex_z) + f(i,j,k)*(1-ax)*(1-ay)*(az)
+  f_out(pindex_z_x) = f_out(pindex_z_x) + f(i,j,k)*(ax)*(1-ay)*(az)
+  f_out(pindex_z_y) = f_out(pindex_z_y) + f(i,j,k)*(1-ax)*(ay)*(az)
+  f_out(pindex_z_xy) = f_out(pindex_z_xy) + f(i,j,k)*(ax)*(ay)*(az)
+
+  end do
+  end do
+  end do
+end subroutine interpolate_3d_dual
+
+subroutine interp_dual_and_grad(f, f2, w, num_points1, num_points2, num_points3,  &
+indexx, indexy, indexz, dx1, dx2, dx3, dt, num_nodes, dim1, dim2, dim3, f_out, f2_out)
+  implicit none
+  integer :: num_nodes
+  real(8) :: f(dim1,dim2,dim3)
+  real(8) :: f2(num_nodes)
+  integer :: num_points1, num_points2, num_points3
+  real(8) :: w(dim1, dim2, dim3, 3)
+  integer :: indexx(dim1, dim2, dim3)
+  integer :: indexy(dim1, dim2, dim3)
+  integer :: indexz(dim1, dim2, dim3)
+  integer :: dim1, dim2, dim3
+  real(8) :: f_out(num_nodes)
+  real(8) :: f2_out(num_nodes, 3)
+  real(8) :: dx1, dx2, dx3, dt
+
+!f2py real(8), intent(in), dimension(dim1,dim2,dim3) :: f
+!f2py real(8), intent(in), dimension(num_nodes) :: f2
+!f2py real(8), intent(in), dimension(dim1, dim2, dim3,3) :: w
+!f2py integer, intent(in)  :: num_points1, num_points2, num_points3
+!f2py integer, intent(in), dimension(dim1, dim2, dim3) :: indexx 
+!f2py integer, intent(in), dimension(dim1, dim2, dim3) :: indexy 
+!f2py integer, intent(in), dimension(dim1, dim2, dim3) :: indexz 
+!f2py real(8), intent(in) :: num_nodes
+!f2py real(8), intent(in) :: dx1, dx2, dx3, dt 
+!f2py real(8), intent(out), dimension(num_nodes) :: f_out
+!f2py real(8), intent(out), dimension(num_nodes,3) :: f2_out
+
+  real(8) :: X(dim1, dim2, dim3), Y(dim1, dim2, dim3), Z(dim1, dim2, dim3)
+  real(8) :: stepsx, stepsy, stepsz
+  real(8) :: px, py, pz
+  integer :: pxindex
+  integer :: pyindex
+  integer :: pzindex
+  integer :: pxindex_x
+  integer :: pyindex_y
+  integer :: pzindex_z
+  integer :: nsqr
+  integer :: pindex
+  integer :: pindex_x
+  integer :: pindex_y
+  integer :: pindex_xy
+  integer :: pindex_z
+  integer :: pindex_z_x
+  integer :: pindex_z_y
+  integer :: pindex_z_xy
+  integer :: f2_out_index 
+  real(8) :: ax
+  real(8) :: ay
+  real(8) :: az
+  real(8) :: f_out_temp(dim1, dim2, dim3)
+  integer :: i,j,k
+
+  !X = reshape(w(:,1), [dim1,dim2,dim3])
+  !Y = reshape(w(:,2), [dim1,dim2,dim3])
+  !Z = reshape(w(:,3), [dim1,dim2,dim3])
+  X = w(:,:,:,1)
+  Y = w(:,:,:,2)
+  Z = w(:,:,:,3)
+
+  nsqr = num_points1 * num_points2
+  
+  !$omp parallel do private(k,j,i,stepsx,stepsy,stepsz,px,py,pz,ax,ay, &
+  !$omp& az,pxindex,pyindex,pzindex,pxindex_x, f2_out_index, &
+  !$omp& pyindex_y,pzindex_z,pindex,pindex_x,pindex_y,pindex_xy,pindex_z,pindex_z_x,pindex_z_y,pindex_z_xy) shared(f_out, f)
+  do k = 1, dim3, 1
+  do j = 1, dim2, 1
+  do i = 1, dim1, 1
+
+  stepsx = -1 * dt * X(i,j,k) / dx1
+  stepsy = -1 * dt * Y(i,j,k) / dx2
+  stepsz = -1 * dt * Z(i,j,k) / dx3
+
+  px = floor(stepsx)
+  py = floor(stepsy)
+  pz = floor(stepsz)
+
+  ax = stepsx - px
+  ay = stepsy - py
+  az = stepsz - pz
+
+  pxindex = int(indexx(i,j,k) + px) 
+  pyindex = int(indexy(i,j,k) + py) 
+  pzindex = int(indexz(i,j,k) + pz)
+  pxindex_x = int(pxindex + 1)
+  pyindex_y = int(pyindex + 1)
+  pzindex_z = int(pzindex + 1)
+  
+  if (pxindex<0) pxindex = 0
+  if (pyindex<0) pyindex = 0
+  if (pxindex_x<0) pxindex_x = 0
+  if (pyindex_y<0) pyindex_y = 0
+  if (pzindex<0) pzindex = 0
+  if (pzindex_z<0) pzindex_z = 0
+
+  if (pxindex>num_points1-1) pxindex = num_points1-1
+  if (pyindex>num_points2-1) pyindex = num_points2-1
+  if (pxindex_x>num_points1-1) pxindex_x = num_points1-1
+  if (pyindex_y>num_points2-1) pyindex_y = num_points2 -1
+  if (pzindex>num_points3-1) pzindex = num_points3-1
+  if (pzindex_z>num_points3-1) pzindex_z = num_points3-1
+
+  pindex = int(pxindex + (num_points1)*(pyindex) + nsqr*pzindex)+1
+  pindex_x = int(pxindex_x + (num_points1)*(pyindex) + nsqr*pzindex)+1
+  pindex_y = int(pxindex + (num_points1)*(pyindex_y) + nsqr*pzindex)+1
+  pindex_xy = int(pxindex_x + (num_points1)*(pyindex_y) + nsqr*pzindex)+1
+
+  pindex_z = int(pxindex + (num_points1)*(pyindex) + nsqr*pzindex_z)+1
+  pindex_z_x = int(pxindex_x + (num_points1)*(pyindex) + nsqr*pzindex_z)+1
+  pindex_z_y = int(pxindex + (num_points1)*(pyindex_y) + nsqr*pzindex_z)+1
+  pindex_z_xy = int(pxindex_x + (num_points1)*(pyindex_y) + nsqr*pzindex_z)+1
+
+  f_out(pindex) = f_out(pindex) + f(i,j,k)*(1-ax)*(1-ay)*(1-az)
+  f_out(pindex_x) = f_out(pindex_x) + f(i,j,k)*(ax)*(1-ay)*(1-az)
+  f_out(pindex_y) = f_out(pindex_y) + f(i,j,k)*(1-ax)*(ay)*(1-az)
+  f_out(pindex_xy) = f_out(pindex_xy) + f(i,j,k)*(ax)*(ay)*(1-az)
+  f_out(pindex_z) = f_out(pindex_z) + f(i,j,k)*(1-ax)*(1-ay)*(az)
+  f_out(pindex_z_x) = f_out(pindex_z_x) + f(i,j,k)*(ax)*(1-ay)*(az)
+  f_out(pindex_z_y) = f_out(pindex_z_y) + f(i,j,k)*(1-ax)*(ay)*(az)
+  f_out(pindex_z_xy) = f_out(pindex_z_xy) + f(i,j,k)*(ax)*(ay)*(az)
+
+  f2_out_index = int(indexx(i,j,k) + (num_points1)*indexy(i,j,k) + nsqr*indexz(i,j,k))+1
+  
+  f2_out(f2_out_index,1) = f2(pindex)*(-1)*(1-ay)*(1-az) + &
+                  f2(pindex_x)*(1)*(1-ay)*(1-az) + &
+                  f2(pindex_y)*(-1)*(ay)*(1-az) + &
+                  f2(pindex_xy)*(1)*(ay)*(1-az) + &
+                  f2(pindex_z)*(-1)*(1-ay)*(az) + &
+                  f2(pindex_z_x)*(1)*(1-ay)*(az) + &
+                  f2(pindex_z_y)*(-1)*(ay)*(az) + &
+                  f2(pindex_z_xy)*(1)*(ay)*(az)
+  f2_out(f2_out_index,2) = f2(pindex)*(1-ax)*(-1)*(1-az) + &
+                  f2(pindex_x)*(ax)*(-1)*(1-az) + &
+                  f2(pindex_y)*(1-ax)*(1)*(1-az) + &
+                  f2(pindex_xy)*(ax)*(1)*(1-az) + &
+                  f2(pindex_z)*(1-ax)*(-1)*(az) + &
+                  f2(pindex_z_x)*(ax)*(-1)*(az) + &
+                  f2(pindex_z_y)*(1-ax)*(1)*(az) + &
+                  f2(pindex_z_xy)*(ax)*(1)*(az)
+  f2_out(f2_out_index,3) = f2(pindex)*(1-ax)*(1-ay)*(-1) + &
+                  f2(pindex_x)*(ax)*(1-ay)*(-1) + &
+                  f2(pindex_y)*(1-ax)*(ay)*(-1) + &
+                  f2(pindex_xy)*(ax)*(ay)*(-1) + &
+                  f2(pindex_z)*(1-ax)*(1-ay)*(1) + &
+                  f2(pindex_z_x)*(ax)*(1-ay)*(1) + &
+                  f2(pindex_z_y)*(1-ax)*(ay)*(1) + &
+                  f2(pindex_z_xy)*(ax)*(ay)*(1)
+  end do
+  end do
+  end do
+  !$omp end parallel do
+end subroutine interp_dual_and_grad
+
+
+subroutine interpolate_3d_old(f, w, num_points1, num_points2, num_points3,  &
+indexx, indexy, indexz, dx1, dx2, dx3, num_nodes, dim1, dim2, dim3, f_out)
+  implicit none
+  integer :: num_nodes
+  real(8) :: f(num_nodes)
+  integer :: num_points1, num_points2, num_points3
+  real(8) :: w(num_nodes, 3)
+  integer :: indexx(dim1, dim2, dim3)
+  integer :: indexy(dim1, dim2, dim3)
+  integer :: indexz(dim1, dim2, dim3)
+  integer :: dim1, dim2, dim3
+  real(8) :: f_out(dim1, dim2, dim3)
+  real(8) :: dx1, dx2, dx3
+
+!f2py real(8), intent(in), dimension(num_nodes) :: f
+!f2py real(8), intent(in), dimension(num_nodes,3) :: w
+!f2py integer, intent(in)  :: num_points1, num_points2, num_points3
+!f2py integer, intent(in), dimension(dim1, dim2, dim3) :: indexx 
+!f2py integer, intent(in), dimension(dim1, dim2, dim3) :: indexy 
+!f2py integer, intent(in), dimension(dim1, dim2, dim3) :: indexz 
+!f2py real(8), intent(in) :: num_nodes
+!f2py real(8), intent(in) :: dx1, dx2, dx3 
+!f2py integer, intent(in) :: dim1, dim2, dim3
+!f2py real(8), intent(out), dimension(num_nodes) :: f_out
+
+  real(8) :: X(dim1, dim2, dim3), Y(dim1, dim2, dim3), Z(dim1, dim2, dim3)
+  real(8) :: stepsx(dim1, dim2, dim3), stepsy(dim1, dim2, dim3), stepsz(dim1, dim2, dim3)
+  real(8) :: px(dim1, dim2, dim3), py(dim1, dim2, dim3), pz(dim1, dim2, dim3)
+  integer :: pxindex(dim1, dim2, dim3)
+  integer :: pyindex(dim1, dim2, dim3)
+  integer :: pzindex(dim1, dim2, dim3)
+  integer :: pxindex_x(dim1, dim2, dim3)
+  integer :: pyindex_y(dim1, dim2, dim3)
+  integer :: pzindex_z(dim1, dim2, dim3)
+  integer :: nsqr
+  integer :: pindex(dim1, dim2, dim3)
+  integer :: pindex_x(dim1, dim2, dim3)
+  integer :: pindex_y(dim1, dim2, dim3)
+  integer :: pindex_xy(dim1, dim2, dim3)
+  integer :: pindex_z(dim1, dim2, dim3)
+  integer :: pindex_z_x(dim1, dim2, dim3)
+  integer :: pindex_z_y(dim1, dim2, dim3)
+  integer :: pindex_z_xy(dim1, dim2, dim3)
+  real(8) :: ax(dim1, dim2, dim3)
+  real(8) :: ay(dim1, dim2, dim3)
+  real(8) :: az(dim1, dim2, dim3)
+  real(8) :: f_out_temp(dim1, dim2, dim3)
+  integer :: i,j,k
+
+  X = reshape(w(:,1), [dim1,dim2,dim3])
+  Y = reshape(w(:,2), [dim1,dim2,dim3])
+  Z = reshape(w(:,3), [dim1,dim2,dim3])
+
+  stepsx = X / dx1
+  stepsy = Y / dx2
+  stepsz = Z / dx3
+
+  px = floor(stepsx)
+  py = floor(stepsy)
+  pz = floor(stepsz)
+
+  ax = stepsx - px
+  ay = stepsy - py
+  az = stepsz - pz
+
+  pxindex = int(indexx + px) 
+  pyindex = int(indexy + py) 
+  pzindex = int(indexz + pz) 
+  pxindex_x = int(pxindex + 1) 
+  pyindex_y = int(pyindex + 1) 
+  pzindex_z = int(pzindex + 1) 
+  
+  where (pxindex<0) pxindex = 0
+  where (pyindex<0) pyindex = 0
+  where (pxindex_x<0) pxindex_x = 0
+  where (pyindex_y<0) pyindex_y = 0
+  where (pzindex<0) pzindex = 0
+  where (pzindex_z<0) pzindex_z = 0
+
+  where (pxindex>num_points1-1) pxindex = num_points1-1
+  where (pyindex>num_points2-1) pyindex = num_points2-1
+  where (pxindex_x>num_points1-1) pxindex_x = num_points1-1
+  where (pyindex_y>num_points2-1) pyindex_y = num_points2-1 
+  where (pzindex>num_points3-1) pzindex = num_points3-1 
+  where (pzindex_z>num_points3-1) pzindex_z = num_points3-1 
+
+  nsqr = num_points1 * num_points2
+  pindex = int(pxindex + (num_points1)*(pyindex) + nsqr*pzindex) + 1
+  pindex_x = int(pxindex_x + (num_points1)*(pyindex) + nsqr*pzindex) + 1
+  pindex_y = int(pxindex + (num_points1)*(pyindex_y) + nsqr*pzindex) + 1
+  pindex_xy = int(pxindex_x + (num_points1)*(pyindex_y) + nsqr*pzindex) + 1
+
+  pindex_z = int(pxindex + (num_points1)*(pyindex) + nsqr*pzindex_z) + 1
+  pindex_z_x = int(pxindex_x + (num_points1)*(pyindex) + nsqr*pzindex_z) + 1
+  pindex_z_y = int(pxindex + (num_points1)*(pyindex_y) + nsqr*pzindex_z) + 1
+  pindex_z_xy = int(pxindex_x + (num_points1)*(pyindex_y) + nsqr*pzindex_z) + 1
+
+  do i = 1, dim1, 1
+  do j = 1, dim2, 1
+  do k = 1, dim3, 1
+  f_out_temp(i,j,k) = f(pindex(i,j,k))*(1-ax(i,j,k))*(1-ay(i,j,k))*(1-az(i,j,k)) + &
+                    f(pindex_x(i,j,k))*(ax(i,j,k))*(1-ay(i,j,k))*(1-az(i,j,k)) + &
+                    f(pindex_y(i,j,k))*(1-ax(i,j,k))*(ay(i,j,k))*(1-az(i,j,k)) + &
+                    f(pindex_xy(i,j,k))*(ax(i,j,k))*(ay(i,j,k))*(1-az(i,j,k))
+  f_out_temp(i,j,k) = f_out_temp(i,j,k) + f(pindex_z(i,j,k))*(1-ax(i,j,k))*(1-ay(i,j,k))*(az(i,j,k)) + &
+                    f(pindex_z_x(i,j,k))*(ax(i,j,k))*(1-ay(i,j,k))*(az(i,j,k)) + &
+                    f(pindex_z_y(i,j,k))*(1-ax(i,j,k))*(ay(i,j,k))*(az(i,j,k)) + &
+                    f(pindex_z_xy(i,j,k))*(ax(i,j,k))*(ay(i,j,k))*(az(i,j,k))
+  end do
+  end do
+  end do
+  f_out = f_out_temp
+  !f_out = reshape(f_out_temp, [num_nodes])
+end subroutine interpolate_3d_old
+
+  

@@ -179,7 +179,7 @@ class ImageTimeSeries(object):
         self.num_times = self.num_times_disc * self.num_target_times + 1
         self.times = numpy.linspace(0, 1, self.num_times)
         self.dt = 1. / (self.num_times - 1)
-        self.sigma = .1
+        self.sigma = 1.
         self.num_points = numpy.array([256,190,160])
         self.domain_max = None
         self.dx = numpy.array([1.,1.,1.])
@@ -377,7 +377,7 @@ class ImageTimeSeries(object):
         #r_sqr_xsi = (numpy.power(fnodes[:,:,0],2) + numpy.power(fnodes[:,:,1],2) + \
         #                    numpy.power(fnodes[:,:,2],2))
         #Kv = 2.*numpy.pi * b * numpy.exp(-b/2. * r_sqr_xsi)
-        alpha = .5
+        alpha = .01
         Kv = 1.0 / numpy.power(1 + alpha*(r_sqr_xsi),2)
         return Kv
 
@@ -617,9 +617,25 @@ class ImageTimeSeries(object):
     def computeMatching(self):
         #conjugateGradient.cg(self, True, maxIter = 500, TestGradient=False,
         #                        epsInit=1e-3)
-        gradientDescent.descend(self, True, maxIter=500, TestGradient=False, \
-                            epsInit=1)
+        gradientDescent.descend(self, True, maxIter=1000, TestGradient=False, \
+                            epsInit=1e-3)
         return self
+
+    def reset(self):
+        from tvtk.api import tvtk
+        rg, N, T = self.get_sim_data()
+        fbase = "/cis/home/clr/compute/time_series/lung_data_1/iter250_mesh256_"
+        for t in range(T):
+            r = tvtk.XMLStructuredGridReader(file_name="%s%d.vts" % (fbase, t))
+            r.update()
+            self.v[...,t] = numpy.array(r.output.point_data.get_array("v")).astype(float)
+            self.I[...,t] = numpy.array(r.output.point_data.get_array("I")).astype(float)
+            self.I_interp[...,t] = numpy.array(r.output.point_data.get_array("I_interp")).astype(float)
+            self.p[...,t] = numpy.array(r.output.point_data.get_array("p")).astype(float)
+            self.mu[...,t] = numpy.array(r.output.point_data.get_array("mu")).astype(float)
+            self.mu_state[...,t] = numpy.array(r.output.point_data.get_array("mu")).astype(float)
+            logging.info("reloaded time %d." % (t))
+        self.update_evolutions()
 
     def dotProduct(self, g1, g2):
         rg, N, T = self.get_sim_data()
@@ -700,4 +716,5 @@ if __name__ == "__main__":
     setup_default_logging(output_dir)
     logging.info(options)
     its = ImageTimeSeries(output_dir)
+    its.reset()
     its.computeMatching()

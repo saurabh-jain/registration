@@ -123,7 +123,7 @@ def kernelMatrixLaplacian(x, y=None, par=[1., 3], diff=False, diff2 = False, con
         if y == None:
             K = dfun.squareform(np.multiply(lapPolDiff2(u, ord), np.exp(-u)/(4*sig**4)))
             #np.fill_diagonal(K, 1./((2*ord-1)*4*sig**4))
-            np.fill_diagonal(K, 1./((3)*4*sig**4))
+            np.fill_diagonal(K, 1./((35)*4*sig**4))
         else:
             K = np.multiply(lapPolDiff2(u, ord), np.exp(-u)/(4*sig**4))
 

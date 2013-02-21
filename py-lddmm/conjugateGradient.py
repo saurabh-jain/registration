@@ -83,31 +83,6 @@ def cg(opt, verb = True, maxIter=1000, TestGradient = False, epsInit=10.):
             logging.info("obj info: %f, %f" % (objfoo, obj))
             logging.info('Test Gradient: %f, %f ' % ( \
                                 (objfoo - obj)/epsfoo, -grdfoo * gradCoeff) )
-
-            opt.rg.create_vtk_sg()
-            opt.rg.add_vtk_point_data(grd, "grd")
-            opt.rg.add_vtk_point_data(dirfoo, "dirfoo")
-            opt.rg.vtk_write(it, "cg_grad_test", output_dir=opt.output_dir)
-
-            all_test = False
-            #import pdb
-            #pdb.set_trace()
-            if all_test == True:
-                for k1 in range(grd.shape[0]):
-                    dirfoo2 = np.zeros(grd.shape[0])
-                    dirfoo2[k1] = dirfoo[k1]
-                    epsfoo = 1e-8
-                    objfoo = opt.updateTry(dirfoo2, epsfoo, obj-1e10)
-                    if hasattr(opt, 'dotProduct'):
-                        [grdfoo] = opt.dotProduct(grd, [dirfoo2])
-                    else:
-                        grdfoo = np.multiply(grd, dirfoo2).sum()
-                    logging.info('All Test Gradient %d: %f, %f ' % (k1, \
-                                        (objfoo - obj)/epsfoo, (1./opt.g_eps) * -grdfoo * gradCoeff) )
-
-
-            #import pdb
-            #pdb.set_trace()
         if it == 0:
             if hasattr(opt, 'dotProduct'):
                 [grdOld2] = opt.dotProduct(grd, [grd])
@@ -200,7 +175,8 @@ def cg(opt, verb = True, maxIter=1000, TestGradient = False, epsInit=10.):
                     contt=0
 
             #print obj+obj0, objTry+obj0
-            if (np.fabs(obj-objTry) < .000001):
+            #if (np.fabs(obj-objTry) < .000001):
+            if (np.fabs(obj-objTry) < 1e-10):
                 if (skipCG==1) | (beta < 1e-10) :
                     logging.info('iteration {0:d}: obj = {1:.5f}, eps = {2:.5f}, beta = {3:.5f}, gradient: {4:.5f}'.format(it+1, obj, eps, beta, np.sqrt(grd2)))
                     logging.info('Stopping Gradient Descent: small variation')
