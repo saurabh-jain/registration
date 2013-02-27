@@ -12,6 +12,7 @@ import pointEvolution
 import conjugateGradient
 import kernelFunctions as kfun
 
+import kernelMatrix_fort
 from PIL import Image
 
 import pdb
@@ -118,7 +119,7 @@ class SmoothImageMeta(object):
         kvn = 'laplacian'
         khn = 'laplacian'
         kvs = .07
-        khs = .015
+        khs = .015 #/ 4.
         kvo = 4
         kho = 4
         logging.info("KV params: name=%s, sigma=%f, order=%f" % (kvn,kvs,kvo))
@@ -153,7 +154,7 @@ class SmoothImageMeta(object):
 #        si = SplineInterp(rg, self.KH, self.target_in)
 #        self.dual_target = si.minimize()
 
-        self.si = SplineInterp_SVD(rg, self.KH)
+        #self.si = SplineInterp_SVD(rg, self.KH)
         #self.dual_template = self.si.solve(self.template_in)
         #self.dual_target = self.si.solve(self.target_in)
         self.dual_template = self.template_in.copy()
@@ -269,51 +270,59 @@ class SmoothImageMeta(object):
         dJ *= self.g_eps * rg.element_volumes[0]
 
         # test the gradient
-        objOld = self.objectiveFun()
-        eps = 1e-8
-        x = self.xt[:,:,T-1]
-        m = self.m[:,T-1]
-        J = self.J[:,T-1]
-        xr = numpy.random.randn(x.shape[0], x.shape[1])
-        #xr[:,1] = 0.
-        #temp = xr[213,0]
-        #print temp * eps
-        #xr[:,0] = 0.
-        #xr[213,0] = temp
-        mr = numpy.random.randn(m.shape[0])
-        jr = numpy.random.randn(J.shape[0])
-
-        x1 = self.xt[:,:,T-1] + eps * xr
-        m1 = self.m[:,T-1] + eps * mr
-        J1 = self.J[:,T-1] + eps * jr
-        interp_target = self.KH.applyK(x1, self.dual_target, y=rg.nodes)
-        diff = m1 - interp_target.real
-        sqrtJ = numpy.sqrt(J1)
-        objFun = numpy.dot(diff*sqrtJ, sqrtJ*diff) * self.g_eps * \
-                                     rg.element_volumes[0]
-
-        ip = numpy.multiply(dx, xr).sum(axis=1).sum() \
-                    + numpy.dot(dm, mr)  \
-                    + numpy.dot(dJ, jr)
-        logging.info("Endpoint gradient test: %f, %f" % \
-                            ((objFun - objOld)/eps, ip))
-
-        if (self.verbose_file_output):
-            rg.create_vtk_sg()
-            rg.add_vtk_point_data(diff.real, "diff")
-            rg.add_vtk_point_data(d_interp.real, "d_interp")
-            rg.add_vtk_point_data(self.J[:,T-1], "J")
-            rg.add_vtk_point_data(dJ, "dJ")
-            rg.add_vtk_point_data(self.target, "target")
-            rg.add_vtk_point_data(interp_target, "interp_target")
-            rg.add_vtk_point_data(dm.real, "dm")
-            rg.add_vtk_point_data(self.m[:,T-1], "m")
-            rg.add_vtk_point_data(dx.real, "dx")
-            rg.vtk_write(0, "grad_test", output_dir=self.output_dir)
+#        objOld = self.objectiveFun()
+#        eps = 1e-8
+#        x = self.xt[:,:,T-1]
+#        m = self.m[:,T-1]
+#        J = self.J[:,T-1]
+#        xr = numpy.random.randn(x.shape[0], x.shape[1])
+#        mr = numpy.random.randn(m.shape[0])
+#        jr = numpy.random.randn(J.shape[0])
+#
+#        x1 = self.xt[:,:,T-1] + eps * xr
+#        m1 = self.m[:,T-1] + eps * mr
+#        J1 = self.J[:,T-1] + eps * jr
+#        interp_target = self.KH.applyK(x1, self.dual_target, y=rg.nodes)
+#        diff = m1 - interp_target.real
+#        sqrtJ = numpy.sqrt(J1)
+#        objFun = numpy.dot(diff*sqrtJ, sqrtJ*diff) * self.g_eps * \
+#                                     rg.element_volumes[0]
+#
+#        ip = numpy.multiply(dx, xr).sum(axis=1).sum() \
+#                    + numpy.dot(dm, mr)  \
+#                    + numpy.dot(dJ, jr)
+#        logging.info("Endpoint gradient test: %f, %f" % \
+#                            ((objFun - objOld)/eps, ip))
+#
+#        if (self.verbose_file_output):
+#            rg.create_vtk_sg()
+#            rg.add_vtk_point_data(diff.real, "diff")
+#            rg.add_vtk_point_data(d_interp.real, "d_interp")
+#            rg.add_vtk_point_data(self.J[:,T-1], "J")
+#            rg.add_vtk_point_data(dJ, "dJ")
+#            rg.add_vtk_point_data(self.target, "target")
+#            rg.add_vtk_point_data(interp_target, "interp_target")
+#            rg.add_vtk_point_data(dm.real, "dm")
+#            rg.add_vtk_point_data(self.m[:,T-1], "m")
+#            rg.add_vtk_point_data(dx.real, "dx")
+#            rg.vtk_write(0, "grad_test", output_dir=self.output_dir)
 
         return [dx, dm, dJ]
 
     def shoot(self):
+        rg, N, T = self.get_sim_data()
+        (x,m,z,J) = kernelMatrix_fort.shoot(self.dt, \
+                            self.sfactor, self.KV.sigma, self.KV.order, \
+                            self.KH.sigma, self.KH.order, \
+                            self.alpha, self.x0, self.template, \
+                            -1.0*self.D_template,
+                            self.num_times, rg.num_nodes)
+        self.xt = x
+        self.m = m
+        self.z = z
+        self.J = J
+
+    def shoot_old(self):
         rg, N, T = self.get_sim_data()
         x = numpy.zeros((rg.num_nodes, 3, T))
         x[:,:,0] = self.x0.copy()
@@ -593,13 +602,13 @@ class SmoothImageMeta(object):
                                  (self.optimize_iteration), \
                                  output_dir=self.output_dir)
 
-        #si = SplineInterp(rg, self.KH, ealpha[:,0])
-        #ge = si.minimize()
-        ge = self.si.solve(ealpha[:,0])
+        si = SplineInterp(rg, self.KH, ealpha[:,0])
+        ge = si.minimize()
+        #ge = self.si.solve(ealpha[:,0])
         return ge
 
     def computeMatching(self):
-        conjugateGradient.cg(self, True, maxIter=1000, TestGradient=True, \
+        conjugateGradient.cg(self, True, maxIter=3, TestGradient=False, \
                             epsInit=1e-3)
         return self
 
@@ -607,11 +616,17 @@ class SmoothImageMeta(object):
         rg, N, T = self.get_sim_data()
         for t in range(T):
             rg.create_vtk_sg()
+            temp = numpy.zeros(rg.num_nodes)
+            temp[100] = 1.
+            kvt = self.KV.applyK(self.xt[...,t], temp)
+            kht = self.KH.applyK(self.xt[...,t], temp)
             xtc = self.xt[:,:,t].copy()
             xtc[:,0] = xtc[:,0] - self.id_x
             xtc[:,1] = xtc[:,1] - self.id_y
             rg.add_vtk_point_data(self.xt[:,:,t], "x")
             rg.add_vtk_point_data(xtc, "xtc")
+            rg.add_vtk_point_data(kvt, "kvt")
+            rg.add_vtk_point_data(kht, "kht")
             rg.add_vtk_point_data(self.z[:,:,t], "z")
             rg.add_vtk_point_data(self.m[:,t], "m")
             rg.add_vtk_point_data(self.J[:,t], "J")
