@@ -2075,6 +2075,7 @@ public:
 
     int foo = d.n ;
     ofs.write((char *) &foo, sizeof(int)) ;
+    //ofs.close(); return ;
     for (unsigned int i=0; i<d.n; i++) {
       foo = d.getm(i) ; 
       ofs.write((char *) &foo, sizeof(int)) ;
