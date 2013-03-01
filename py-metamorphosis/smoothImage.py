@@ -80,10 +80,11 @@ class SmoothImageMeta(object):
     def __init__(self, output_dir):
         self.verbose_file_output = False
         self.output_dir = output_dir
+        self.write_iter = 5
         self.dim = 2
-        self.sigma = 7.
+        self.sigma = 10.
         self.sfactor = 1./numpy.power(self.sigma, 2)
-        self.num_points = (36,36)
+        self.num_points = (100,100)
         self.domain_max = (1., 1.)
         #self.domain_max = None
         #self.dx = (1.,1.)
@@ -116,24 +117,28 @@ class SmoothImageMeta(object):
         self.id_y = self.rg.nodes[:,1].copy()
         self.m = numpy.zeros((rg.num_nodes, self.num_times))
 
-        kvn = 'laplacian'
-        khn = 'laplacian'
-        kvs = .07
-        khs = .015 #/ 4.
-        kvo = 4
-        kho = 4
-        logging.info("KV params: name=%s, sigma=%f, order=%f" % (kvn,kvs,kvo))
-        logging.info("KH params: name=%s, sigma=%f, order=%f" % (khn,khs,kho))
-        self.KV = kfun.Kernel(name = kvn, sigma=kvs, order=kvo)
-        self.KH = kfun.Kernel(name = khn, sigma=khs, order=kho)
+        self.kvn = 'laplacian'
+        self.khn = 'laplacian'
+        self.kvs = .07
+        self.khs = .015 / 3.0
+        self.kvo = 4
+        self.kho = 4
+        logging.info("KV params: name=%s, sigma=%f, order=%f" \
+                            % (self.kvn,self.kvs,self.kvo))
+        logging.info("KH params: name=%s, sigma=%f, order=%f" \
+                            % (self.khn,self.khs,self.kho))
+        #self.KV = kfun.Kernel(name = kvn, sigma=kvs, order=kvo)
+        #self.KH = kfun.Kernel(name = khn, sigma=khs, order=kho)
         self.alpha = numpy.zeros(rg.num_nodes)
         self.alpha_state = numpy.zeros_like(self.alpha)
 
         # ****************************************************************
 
         size = self.num_points
-        im1 = Image.open("test_images/eight_1c.png").rotate(-90).resize(size)
-        im2 = Image.open("test_images/eight_2c.png").rotate(-90).resize(size)
+        #im1 = Image.open("test_images/eight_1c.png").rotate(-90).resize(size)
+        #im2 = Image.open("test_images/eight_2c.png").rotate(-90).resize(size)
+        im1 = Image.open("test_images/leaf100_1.png").rotate(-90).resize(size)
+        im2 = Image.open("test_images/leaf100_2.png").rotate(-90).resize(size)
         ims = [im1, im2]
         tp = numpy.zeros(size)
         tr = numpy.zeros(size)
@@ -159,11 +164,21 @@ class SmoothImageMeta(object):
         #self.dual_target = self.si.solve(self.target_in)
         self.dual_template = self.template_in.copy()
         self.dual_target = self.target_in.copy()
-        rdt = self.dual_template.reshape([self.dual_template.shape[0],1])
-        self.D_template = self.KH.applyDiffKT(rg.nodes, \
-                            [numpy.ones_like(rdt)], [rdt])
-        self.template = self.KH.applyK(rg.nodes, self.dual_template)
-        self.target = self.KH.applyK(rg.nodes, self.dual_target)
+        #rdt = self.dual_template.reshape([self.dual_template.shape[0],1])
+        #self.D_template = self.KH.applyDiffKT(rg.nodes, \
+        #                    [numpy.ones_like(rdt)], [rdt])
+
+        #self.template = self.KH.applyK(rg.nodes, self.dual_template)
+        #self.target = self.KH.applyK(rg.nodes, self.dual_target)
+
+        (templ, dtempl) = kernelMatrix_fort.applyk_and_diff( \
+                    rg.nodes, rg.nodes, self.dual_template,
+                    self.khs, self.kho, self.rg.num_nodes)
+        self.target = kernelMatrix_fort.applyk( \
+                    rg.nodes, rg.nodes, self.dual_target,
+                    self.khs, self.kho, self.rg.num_nodes)
+        self.template = templ
+        self.D_template = dtempl
 
         tmpMax = numpy.max(numpy.abs(self.template))
         tarMax = numpy.max(numpy.abs(self.target))
@@ -183,8 +198,11 @@ class SmoothImageMeta(object):
         rg, N, T = self.get_sim_data()
         self.shoot()
         interp_loc = self.xt[:,:,T-1].copy()
-        interp_target = self.KH.applyK(interp_loc, \
-                             self.dual_target, y=rg.nodes)
+        #interp_target = self.KH.applyK(interp_loc, \
+        #                     self.dual_target, y=rg.nodes)
+        interp_target = kernelMatrix_fort.applyk( \
+                    interp_loc, rg.nodes, self.dual_target,
+                    self.khs, self.kho, self.rg.num_nodes)
         diff = self.m[:,T-1] - interp_target
         objFun = (numpy.multiply(diff, diff) * self.J[:,T-1]).sum()
         objFun *= rg.element_volumes[0]
@@ -238,7 +256,7 @@ class SmoothImageMeta(object):
             rg.vtk_write(0, "get_grad_test", output_dir=self.output_dir)
         return coeff * ealpha0
 
-    def dotProduct(self, g1, g2):
+    def dotProduct_TEMP(self, g1, g2):
         x = self.rg.nodes.copy()
         res = numpy.zeros(len(g2))
         for ll in range(len(g2)):
@@ -249,14 +267,19 @@ class SmoothImageMeta(object):
     def endPointGradient(self):
         rg, N, T = self.get_sim_data()
         interp_loc = self.xt[:,:,T-1].copy()
-        interp_target = self.KH.applyK(interp_loc, \
-                            self.dual_target, y=rg.nodes)
+        #interp_target = self.KH.applyK(interp_loc, \
+        #                    self.dual_target, y=rg.nodes)
+
+        (interp_target, d_interp) = kernelMatrix_fort.applyk_and_diff( \
+                    interp_loc, rg.nodes, self.dual_target,
+                    self.khs, self.kho, self.rg.num_nodes)
+
         diff = self.m[:,T-1] - interp_target
 
-        rdt = self.dual_target.reshape([self.dual_target.shape[0],1])
-        d_interp = self.KH.applyDiffKT(interp_loc, \
-                            [numpy.ones_like(rdt)],\
-                             [rdt], y=rg.nodes)
+        #rdt = self.dual_target.reshape([self.dual_target.shape[0],1])
+        #d_interp = self.KH.applyDiffKT(interp_loc, \
+        #                    [numpy.ones_like(rdt)],\
+        #                     [rdt], y=rg.nodes)
 
         dx = numpy.zeros((rg.num_nodes, 3))
         dm = 2*diff*self.J[:,T-1]
@@ -312,8 +335,8 @@ class SmoothImageMeta(object):
     def shoot(self):
         rg, N, T = self.get_sim_data()
         (x,m,z,J) = kernelMatrix_fort.shoot(self.dt, \
-                            self.sfactor, self.KV.sigma, self.KV.order, \
-                            self.KH.sigma, self.KH.order, \
+                            self.sfactor, self.kvs, self.kvo, \
+                            self.khs, self.kho, \
                             self.alpha, self.x0, self.template, \
                             -1.0*self.D_template,
                             self.num_times, rg.num_nodes)
@@ -394,7 +417,23 @@ class SmoothImageMeta(object):
         self.z = z.copy()
         self.J = J.copy()
 
+
     def adjointSystem(self, dx, dm, dJ):
+        rg, N, T = self.get_sim_data()
+
+        ealpha = kernelMatrix_fort.adjointsystem( \
+                    self.dt, self.sfactor, self.kvs, self.kvo, \
+                    self.khs, self.kho, \
+                    self.alpha, self.xt, self.m, self.z, self.J, \
+                    dx, dm, dJ, self.num_times, rg.num_nodes)
+
+        #si = SplineInterp(rg, self.KH, ealpha[:,0])
+        #ge = si.minimize()
+        ge = ealpha[:,0]
+        #ge = self.si.solve(ealpha[:,0])
+        return ge
+
+    def adjointSystem_old(self, dx, dm, dJ):
         rg, N, T = self.get_sim_data()
         ex = numpy.zeros((rg.num_nodes, 3, T))
         ez = numpy.zeros((rg.num_nodes, 3, T))
@@ -608,7 +647,7 @@ class SmoothImageMeta(object):
         return ge
 
     def computeMatching(self):
-        conjugateGradient.cg(self, True, maxIter=3, TestGradient=False, \
+        conjugateGradient.cg(self, True, maxIter=1000, TestGradient=False, \
                             epsInit=1e-3)
         return self
 
@@ -618,15 +657,15 @@ class SmoothImageMeta(object):
             rg.create_vtk_sg()
             temp = numpy.zeros(rg.num_nodes)
             temp[100] = 1.
-            kvt = self.KV.applyK(self.xt[...,t], temp)
-            kht = self.KH.applyK(self.xt[...,t], temp)
+            #kvt = self.KV.applyK(self.xt[...,t], temp)
+            #kht = self.KH.applyK(self.xt[...,t], temp)
             xtc = self.xt[:,:,t].copy()
             xtc[:,0] = xtc[:,0] - self.id_x
             xtc[:,1] = xtc[:,1] - self.id_y
             rg.add_vtk_point_data(self.xt[:,:,t], "x")
             rg.add_vtk_point_data(xtc, "xtc")
-            rg.add_vtk_point_data(kvt, "kvt")
-            rg.add_vtk_point_data(kht, "kht")
+            #rg.add_vtk_point_data(kvt, "kvt")
+            #rg.add_vtk_point_data(kht, "kht")
             rg.add_vtk_point_data(self.z[:,:,t], "z")
             rg.add_vtk_point_data(self.m[:,t], "m")
             rg.add_vtk_point_data(self.J[:,t], "J")
@@ -634,17 +673,18 @@ class SmoothImageMeta(object):
             rg.add_vtk_point_data(self.template, "template")
             rg.add_vtk_point_data(self.target, "target")
 
-            a = numpy.multiply(self.z[:,:,t], numpy.vstack( \
-                                (self.alpha, self.alpha, self.alpha)).T)
-            vt = self.sfactor*self.KV.applyK(self.xt[:,:,t], a)
-            rg.add_vtk_point_data(vt, "v")
-            kha = self.KH.applyK(self.xt[:,:,t], self.alpha)
-            rg.add_vtk_point_data(kha, "kha")
+            #a = numpy.multiply(self.z[:,:,t], numpy.vstack( \
+            #                    (self.alpha, self.alpha, self.alpha)).T)
+            #vt = self.sfactor*self.KV.applyK(self.xt[:,:,t], a)
+            #rg.add_vtk_point_data(self.v[...,t], "v")
+            #kha = self.KH.applyK(self.xt[:,:,t], self.alpha)
+            #rg.add_vtk_point_data(kha, "kha")
             rg.vtk_write(t, name, output_dir=self.output_dir)
 
     def endOfIteration(self):
         self.optimize_iteration += 1
-        self.writeData("iter%d" % (self.optimize_iteration))
+        if (self.optimize_iteration % self.write_iter == 0):
+            self.writeData("iter%d" % (self.optimize_iteration))
 
 def setup_default_logging(output_dir):
     logger = logging.getLogger()

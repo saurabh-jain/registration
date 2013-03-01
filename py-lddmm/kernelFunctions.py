@@ -1,6 +1,8 @@
 import numpy as np
 from scipy.spatial import distance as dfun
 
+import kernelMatrix_fort
+
 ## Computes matrix associated with Gaussian kernel
 # par[0] = width
 # if y=None, computes K(x,x), otherwise computes K(x,y)
@@ -94,39 +96,62 @@ def lapPolDiff2(u, ord):
 
 # computes matrix associated with polynomial kernel
 # par[0] = width, par[1] =  order
+#def kernelMatrixLaplacian(x, y=None, par=[1., 3], diff=False, diff2 = False, constant_plane=False, precomp = None):
+#    sig = par[0]
+#    ord=par[1]
+#    if precomp == None:
+#        if y==None:
+#            u = dfun.pdist(x)/sig
+#        else:
+#            u = dfun.cdist(x, y)/sig
+#        precomp = u
+#    else:
+#        u = precomp
+#
+#    #if diff==False & diff2==False:
+#    if diff==False and diff2==False:
+#        if y == None:
+#            K = dfun.squareform(np.multiply(lapPol(u,ord), np.exp(-u)))
+#            np.fill_diagonal(K, 1)
+#        else:
+#            K = np.multiply(lapPol(u,ord), np.exp(-u))
+#    elif diff2==False:
+#        if y == None:
+#            K = dfun.squareform(np.multiply(-lapPolDiff(u, ord), np.exp(-u)/(2*sig*sig)))
+#            np.fill_diagonal(K, -1./((2*ord-1)*2*sig*sig))
+#        else:
+#            K = np.multiply(-lapPolDiff(u, ord), np.exp(-u)/(2*sig*sig))
+#    else:
+#        if y == None:
+#            K = dfun.squareform(np.multiply(lapPolDiff2(u, ord), np.exp(-u)/(4*sig**4)))
+#            #np.fill_diagonal(K, 1./((2*ord-1)*4*sig**4))
+#            np.fill_diagonal(K, 1./((35)*4*sig**4))
+#        else:
+#            K = np.multiply(lapPolDiff2(u, ord), np.exp(-u)/(4*sig**4))
+#
+#
+#    if constant_plane:
+#        uu = dfun.pdist(x[:,x.shape[1]-1])/sig
+#        K2 = dfun.squareform(lapPol(uu,ord)*np.exp(-uu))
+#        np.fill_diagonal(K2, 1)
+#        return K,K2,precomp
+#    else:
+#        return K,precomp
+
+# computes matrix associated with polynomial kernel
+# par[0] = width, par[1] =  order
 def kernelMatrixLaplacian(x, y=None, par=[1., 3], diff=False, diff2 = False, constant_plane=False, precomp = None):
     sig = par[0]
     ord=par[1]
     if precomp == None:
-        if y==None:
-            u = dfun.pdist(x)/sig
-        else:
-            u = dfun.cdist(x, y)/sig
-        precomp = u
-    else:
-        u = precomp
+        precomp = kernelMatrixLaplacianPrecompute(x,y,par,diff,diff2,constant_plane)
 
-    #if diff==False & diff2==False:
     if diff==False and diff2==False:
-        if y == None:
-            K = dfun.squareform(np.multiply(lapPol(u,ord), np.exp(-u)))
-            np.fill_diagonal(K, 1)
-        else:
-            K = np.multiply(lapPol(u,ord), np.exp(-u))
+        K = precomp[1]
     elif diff2==False:
-        if y == None:
-            K = dfun.squareform(np.multiply(-lapPolDiff(u, ord), np.exp(-u)/(2*sig*sig)))
-            np.fill_diagonal(K, -1./((2*ord-1)*2*sig*sig))
-        else:
-            K = np.multiply(-lapPolDiff(u, ord), np.exp(-u)/(2*sig*sig))
+        K = precomp[2]
     else:
-        if y == None:
-            K = dfun.squareform(np.multiply(lapPolDiff2(u, ord), np.exp(-u)/(4*sig**4)))
-            #np.fill_diagonal(K, 1./((2*ord-1)*4*sig**4))
-            np.fill_diagonal(K, 1./((35)*4*sig**4))
-        else:
-            K = np.multiply(lapPolDiff2(u, ord), np.exp(-u)/(4*sig**4))
-
+        K = precomp[3]
 
     if constant_plane:
         uu = dfun.pdist(x[:,x.shape[1]-1])/sig
@@ -136,7 +161,34 @@ def kernelMatrixLaplacian(x, y=None, par=[1., 3], diff=False, diff2 = False, con
     else:
         return K,precomp
 
-
+def kernelMatrixLaplacianPrecompute(x, y=None, par=[1., 3], diff=False, diff2 = False, constant_plane=False):
+    sig = par[0]
+    ord=par[1]
+    if y==None:
+        (u,K,K_diff,K_diff2) = kernelMatrix_fort.kernelmatrixlaplacianprecompute(x, sig, ord)
+    else:
+        if y==None:
+            u = dfun.pdist(x)/sig
+        else:
+            u = dfun.cdist(x, y)/sig
+        if y == None:
+            K = dfun.squareform(np.multiply(lapPol(u,ord), np.exp(-u)))
+            np.fill_diagonal(K, 1)
+        else:
+            K = np.multiply(lapPol(u,ord), np.exp(-u))
+        if y == None:
+            K_diff = dfun.squareform(np.multiply(-lapPolDiff(u, ord), np.exp(-u)/(2*sig*sig)))
+            np.fill_diagonal(K_diff, -1./((2*ord-1)*2*sig*sig))
+        else:
+            K_diff = np.multiply(-lapPolDiff(u, ord), np.exp(-u)/(2*sig*sig))
+        if y == None:
+            K_diff2 = dfun.squareform(np.multiply(lapPolDiff2(u, ord), np.exp(-u)/(4*sig**4)))
+            #np.fill_diagonal(K, 1./((2*ord-1)*4*sig**4))
+            np.fill_diagonal(K_diff2, 1./((35)*4*sig**4))
+        else:
+            K_diff2 = np.multiply(lapPolDiff2(u, ord), np.exp(-u)/(4*sig**4))
+    precomp = [u, K, K_diff, K_diff2]
+    return precomp
 
 # Wrapper for kernel matrix computation
 def  kernelMatrix(Kpar, x, y=None, diff = False, diff2=False, constant_plane = False):
