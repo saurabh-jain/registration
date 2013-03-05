@@ -307,11 +307,12 @@ class Surface:
             smoother.Update()
             g = smoother.GetOutput()
 
-        dc = vtkDecimatePro()
+            #dc = vtkDecimatePro()
+        dc = vtkQuadricDecimation()
         red = 1 - min(np.float(target)/g.GetNumberOfPoints(), 1)
         print 'Reduction: ', red
         dc.SetTargetReduction(red)
-        dc.PreserveTopologyOn()
+        #dc.PreserveTopologyOn()
         #dc.SetSplitting(0)
         dc.SetInput(g)
         #print dc

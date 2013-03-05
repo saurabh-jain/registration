@@ -13,7 +13,9 @@ def compute():
 
     I1 = .06 - ((x-.50)**2 + 0.5*y**2 + z**2)  
     fv1 = Surface() ;
-    fv1.Isosurface(I1, value = 0, target=2000, scales=[1, 1, 1])
+    fv1.Isosurface(I1, value = 0, target=5000, scales=[1, 1, 1])
+
+    return fv1
 
     u = (z + y)/s2
     v = (z - y)/s2
