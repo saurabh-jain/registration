@@ -34,7 +34,6 @@ class SplineInterp_SVD(object):
         return numpy.dot(self.VT.T, numpy.dot(self.Di, \
                                 numpy.dot(self.U.T, rhs)))
 
-
 class SplineInterp(object):
 
     def __init__(self, rg, K, h):
@@ -82,9 +81,9 @@ class SmoothImageMeta(object):
         self.output_dir = output_dir
         self.write_iter = 5
         self.dim = 2
-        self.sigma = 10.
+        self.sigma = 8.
         self.sfactor = 1./numpy.power(self.sigma, 2)
-        self.num_points = (100,100)
+        self.num_points = (200,200)
         self.domain_max = (1., 1.)
         #self.domain_max = None
         #self.dx = (1.,1.)
@@ -119,8 +118,9 @@ class SmoothImageMeta(object):
 
         self.kvn = 'laplacian'
         self.khn = 'laplacian'
-        self.kvs = .07
-        self.khs = .015 / 3.0
+        #self.kvs = .07 / 2.0
+        self.kvs = .015 / 2.2
+        self.khs = .015 / 3.0 / 2.2
         self.kvo = 4
         self.kho = 4
         logging.info("KV params: name=%s, sigma=%f, order=%f" \
@@ -137,8 +137,8 @@ class SmoothImageMeta(object):
         size = self.num_points
         #im1 = Image.open("test_images/eight_1c.png").rotate(-90).resize(size)
         #im2 = Image.open("test_images/eight_2c.png").rotate(-90).resize(size)
-        im1 = Image.open("test_images/leaf100_1.png").rotate(-90).resize(size)
-        im2 = Image.open("test_images/leaf100_2.png").rotate(-90).resize(size)
+        im1 = Image.open("test_images/leaf200_1_reg.png").rotate(-90).resize(size)
+        im2 = Image.open("test_images/leaf200_2.png").rotate(-90).resize(size)
         ims = [im1, im2]
         tp = numpy.zeros(size)
         tr = numpy.zeros(size)
@@ -179,6 +179,23 @@ class SmoothImageMeta(object):
                     self.khs, self.kho, self.rg.num_nodes)
         self.template = templ
         self.D_template = dtempl
+
+        if True:
+            temp = numpy.zeros(rg.num_nodes)
+            temp[250] = 1.
+            kvt = kernelMatrix_fort.applyk( \
+                        rg.nodes, rg.nodes, temp,
+                        self.kvs, self.kvo, self.rg.num_nodes)
+            kht = kernelMatrix_fort.applyk( \
+                        rg.nodes, rg.nodes, temp,
+                        self.khs, self.kho, self.rg.num_nodes)
+            rg.create_vtk_sg()
+            rg.add_vtk_point_data(self.template, "template")
+            rg.add_vtk_point_data(self.D_template, "D_template")
+            rg.add_vtk_point_data(self.target, "target")
+            rg.add_vtk_point_data(kvt, "kvt")
+            rg.add_vtk_point_data(kht, "kht")
+            rg.vtk_write(0, "initial_data", output_dir=self.output_dir)
 
         tmpMax = numpy.max(numpy.abs(self.template))
         tarMax = numpy.max(numpy.abs(self.target))
@@ -655,8 +672,8 @@ class SmoothImageMeta(object):
         rg, N, T = self.get_sim_data()
         for t in range(T):
             rg.create_vtk_sg()
-            temp = numpy.zeros(rg.num_nodes)
-            temp[100] = 1.
+            #temp = numpy.zeros(rg.num_nodes)
+            #temp[100] = 1.
             #kvt = self.KV.applyK(self.xt[...,t], temp)
             #kht = self.KH.applyK(self.xt[...,t], temp)
             xtc = self.xt[:,:,t].copy()

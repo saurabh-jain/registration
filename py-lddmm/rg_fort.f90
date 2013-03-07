@@ -497,30 +497,36 @@ indexx, indexy, indexz, dx1, dx2, dx3, dt, num_nodes, dim1, dim2, dim3, f_out, f
 
   f2_out_index = int(indexx(i,j,k) + (num_points1)*indexy(i,j,k) + nsqr*indexz(i,j,k))+1
   
-  f2_out(f2_out_index,1) = f2(pindex)*(-1)*(1-ay)*(1-az) + &
-                  f2(pindex_x)*(1)*(1-ay)*(1-az) + &
-                  f2(pindex_y)*(-1)*(ay)*(1-az) + &
-                  f2(pindex_xy)*(1)*(ay)*(1-az) + &
-                  f2(pindex_z)*(-1)*(1-ay)*(az) + &
-                  f2(pindex_z_x)*(1)*(1-ay)*(az) + &
-                  f2(pindex_z_y)*(-1)*(ay)*(az) + &
-                  f2(pindex_z_xy)*(1)*(ay)*(az)
-  f2_out(f2_out_index,2) = f2(pindex)*(1-ax)*(-1)*(1-az) + &
-                  f2(pindex_x)*(ax)*(-1)*(1-az) + &
-                  f2(pindex_y)*(1-ax)*(1)*(1-az) + &
-                  f2(pindex_xy)*(ax)*(1)*(1-az) + &
-                  f2(pindex_z)*(1-ax)*(-1)*(az) + &
-                  f2(pindex_z_x)*(ax)*(-1)*(az) + &
-                  f2(pindex_z_y)*(1-ax)*(1)*(az) + &
-                  f2(pindex_z_xy)*(ax)*(1)*(az)
-  f2_out(f2_out_index,3) = f2(pindex)*(1-ax)*(1-ay)*(-1) + &
-                  f2(pindex_x)*(ax)*(1-ay)*(-1) + &
-                  f2(pindex_y)*(1-ax)*(ay)*(-1) + &
-                  f2(pindex_xy)*(ax)*(ay)*(-1) + &
-                  f2(pindex_z)*(1-ax)*(1-ay)*(1) + &
-                  f2(pindex_z_x)*(ax)*(1-ay)*(1) + &
-                  f2(pindex_z_y)*(1-ax)*(ay)*(1) + &
-                  f2(pindex_z_xy)*(ax)*(ay)*(1)
+!   f2_out(f2_out_index,1) = f2(pindex)*(-1/dx1)*(1-ay)*(1-az) + &
+!                   f2(pindex_x)*(1/dx1)*(1-ay)*(1-az) + &
+!                   f2(pindex_y)*(-1/dx1)*(ay)*(1-az) + &
+!                   f2(pindex_xy)*(1/dx1)*(ay)*(1-az) + &
+!                   f2(pindex_z)*(-1/dx1)*(1-ay)*(az) + &
+!                   f2(pindex_z_x)*(1/dx1)*(1-ay)*(az) + &
+!                   f2(pindex_z_y)*(-1/dx1)*(ay)*(az) + &
+!                   f2(pindex_z_xy)*(1/dx1)*(ay)*(az)
+!   f2_out(f2_out_index,2) = f2(pindex)*(1-ax)*(-1/dx2)*(1-az) + &
+!                   f2(pindex_x)*(ax)*(-1/dx2)*(1-az) + &
+!                   f2(pindex_y)*(1-ax)*(1/dx2)*(1-az) + &
+!                   f2(pindex_xy)*(ax)*(1/dx2)*(1-az) + &
+!                   f2(pindex_z)*(1-ax)*(-1/dx2)*(az) + &
+!                   f2(pindex_z_x)*(ax)*(-1/dx2)*(az) + &
+!                   f2(pindex_z_y)*(1-ax)*(1/dx2)*(az) + &
+!                   f2(pindex_z_xy)*(ax)*(1/dx2)*(az)
+!   f2_out(f2_out_index,3) = f2(pindex)*(1-ax)*(1-ay)*(-1/dx3) + &
+!                   f2(pindex_x)*(ax)*(1-ay)*(-1/dx3) + &
+!                   f2(pindex_y)*(1-ax)*(ay)*(-1/dx3) + &
+!                   f2(pindex_xy)*(ax)*(ay)*(-1/dx3) + &
+!                   f2(pindex_z)*(1-ax)*(1-ay)*(1/dx3) + &
+!                   f2(pindex_z_x)*(ax)*(1-ay)*(1/dx3) + &
+!                   f2(pindex_z_y)*(1-ax)*(ay)*(1/dx3) + &
+!                   f2(pindex_z_xy)*(ax)*(ay)*(1/dx3)
+  if ((i/=1).and.(i/=dim1).and.(j/=1).and.(j/=dim2).and.(k/=1).and.(k/=dim3)) then
+	f2_out(f2_out_index,1) = (f2(pindex+1) - f2(pindexi-1))/(2*dx1)
+	f2_out(f2_out_index,2) = (f2(pindex+num_points1) - f2(pindex-num_points1))/(2*dx2)
+	f2_out(f2_out_index,3) = (f2(pindex+nsqr) - f2(pindex-nsqr))/(2*dx3)
+  end if
+
   end do
   end do
   end do

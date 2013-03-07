@@ -72,8 +72,8 @@ def cg(opt, verb = True, maxIter=1000, TestGradient = False, epsInit=10.):
             if hasattr(opt, 'randomDir'):
                 dirfoo = opt.randomDir()
             else:
-                #dirfoo = np.random.randn(grd.shape[0], grd.shape[1], grd.shape[2])
-                dirfoo = np.random.randn(grd.shape[0])
+                dirfoo = np.random.randn(grd.shape[0], grd.shape[1], grd.shape[2])
+                #dirfoo = np.random.randn(grd.shape[0])
             epsfoo = 1e-8
             objfoo = opt.updateTry(dirfoo, epsfoo, obj-1e10)
             if hasattr(opt, 'dotProduct'):
