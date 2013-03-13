@@ -526,7 +526,7 @@ class ImageEvolution: public ImageMatching
       foo1.copy(AZ) ;
       foo1 /= 2 ;
       foo1 -= b ;
-      ener = Z.sumProd(foo1) ;
+      //ener = Z.sumProd(foo1) ;
       
       foo1.copy(AZ) ;
       foo1 -= b ;
