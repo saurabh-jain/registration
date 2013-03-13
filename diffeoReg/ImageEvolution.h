@@ -491,7 +491,7 @@ class ImageEvolution: public ImageMatching
     }
     
     //cout << "Starting iterations " << endl ;
-    _real mu=0, muold, alfa, be, ener2, ener  ;
+    _real mu=0, muold, alfa, be, ener2  ;
     for (unsigned int i2 =0; i2<K; i2++) {
       if (i2 == 0) {
 	mu = r.norm2() ;

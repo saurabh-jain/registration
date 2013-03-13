@@ -249,13 +249,14 @@ public:
   bool initTimeData ;
   bool foundInitialMomentum ;
   bool keepTarget ;
-bool applyAffineToTemplate ;
+  bool applyAffineToTemplate ;
   bool saveProjectedMomentum ;
   _real lambda ;
-_real scaleThreshold ;
+  _real scaleThreshold ;
   _real kernelNormalization ;
-bool saveMovie ;
-bool periodic ;
+  bool normalizeKernel ;
+  bool saveMovie ;
+  bool periodic ;
 
   void defaultArray(int dm)  {
     ndim = dm ;
@@ -359,6 +360,7 @@ bool periodic ;
       cont = p0.cont ;
       applyAffineToTemplate = p0.applyAffineToTemplate ;
       kernelNormalization = p0.kernelNormalization ;
+      normalizeKernel = p0.normalizeKernel ;
 
       parallelTimeDisc = p0.parallelTimeDisc ;
       time_disc = p0.time_disc ;
@@ -426,7 +428,8 @@ bool periodic ;
 		TIME_DISC, LAMBDA, MINVAREN, EXPAND, MAXSHOOTTIME, SCALESCALARS, KEEPTARGET,
 		APPLYAFFINETOTEMPLATE, FLIPTARGET, GRADIENT_THRESHOLD,
 		PARALLELTIMEDISC, INITIALMOMENTUM, BINARIZE, EXPANDTOMAXSIZE,USEVECTORMOMENTUM,
-                REVERTINTENSITIES, MATCHDENSITIES,NB_THREADS, CONTINUE,SAVEMOVIE,PERIODIC,QUIET
+                REVERTINTENSITIES, MATCHDENSITIES,NB_THREADS, CONTINUE,SAVEMOVIE,PERIODIC,QUIET,
+		NORMALIZEKERNEL
   } ;
   map<string, int> paramMap ;
 } ;

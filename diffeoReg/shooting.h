@@ -139,14 +139,16 @@ public:
     }
 
     void startOfProcedure(Tangent &Z) {
-      Vector foo ;
-      int nbFreeVar=0 ;
-      _sh->Template.gradient().norm(foo) ;
-      for (unsigned int k=0; k<foo.d.length;k++)
-	if (foo[k] > 0.01)
-	  nbFreeVar++ ;
-      _sh->kernelNormalization = nbFreeVar ; 
-      cout << "Number of momentum variables: " << nbFreeVar << " out of " << foo.d.length << endl ;
+      if (_sh->param.normalizeKernel) {
+	Vector foo ;
+	int nbFreeVar=0 ;
+	_sh->Template.gradient().norm(foo) ;
+	for (unsigned int k=0; k<foo.d.length;k++)
+	  if (foo[k] > 0.01)
+	    nbFreeVar++ ;
+	_sh->kernelNormalization = nbFreeVar ; 
+	cout << "Number of momentum variables: " << nbFreeVar << " out of " << foo.d.length << endl ;
+      }
     }
 
     void endOfProcedure(Tangent &Z) {
@@ -470,6 +472,7 @@ public:
 
     double objectiveFun(Tangent &Z) {
       VectorMap LvI, vI ;
+      //cout << "obj. fun: " << Z.max() << endl 
       _sh->Template.getMomentum(Z, LvI) ;
       _sh->GeodesicDiffeoEvolution(LvI) ;
       _sh->kernel(LvI, vI) ;
@@ -486,15 +489,17 @@ public:
     }
 
     void startOfProcedure(Tangent &Z) {
-      Vector foo ;
-      int nbFreeVar=0 ;
-      _sh->Template.gradient().norm(foo) ;
-      for (unsigned int k=0; k<foo.d.length;k++)
-      	if (foo[k] > 0.01)
-      	  nbFreeVar++ ;
-      _sh->kernelNormalization = nbFreeVar ; 
-	   //      _sh->kernelNormalization = 1.0 ; 
-      cout << "Number of momentum variables: " << nbFreeVar << " out of " << foo.d.length << endl ;
+      if (_sh->param.normalizeKernel) {
+	Vector foo ;
+	int nbFreeVar=0 ;
+	_sh->Template.gradient().norm(foo) ;
+	for (unsigned int k=0; k<foo.d.length;k++)
+	  if (foo[k] > 0.01)
+	    nbFreeVar++ ;
+	_sh->kernelNormalization = nbFreeVar ; 
+	//      _sh->kernelNormalization = 1.0 ; 
+	cout << "Number of momentum variables: " << nbFreeVar << " out of " << foo.d.length << endl ;
+      }
     }
 
     void endOfProcedure(Tangent &Z) {
