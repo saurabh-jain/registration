@@ -427,6 +427,24 @@ class RegularGrid(object):
         filt = a*b*c
         return filt
 
+    def raised_cosine_x(self, mf):
+        outer_cut = numpy.ones(self.dims)
+        for d in range(self.dim):
+            abn = numpy.abs(self.nodes[:,d].reshape(self.dims))
+            M = numpy.max(self.nodes[:,d])
+            beta = 1-(2.*mf)
+            ic = M*(1-beta)/2.
+            #oc = M*(1+beta)/2.
+            inner = abn <= ic
+            outer = abn > ic
+            outer_cut_temp = numpy.zeros(self.dims)
+            outer_cut_temp[inner] = 1.0/M
+            outer_cut_temp[outer] = 1.0/(2.*M) *(1 + numpy.cos(numpy.pi/(M*beta) *\
+                                (abn[outer] - (1-beta)*M/2.)) )
+            outer_cut *= outer_cut_temp
+        outer_cut /= numpy.max(outer_cut)
+        return outer_cut
+
     def raised_cosine(self, mf, beta):
         f_x = 1./(2.0*numpy.pi) * self.xsi_1
         f_y = 1./(2.0*numpy.pi) * self.xsi_2
