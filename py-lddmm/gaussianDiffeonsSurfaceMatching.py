@@ -1,10 +1,13 @@
 import os
 import numpy as np
+import numpy.linalg as LA
 import scipy as sp
 import surfaces
 import kernelFunctions as kfun
+import gaussianDiffeons as gd
 import pointEvolution as evol
 import conjugateGradient as cg
+import surfaceMatching
 from affineBasis import *
 
 ## Parameter class for matching
@@ -14,32 +17,11 @@ from affineBasis import *
 #      sigmaError: normlization for error term
 #      errorType: 'measure' or 'current'
 #      typeKernel: 'gauss' or 'laplacian'
-class SurfaceMatchingParam:
-    def __init__(self, timeStep = .1, KparDiff = None, KparDist = None, sigmaKernel = 6.5, sigmaDist=2.5, sigmaError=1.0, errorType = 'measure', typeKernel='gauss'):
-        self.timeStep = timeStep
-        self.sigmaKernel = sigmaKernel
-        self.sigmaDist = sigmaDist
-        self.sigmaError = sigmaError
-        self.typeKernel = typeKernel
-        self.errorType = errorType
-        if errorType == 'current':
-            self.fun_obj0 = surfaces.currentNorm0
-            self.fun_obj = surfaces.currentNormDef
-            self.fun_objGrad = surfaces.currentNormGradient
-        elif errorType=='measure':
-            self.fun_obj0 = surfaces.measureNorm0
-            self.fun_obj = surfaces.measureNormDef
-            self.fun_objGrad = surfaces.measureNormGradient
-        else:
-            print 'Unknown error Type: ', self.errorType
-        if KparDiff == None:
-            self.KparDiff = kfun.Kernel(name = self.typeKernel, sigma = self.sigmaKernel)
-        else:
-            self.KparDiff = KparDiff
-        if KparDist == None:
-            self.KparDist = kfun.Kernel(name = 'gauss', sigma = self.sigmaDist)
-        else:
-            self.KparDist = KparDist
+class SurfaceMatchingParam(surfaceMatching.SurfaceMatchingParam):
+    def __init__(self, timeStep = .1, sigmaKernel = 6.5, sigmaDist=2.5, sigmaError=1.0, errorType='measure'):
+        surfaceMatching.SurfaceMatchingParam.__init__(self, timeStep = timeStep, sigmaKernel =  sigmaKernel, sigmaDist = sigmaDist, sigmaError = sigmaError, typeKernel = 'gauss', errorType=errorType)
+        self.KparDiff = kfun.Kernel(name = self.typeKernel, sigma = self.sigmaKernel)
+        self.KparDist = kfun.Kernel(name = 'gauss', sigma = self.sigmaDist)
 
 class Direction:
     def __init__(self):
@@ -62,9 +44,10 @@ class Direction:
 #        saveFile: generic name for saved surfaces
 #        affine: 'affine', 'similitude', 'euclidean', 'translation' or 'none'
 #        maxIter: max iterations in conjugate gradient
-class SurfaceMatching:
+class SurfaceMatching(surfaceMatching.SurfaceMatching):
 
-    def __init__(self, Template=None, Target=None, fileTempl=None, fileTarg=None, param=None, maxIter=1000, regWeight = 1.0, affineWeight = 1.0, verb=True,
+    def __init__(self, Template=None, Target=None, Diffeons=None, DiffeonRatio=None, zeroVar=False, fileTempl=None,
+                 fileTarg=None, param=None, maxIter=1000, regWeight = 1.0, affineWeight = 1.0, verb=True,
                  rotWeight = None, scaleWeight = None, transWeight = None, testGradient=False, saveFile = 'evolution', affine = 'none', outputDir = '.'):
         if Template==None:
             if fileTempl==None:
@@ -115,28 +98,47 @@ class SurfaceMatching:
             self.param = SurfaceMatchingParam()
         else:
             self.param = param
-        x0 = self.fv0.vertices
+        self.x0 = self.fv0.vertices
+        if Diffeons==None:
+            if DiffeonRatio==None:
+                self.c0 = np.copy(self.x0) ;
+                self.S0 = np.zeros([self.x0.shape[0], self.x0.shape[1], self.x0.shape[1]])
+                self.idx = None
+            else:
+                (self.c0, self.S0, self.idx) = gd.generateDiffeons(self.fv0, DiffeonRatio)
+                #self.S0 *= self.param.sigmaKernel**2;
+        else:
+            (self.c0, self.S0, self.idx) = Diffeons
+        if zeroVar:
+            self.S0 = np.zeros(self.S0.shape)
 
+        self.ndf = self.c0.shape[0]
         self.Tsize = int(round(1.0/self.param.timeStep))
-        self.at = np.zeros([self.Tsize, x0.shape[0], x0.shape[1]])
-        self.atTry = np.zeros([self.Tsize, x0.shape[0], x0.shape[1]])
+        self.at = np.zeros([self.Tsize, self.c0.shape[0], self.x0.shape[1]])
+        self.atTry = np.zeros([self.Tsize, self.c0.shape[0], self.x0.shape[1]])
         self.Afft = np.zeros([self.Tsize, self.affineDim])
         self.AfftTry = np.zeros([self.Tsize, self.affineDim])
-        self.xt = np.tile(self.fv0.vertices, [self.Tsize+1, 1, 1])
+        self.xt = np.tile(self.x0, [self.Tsize+1, 1, 1])
+        self.ct = np.tile(self.c0, [self.Tsize+1, 1, 1])
+        self.St = np.tile(self.S0, [self.Tsize+1, 1, 1, 1])
         self.obj = None
         self.objTry = None
-        self.gradCoeff = self.fv0.vertices.shape[0]
+        self.gradCoeff = self.ndf
         self.saveFile = saveFile
         self.fv0.saveVTK(self.outputDir+'/Template.vtk')
         self.fv1.saveVTK(self.outputDir+'/Target.vtk')
 
-    def dataTerm(self, _fvDef):
-        obj = self.param.fun_obj(_fvDef, self.fv1, self.param.KparDist) / (self.param.sigmaError**2)
-        return obj
+    # def dataTerm(self, _fvDef):
+    #     obj = self.param.fun_obj(_fvDef, self.fv1, self.param.KparDist) / (self.param.sigmaError**2)
+    #     return obj
 
-    def  objectiveFunDef(self, at, Afft, withTrajectory = False, withJacobian=False, x0 = None):
-        if x0 == None:
-            x0 = self.fv0.vertices
+    def  objectiveFunDef(self, at, Afft, withTrajectory = False, withJacobian=False, initial = None):
+        if initial == None:
+            x0 = self.x0
+            c0 = self.c0
+            S0 = self.S0
+        else:
+            (x0, c0, S0) = initial
         param = self.param
         timeStep = 1.0/self.Tsize
         dim2 = self.dim**2
@@ -147,45 +149,40 @@ class SurfaceMatching:
                 A[0][t] = AB[0:dim2].reshape([self.dim, self.dim])
                 A[1][t] = AB[dim2:dim2+self.dim]
         if withJacobian:
-            (xt,Jt)  = evol.landmarkDirectEvolutionEuler(x0, at, param.KparDiff, affine=A, withJacobian=True)
+            (xt, ct, St, Jt)  = evol.gaussianDiffeonsEvolutionEuler(x0, c0, S0, at, param.sigmaKernel, affine=A, withJacobian=True)
         else:
-            xt  = evol.landmarkDirectEvolutionEuler(x0, at, param.KparDiff, affine=A)
+            (xt, ct, St)  = evol.gaussianDiffeonsEvolutionEuler(x0, c0, S0, at, param.sigmaKernel, affine=A)
         #print xt[-1, :, :]
         #print obj
         obj=0
+        #print St.shape
         for t in range(self.Tsize):
             z = np.squeeze(xt[t, :, :])
+            c = np.squeeze(ct[t, :, :])
+            S = np.squeeze(St[t, :, :, :])
             a = np.squeeze(at[t, :, :])
             #rzz = kfun.kernelMatrix(param.KparDiff, z)
-            ra = param.KparDiff.applyK(z, a)
-            obj = obj + self.regweight*timeStep*np.multiply(a, (ra)).sum()
+            rcc = gd.computeProducts(c, S, param.sigmaKernel)
+            obj = obj + self.regweight*timeStep*np.multiply(a, np.dot(rcc,a)).sum()
             if self.affineDim > 0:
                 obj +=  timeStep * np.multiply(self.affineWeight.reshape(Afft[t].shape), Afft[t]**2).sum()
             #print xt.sum(), at.sum(), obj
         if withJacobian:
-            return obj, xt, Jt
+            return obj, xt, ct, St, Jt
         elif withTrajectory:
-            return obj, xt
+            return obj, xt,  ct, St
         else:
             return obj
 
-    def  _objectiveFun(self, at, Afft, withTrajectory = False):
-        (obj, xt) = self.objectiveFunDef(at, Afft, withTrajectory=True)
-        self.fvDef.updateVertices(np.squeeze(xt[-1, :, :]))
-        obj0 = self.dataTerm(self.fvDef)
-
-        if withTrajectory:
-            return obj+obj0, xt
-        else:
-            return obj+obj0
-
+    
     def objectiveFun(self):
         if self.obj == None:
             self.obj0 = self.param.fun_obj0(self.fv1, self.param.KparDist) / (self.param.sigmaError**2)
-            (self.obj, self.xt) = self.objectiveFunDef(self.at, self.Afft, withTrajectory=True)
+            (self.obj, self.xt, self.ct, self.St) = self.objectiveFunDef(self.at, self.Afft, withTrajectory=True)
             self.fvDef.updateVertices(np.squeeze(self.xt[-1, :, :]))
             self.obj += self.obj0 + self.dataTerm(self.fvDef)
             #print self.obj0,  self.dataTerm(self.fvDef)
+            #print self.obj0, self.obj
 
         return self.obj
 
@@ -199,11 +196,11 @@ class SurfaceMatching:
             AfftTry = self.Afft - eps * dir.aff
         else:
             AfftTry = self.Afft
-        foo = self.objectiveFunDef(atTry, AfftTry, withTrajectory=True)
-        objTry += foo[0]
+        obj, xt, ct, St = self.objectiveFunDef(atTry, AfftTry, withTrajectory=True)
+        objTry += obj
 
         ff = surfaces.Surface(surf=self.fvDef)
-        ff.updateVertices(np.squeeze(foo[1][-1, :, :]))
+        ff.updateVertices(np.squeeze(xt[-1, :, :]))
         objTry += self.dataTerm(ff)
         if np.isnan(objTry):
             print 'Warning: nan in updateTry'
@@ -213,8 +210,8 @@ class SurfaceMatching:
             self.atTry = atTry
             self.objTry = objTry
             self.AfftTry = AfftTry
-            #print 'objTry=',objTry, dir.diff.sum()
 
+            #print 'objTry=',objTry, dir.diff.sum()
         return objTry
 
 
@@ -226,6 +223,8 @@ class SurfaceMatching:
 
     def getGradient(self, coeff=1.0):
         px1 = -self.endPointGradient()
+        pc1 = np.zeros(self.c0.shape)
+        pS1 = np.zeros(self.S0.shape)
         A = [np.zeros([self.Tsize, self.dim, self.dim]), np.zeros([self.Tsize, self.dim])]
         dim2 = self.dim**2
         if self.affineDim > 0:
@@ -233,21 +232,19 @@ class SurfaceMatching:
                 AB = np.dot(self.affineBasis, self.Afft[t])
                 A[0][t] = AB[0:dim2].reshape([self.dim, self.dim])
                 A[1][t] = AB[dim2:dim2+self.dim]
-        foo = evol.landmarkHamiltonianGradient(self.fv0.vertices, self.at, px1, self.param.KparDiff, self.regweight, affine=A)
+        foo = evol.gaussianDiffeonsGradient(self.x0, self.c0, self.S0,
+                                            self.at, px1, pc1, pS1, self.param.sigmaKernel, self.regweight, affine=A)
         grd = Direction()
         grd.diff = foo[0]/(coeff*self.Tsize)
-        #print grd.diff.sum()
         grd.aff = np.zeros(self.Afft.shape)
         if self.affineDim > 0:
             dA = foo[1]
             db = foo[2]
-            #dAfft = 2*np.multiply(self.affineWeight.reshape([1, self.affineDim]), self.Afft)
             grd.aff = 2 * self.Afft
             for t in range(self.Tsize):
                dAff = np.dot(self.affineBasis.T, np.vstack([dA[t].reshape([dim2,1]), db[t].reshape([self.dim, 1])]))
                grd.aff[t] -=  np.divide(dAff.reshape(grd.aff[t].shape), self.affineWeight.reshape(grd.aff[t].shape))
             grd.aff /= (coeff*self.Tsize)
-            #            dAfft[:,0:self.dim**2]/=100
         return grd
 
 
@@ -262,13 +259,12 @@ class SurfaceMatching:
         dir = Direction()
         dir.diff = np.copy(dir0.diff)
         dir.aff = np.copy(dir0.aff)
-
         return dir
 
 
     def randomDir(self):
         dirfoo = Direction()
-        dirfoo.diff = np.random.randn(self.Tsize, self.npt, self.dim)
+        dirfoo.diff = np.random.randn(self.Tsize, self.ndf, self.dim)
         dirfoo.aff = np.random.randn(self.Tsize, self.affineDim)
         return dirfoo
 
@@ -276,16 +272,19 @@ class SurfaceMatching:
         res = np.zeros(len(g2))
         dim2 = self.dim**2
         for t in range(self.Tsize):
-            z = np.squeeze(self.xt[t, :, :])
+            c = np.squeeze(self.ct[t, :, :])
+            S = np.squeeze(self.St[t, :, :, :])
             gg = np.squeeze(g1.diff[t, :, :])
-            u = self.param.KparDiff.applyK(z, gg)
+            rcc = gd.computeProducts(c, S, self.param.sigmaKernel)
+            (L, W) = LA.eigh(rcc)
+            rcc += (L.max()/1000)*np.eye(rcc.shape[0])
+            u = np.dot(rcc, gg)
             uu = np.multiply(g1.aff[t], self.affineWeight.reshape(g1.aff[t].shape))
             ll = 0
             for gr in g2:
                 ggOld = np.squeeze(gr.diff[t, :, :])
                 res[ll]  = res[ll] + np.multiply(ggOld,u).sum()
                 if self.affineDim > 0:
-                    #print np.multiply(np.multiply(g1[1][t], gr[1][t]), self.affineWeight).shape
                     res[ll] += np.multiply(uu, gr.aff[t]).sum()
                     #                    +np.multiply(g1[1][t, dim2:dim2+self.dim], gr[1][t, dim2:dim2+self.dim]).sum())
                 ll = ll + 1
@@ -299,21 +298,21 @@ class SurfaceMatching:
         #print self.at
 
     def endOfIteration(self):
-        (obj1, self.xt, Jt) = self.objectiveFunDef(self.at, self.Afft, withTrajectory=True, withJacobian=True)
-        xtEPDiff, atEPdiff = evol.landmarkEPDiff(self.at.shape[0], self.fv0.vertices, np.squeeze(self.at[0, :, :]), self.param.KparDiff)
-        self.fvDef.updateVertices(np.squeeze(xtEPDiff[-1, :, :]))
-        self.fvDef.saveVTK(self.outputDir +'/'+ self.saveFile+'EPDiff.vtk')
-        print 'EPDiff difference', np.fabs(self.xt[-1,:,:] - xtEPDiff[-1,:,:]).sum() 
+        (obj1, self.xt, self.ct, self.St, Jt) = self.objectiveFunDef(self.at, self.Afft, withTrajectory=True, withJacobian=True)
         for kk in range(self.Tsize+1):
             self.fvDef.updateVertices(np.squeeze(self.xt[kk, :, :]))
-            self.fvDef.saveVTK(self.outputDir +'/'+ self.saveFile+str(kk)+'.vtk', scalars = Jt[kk, :], scal_name='Jacobian')
+            if self.idx == None:
+                self.fvDef.saveVTK(self.outputDir +'/'+ self.saveFile+str(kk)+'.vtk', scalars = Jt[kk, :], scal_name='Jacobian')
+            else:
+                self.fvDef.saveVTK(self.outputDir +'/'+ self.saveFile+str(kk)+'.vtk', scalars = self.idx, scal_name='Labels')
+            gd.saveDiffeons(self.outputDir +'/'+ self.saveFile+'Diffeons'+str(kk)+'.vtk', self.ct[kk,:,:], self.St[kk,:,:,:])
 
     def optimizeMatching(self):
         grd = self.getGradient(self.gradCoeff)
         [grd2] = self.dotProduct(grd, [grd])
 
         self.gradEps = max(0.001, np.sqrt(grd2) / 10000)
-        print 'Gradient lower bound:', self.gradEps
+        print 'Gradient lower bound: ', self.gradEps
         cg.cg(self, verb = self.verb, maxIter = self.maxIter, TestGradient=self.testGradient)
         #return self.at, self.xt
 

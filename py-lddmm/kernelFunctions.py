@@ -15,6 +15,7 @@ def kernelMatrixGauss(x, y=None, par=[1], diff = False, diff2 = False, constant_
             #        K = np.eye(x.shape[0]) + np.mat(dfun.squareform(u))
             K = dfun.squareform(u, checks=False)
             np.fill_diagonal(K, 1)
+            #print 'Ksum', K.sum()
             precomp = np.copy(K)
             if diff:
                 K = -K/sig2

@@ -1,5 +1,6 @@
 import numpy as np
 import scipy as sp
+import scipy.linalg as spLA
 import os
 import glob
 from vtk import *
@@ -55,16 +56,54 @@ class Surface:
         self.surfel =  np.cross(xDef2-xDef1, xDef3-xDef1)
 
     def computeVertexArea(self):
-        a = np.zeros(self.vertices.shape[0])
-        n = np.zeros(self.vertices.shape[0])
-        af = np.sqrt((self.surfel**2).sum(axis=1))
-        for jj in range(3):
-            I = self.faces[:,jj]
-            for k in range(I.size):
-                a[I[k]] += af[k]
-                n[I[k]] += 1
-        a = np.divide(a,n)
-        return a
+        # compute areas of faces and vertices
+        V = self.vertices
+        F = self.faces
+        nv = V.shape[0]
+        nf = F.shape[0]
+        AF = np.zeros([nf,1])
+        AV = np.zeros([nv, 1])
+        for k in range(nf):
+            # determining if face is obtuse
+            x12 = V[F[k,1], :] - V[F[k,0], :]
+            x13 = V[F[k,2], :] - V[F[k,0], :]
+            n12 = np.sqrt((x12**2).sum())
+            n13 = np.sqrt((x13**2).sum())
+            c1 = (x12*x13).sum()/(n12*n13)
+            x23 = V[F[k,2], :] - V[F[k,1], :]
+            n23 = np.sqrt((x23**2).sum())
+            #n23 = norm(x23) ;
+            c2 = -(x12*x23).sum()/(n12*n23)
+            c3 = (x13*x23).sum()/(n13*n23)
+            AF[k] = np.sqrt((np.cross(x12, x13)**2).sum())/2
+            if (c1 < 0):
+                #face obtuse at vertex 1
+                AV[F[k,0]] += AF[k]/2
+                AV[F[k,1]] += AF[k]/4
+                AV[F[k,2]] += AF[k]/4
+            elif (c2 < 0):
+                #face obuse at vertex 2
+                AV[F[k,0]] += AF[k]/4
+                AV[F[k,1]] += AF[k]/2
+                AV[F[k,2]] += AF[k]/4
+            elif (c3 < 0):
+                #face obtuse at vertex 3
+                AV[F[k,0]] += AF[k]/4
+                AV[F[k,1]] += AF[k]/4
+                AV[F[k,2]] += AF[k]/2
+            else:
+                #non obtuse face
+                cot1 = c1 / np.sqrt(1-c1**2) 
+                cot2 = c2 / np.sqrt(1-c2**2) 
+                cot3 = c3 / np.sqrt(1-c3**2) 
+                AV[F[k,0]] += ((x12**2).sum() * cot3 + (x13**2).sum() * cot2)/8 
+                AV[F[k,1]] += ((x12**2).sum() * cot3 + (x23**2).sum() * cot1)/8 
+                AV[F[k,2]] += ((x13**2).sum() * cot2 + (x23**2).sum() * cot1)/8 
+
+        for k in range(nv):
+            if (np.fabs(AV[k]) <1e-10):
+                print 'Warning: vertex ', k, 'has no face; use removeIsolated'
+        return AV, AF
 
          
 
@@ -118,10 +157,114 @@ class Surface:
             else:
                 res[p[0],p[1], p[2]] =- min(cube[np.nonzero(d2[bmin[0]:bmax[0], bmin[1]:bmax[1], bmin[2]:bmax[2]] > 0)])-.25
                 
-        return res                
+        return res
+
+    def toPolyData(self):
+        points = vtkPoints()
+        for k in range(self.vertices.shape[0]):
+            points.InsertNextPoint(self.vertices[k,0], self.vertices[k,1], self.vertices[k,2])
+        polys = vtkCellArray()
+        for k in range(self.faces.shape[0]):
+            polys.InsertNextCell(3)
+            for kk in range(3):
+                polys.InsertCellPoint(self.faces[k,kk])
+        polydata = vtkPolyData()
+        polydata.SetPoints(points)
+        polydata.SetPolys(polys)
+        return polydata
+
+    def fromPolyData(self, g, scales=[1.,1.,1.]):
+        npoints = int(g.GetNumberOfPoints())
+        nfaces = int(g.GetNumberOfPolys())
+        print 'Dimensions:', npoints, nfaces, g.GetNumberOfCells()
+        V = np.zeros([npoints, 3])
+        for kk in range(npoints):
+            V[kk, :] = np.array(g.GetPoint(kk))
+            #print kk, V[kk]
+            #print kk, np.array(g.GetPoint(kk))
+        F = np.zeros([nfaces, 3])
+        gf = 0
+        for kk in range(g.GetNumberOfCells()):
+            c = g.GetCell(kk)
+            if(c.GetNumberOfPoints() == 3):
+                for ll in range(3):
+                    F[gf,ll] = c.GetPointId(ll)
+                    #print kk, gf, F[gf]
+                gf += 1
+
+                #self.vertices = np.multiply(data.shape-V-1, scales)
+        self.vertices = np.multiply(V, scales)
+        self.faces = np.int_(F[0:gf, :])
+        self.computeCentersAreas()
+
+
+    def Simplify(self, target=1000.0):
+        # points = vtkPoints()
+        # for k in range(self.vertices.shape[0]):
+        #     points.InsertNextPoint(self.vertices[k,0], self.vertices[k,1], self.vertices[k,2])
+        # polys = vtkCellArray()
+        # for k in range(self.faces.shape[0]):
+        #     polys.InsertNextCell(3)
+        #     for kk in range(3):
+        #         polys.InsertCellPoint(self.faces[k,kk])
+        polydata = self.toPolyData()
+        # polydata.SetPoints(points)
+        # polydata.SetPolys(polys)
+        dc = vtkDecimatePro()
+        red = 1 - min(np.float(target)/polydata.GetNumberOfPoints(), 1)
+        dc.SetTargetReduction(red)
+        dc.PreserveTopologyOn()
+        #dc.SetSplitting(0)
+        dc.SetInput(polydata)
+        #print dc
+        dc.Update()
+        g = dc.GetOutput()
+        # #print 'points:', g.GetNumberOfPoints()
+        # cp = vtkCleanPolyData()
+        # cp.SetInput(dc.GetOutput())
+        # #cp.SetPointMerging(1)
+        # cp.ConvertPolysToLinesOn()
+        # cp.SetAbsoluteTolerance(1e-5)
+        # cp.Update()
+        # g = cp.GetOutput()
+        # #print g
+        self.fromPolyData(g)
+        # npoints = int(g.GetNumberOfPoints())
+        # nfaces = int(g.GetNumberOfPolys())
+        # print 'Dimensions after Reduction:', npoints, nfaces, g.GetNumberOfCells()
+        # V = np.zeros([npoints, 3])
+        # for kk in range(npoints):
+        #     V[kk, :] = np.array(g.GetPoint(kk))
+        # F = np.zeros([nfaces, 3])
+        # gf = 0
+        # for kk in range(g.GetNumberOfCells()):
+        #     c = g.GetCell(kk)
+        #     if(c.GetNumberOfPoints() == 3):
+        #         for ll in range(3):
+        #             F[gf,ll] = c.GetPointId(ll)
+        #         gf += 1
+
+        # self.vertices = V
+        # self.faces = np.int_(F[0:gf, :])
+        # self.computeCentersAreas()
+
+    def smooth(self, n=30):
+        g = self.toPolyData()
+        smoother= vtkWindowedSincPolyDataFilter()
+        smoother.SetInput(g)
+        smoother.SetNumberOfIterations(n)
+        #smoother.SetPassBand(smooth)        #this increases the error a lot!
+        smoother.NonManifoldSmoothingOn()
+        smoother.NormalizeCoordinatesOn()
+        smoother.GenerateErrorScalarsOn() 
+        #smoother.GenerateErrorVectorsOn()
+        smoother.Update()
+        g = smoother.GetOutput()
+        self.fromPolyData(g)
+
             
     # Computes isosurfaces using vtk               
-    def Isosurface(self, data, value=0.5, target=1000.0, scales = [1., 1., 1.], smooth = 30, fill_holes = 1.):
+    def Isosurface(self, data, value=0.5, target=1000.0, scales = [1., 1., 1.], smooth = -1, fill_holes = 1.):
         #data = self.LocalSignedDistance(data0, value)
         img = vtkImageData()
         img.SetDimensions(data.shape)
@@ -146,20 +289,17 @@ class Surface:
         connectivity.Update()
         g = connectivity.GetOutput()
 
-            
-
-
         if smooth > 0:
             smoother= vtkWindowedSincPolyDataFilter()
             smoother.SetInput(g)
             #     else:
             # smoother.SetInputConnection(contour.GetOutputPort())    
-            smoother.SetNumberOfIterations(smooth)
+            smoother.SetNumberOfIterations(30)
             #this has little effect on the error!
             #smoother.BoundarySmoothingOff()
             #smoother.FeatureEdgeSmoothingOff()
             #smoother.SetFeatureAngle(120.0)
-            #smoother.SetPassBand(.001)        #this increases the error a lot!
+            smoother.SetPassBand(smooth)        #this increases the error a lot!
             smoother.NonManifoldSmoothingOn()
             smoother.NormalizeCoordinatesOn()
             smoother.GenerateErrorScalarsOn() 
@@ -167,11 +307,12 @@ class Surface:
             smoother.Update()
             g = smoother.GetOutput()
 
-        dc = vtkDecimatePro()
+            #dc = vtkDecimatePro()
+        dc = vtkQuadricDecimation()
         red = 1 - min(np.float(target)/g.GetNumberOfPoints(), 1)
-            #print 'Reduction: ', red
+        print 'Reduction: ', red
         dc.SetTargetReduction(red)
-        dc.PreserveTopologyOn()
+        #dc.PreserveTopologyOn()
         #dc.SetSplitting(0)
         dc.SetInput(g)
         #print dc
@@ -185,29 +326,35 @@ class Surface:
         cp.SetAbsoluteTolerance(1e-5)
         cp.Update()
         g = cp.GetOutput()
-        #print g
-        npoints = int(g.GetNumberOfPoints())
-        nfaces = int(g.GetNumberOfPolys())
-        print 'Dimensions:', npoints, nfaces, g.GetNumberOfCells()
-        V = np.zeros([npoints, 3])
-        for kk in range(npoints):
-            V[kk, :] = np.array(g.GetPoint(kk))
-            #print kk, V[kk]
-            #print kk, np.array(g.GetPoint(kk))
-        F = np.zeros([nfaces, 3])
-        gf = 0
-        for kk in range(g.GetNumberOfCells()):
-            c = g.GetCell(kk)
-            if(c.GetNumberOfPoints() == 3):
-                for ll in range(3):
-                    F[gf,ll] = c.GetPointId(ll)
-                    #print kk, gf, F[gf]
-                gf += 1
+        self.fromPolyData(g,scales)
+        z= self.surfVolume()
+        if (z > 0):
+            self.faces = self.faces[:, [0,2,1]]
+            print 'flipping volume', z, self.surfVolume()
 
-                #self.vertices = np.multiply(data.shape-V-1, scales)
-        self.vertices = np.multiply(V, scales)
-        self.faces = np.int_(F[0:gf, :])
-        self.computeCentersAreas()
+        #print g
+        # npoints = int(g.GetNumberOfPoints())
+        # nfaces = int(g.GetNumberOfPolys())
+        # print 'Dimensions:', npoints, nfaces, g.GetNumberOfCells()
+        # V = np.zeros([npoints, 3])
+        # for kk in range(npoints):
+        #     V[kk, :] = np.array(g.GetPoint(kk))
+        #     #print kk, V[kk]
+        #     #print kk, np.array(g.GetPoint(kk))
+        # F = np.zeros([nfaces, 3])
+        # gf = 0
+        # for kk in range(g.GetNumberOfCells()):
+        #     c = g.GetCell(kk)
+        #     if(c.GetNumberOfPoints() == 3):
+        #         for ll in range(3):
+        #             F[gf,ll] = c.GetPointId(ll)
+        #             #print kk, gf, F[gf]
+        #         gf += 1
+
+        #         #self.vertices = np.multiply(data.shape-V-1, scales)
+        # self.vertices = np.multiply(V, scales)
+        # self.faces = np.int_(F[0:gf, :])
+        # self.computeCentersAreas()
 
     # Ensures that orientation is correct
     def edgeRecover(self):
@@ -293,6 +440,208 @@ class Surface:
         z= self.surfVolume()
         if (z > 0):
             self.faces = f[:, [0,2,1]]
+
+
+
+    def laplacianMatrix(self):
+        F = self.faces
+        V = self.vertices ;
+        nf = F.shape[0]
+        nv = V.shape[0]
+
+        AV, AF = self.computeVertexArea()
+
+        # compute edges and detect boundary
+        #edm = sp.lil_matrix((nv,nv))
+        edm = -np.ones([nv,nv])
+        E = np.zeros([3*nf, 2])
+        j = 0
+        for k in range(nf):
+            if (edm[F[k,0], F[k,1]]== -1):
+                edm[F[k,0], F[k,1]] = j
+                edm[F[k,1], F[k,0]] = j
+                E[j, :] = [F[k,0], F[k,1]]
+                j = j+1
+            if (edm[F[k,1], F[k,2]]== -1):
+                edm[F[k,1], F[k,2]] = j
+                edm[F[k,2], F[k,1]] = j
+                E[j, :] = [F[k,1], F[k,2]]
+                j = j+1
+            if (edm[F[k,0], F[k,2]]== -1):
+                edm[F[k,2], F[k,0]] = j
+                edm[F[k,0], F[k,2]] = j
+                E[j, :] = [F[k,2], F[k,0]]
+                j = j+1
+        E = E[0:j, :]
+        
+        edgeFace = np.zeros([j, nf])
+        ne = j
+        #print E
+        for k in range(nf):
+            edgeFace[edm[F[k,0], F[k,1]], k] = 1 
+            edgeFace[edm[F[k,1], F[k,2]], k] = 1 
+            edgeFace[edm[F[k,2], F[k,0]], k] = 1 
+    
+        bEdge = np.zeros([ne, 1])
+        bVert = np.zeros([nv, 1])
+        edgeAngles = np.zeros([ne, 2])
+        for k in range(ne):
+            I = np.flatnonzero(edgeFace[k, :])
+            #print 'I=', I, F[I, :], E.shape
+            #print 'E[k, :]=', k, E[k, :]
+            #print k, edgeFace[k, :]
+            for u in range(len(I)):
+                f = I[u]
+                i1l = np.flatnonzero(F[f, :] == E[k,0])
+                i2l = np.flatnonzero(F[f, :] == E[k,1])
+                #print f, F[f, :]
+                #print i1l, i2l
+                i1 = i1l[0]
+                i2 = i2l[0]
+                s = i1+i2
+                if s == 1:
+                    i3 = 2
+                elif s==2:
+                    i3 = 1
+                elif s==3:
+                    i3 = 0
+                x1 = V[F[f,i1], :] - V[F[f,i3], :]
+                x2 = V[F[f,i2], :] - V[F[f,i3], :]
+                a = (np.cross(x1, x2) * np.cross(V[F[f,1], :] - V[F[f,0], :], V[F[f, 2], :] - V[F[f, 0], :])).sum()
+                b = (x1*x2).sum()
+                if (a  > 0):
+                    edgeAngles[k, u] = b/np.sqrt(a)
+                else:
+                    edgeAngles[k, u] = b/np.sqrt(-a)
+            if (len(I) == 1):
+                # boundary edge
+                bEdge[k] = 1
+                bVert[E[k,0]] = 1
+                bVert[E[k,1]] = 1
+                edgeAngles[k,1] = 0 
+        
+
+        # Compute Laplacian matrix
+        L = np.zeros([nv, nv])
+
+        for k in range(ne):
+            L[E[k,0], E[k,1]] = (edgeAngles[k,0] + edgeAngles[k,1]) /2
+            L[E[k,1], E[k,0]] = L[E[k,0], E[k,1]]
+
+        for k in range(nv):
+            L[k,k] = - L[k, :].sum()
+
+        A = np.zeros([nv, nv])
+        for k in range(nv):
+            A[k, k] = AV[k]
+
+        return L,A
+
+    def graphLaplacianMatrix(self):
+        F = self.faces
+        V = self.vertices
+        nf = F.shape[0]
+        nv = V.shape[0]
+
+        # compute edges and detect boundary
+        #edm = sp.lil_matrix((nv,nv))
+        edm = -np.ones([nv,nv])
+        E = np.zeros([3*nf, 2])
+        j = 0
+        for k in range(nf):
+            if (edm[F[k,0], F[k,1]]== -1):
+                edm[F[k,0], F[k,1]] = j
+                edm[F[k,1], F[k,0]] = j
+                E[j, :] = [F[k,0], F[k,1]]
+                j = j+1
+            if (edm[F[k,1], F[k,2]]== -1):
+                edm[F[k,1], F[k,2]] = j
+                edm[F[k,2], F[k,1]] = j
+                E[j, :] = [F[k,1], F[k,2]]
+                j = j+1
+            if (edm[F[k,0], F[k,2]]== -1):
+                edm[F[k,2], F[k,0]] = j
+                edm[F[k,0], F[k,2]] = j
+                E[j, :] = [F[k,2], F[k,0]]
+                j = j+1
+        E = E[0:j, :]
+        
+        edgeFace = np.zeros([j, nf])
+        ne = j
+        #print E
+
+        # Compute Laplacian matrix
+        L = np.zeros([nv, nv])
+
+        for k in range(ne):
+            L[E[k,0], E[k,1]] = 1
+            L[E[k,1], E[k,0]] = 1
+
+        for k in range(nv):
+            L[k,k] = - L[k, :].sum()
+
+        return L
+
+
+    def laplacianSegmentation(self, k):
+        (L, AA) =  self.laplacianMatrix()
+        print (L.shape[0]-k-1, L.shape[0]-2)
+        (D, y) = spLA.eigh(L, AA, eigvals= (L.shape[0]-k, L.shape[0]-1))
+        #V = real(V) ;
+        #print D
+        N = y.shape[0]
+        d = y.shape[1]
+        I = np.argsort(y.sum(axis=1))
+        I0 =np.floor((N-1)*sp.linspace(0, 1, num=k)).astype(int)
+        #print y.shape, L.shape, N, k, d
+        C = y[I0, :].copy()
+
+        eps = 1e-20
+        Cold = C.copy()
+        u = ((C.reshape([k,1,d]) - y.reshape([1,N,d]))**2).sum(axis=2)
+        T = u.min(axis=0).sum()/(N)
+        #print T
+        j=0
+        while j< 5000:
+            u0 = u - u.min(axis=0).reshape([1, N])
+            w = np.exp(-u0/T) ;
+            w = w / (eps + w.sum(axis=0).reshape([1,N]))
+            #print w.min(), w.max()
+            cost = (u*w).sum() + T*(w*np.log(w+eps)).sum()
+            C = np.dot(w, y) / (eps + w.sum(axis=1).reshape([k,1]))
+            #print j, 'cost0 ', cost
+
+            u = ((C.reshape([k,1,d]) - y.reshape([1,N,d]))**2).sum(axis=2)
+            cost = (u*w).sum() + T*(w*np.log(w+eps)).sum()
+            err = np.sqrt(((C-Cold)**2).sum(axis=1)).sum()
+            #print j, 'cost ', cost, err, T
+            if ( j>100) & (err < 1e-4 ):
+                break
+            j = j+1
+            Cold = C.copy()
+            T = T*0.95
+
+            #print k, d, C.shape
+        dst = ((C.reshape([k,1,d]) - y.reshape([1,N,d]))**2).sum(axis=2)
+        md = dst.min(axis=0)
+        idx = np.zeros(N).astype(int)
+        for j in range(N):
+            I = np.flatnonzero(dst[:,j] < md[j] + 1e-10) 
+            idx[j] = I[0]
+        I = -np.ones(k).astype(int)
+        kk=0
+        for j in range(k):
+            if True in (idx==j):
+                I[j] = kk
+                kk += 1
+        idx = I[idx]
+        if idx.max() < (k-1):
+            print 'Warning: kmeans convergence with', idx.max(), 'clusters instead of', k
+        ml = w.sum(axis=1)/N
+
+        return idx, C
+
+
 
     # Computes surface volume
     def surfVolume(self):
@@ -399,7 +748,7 @@ class Surface:
                     j=0
 
     # Saves in .vtk format
-    def saveVTK(self, fileName, scalars = None, normals = None, scal_name='scalars'):
+    def saveVTK(self, fileName, scalars = None, normals = None, tensors=None, scal_name='scalars'):
         F = self.faces ;
         V = self.vertices ;
 
@@ -414,13 +763,20 @@ class Surface:
             if (not (scalars == None)) | (not (normals==None)):
                 fvtkout.write(('\nPOINT_DATA {0: d}').format(V.shape[0]))
             if not (scalars == None):
+                #print scalars
                 fvtkout.write('\nSCALARS '+scal_name+' float 1\nLOOKUP_TABLE default')
                 for ll in range(V.shape[0]):
+                    #print scalars[ll]
                     fvtkout.write('\n {0: .5f}'.format(scalars[ll]))
             if not (normals == None):
                 fvtkout.write('\nNORMALS normals float')
                 for ll in range(V.shape[0]):
                     fvtkout.write('\n {0: .5f} {1: .5f} {2: .5f}'.format(normals[ll, 0], normals[ll, 1], normals[ll, 2]))
+            if not (tensors == None):
+                fvtkout.write('\nTENSORS tensors float')
+                for ll in range(V.shape[0]):
+                    for kk in range(2):
+                        fvtkout.write('\n {0: .5f} {1: .5f} {2: .5f}'.format(tensors[ll, kk, 0], tensors[ll, kk, 1], tensors[ll, kk, 2]))
             fvtkout.write('\n')
 
 
