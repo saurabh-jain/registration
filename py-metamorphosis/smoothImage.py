@@ -8,6 +8,7 @@ import logging
 import optparse
 import shutil
 import regularGrid
+import smoothImageConfig
 import pointEvolution
 import conjugateGradient
 import kernelFunctions as kfun
@@ -76,23 +77,14 @@ class SplineInterp(object):
 
 class SmoothImageMeta(object):
 
-    def __init__(self, output_dir):
+    def __init__(self, output_dir, config_name):
         self.verbose_file_output = False
         self.output_dir = output_dir
         self.write_iter = 5
-        self.dim = 2
-        self.sigma = 8.
-        self.sfactor = 1./numpy.power(self.sigma, 2)
-        self.num_points = (200,200)
-        self.domain_max = (1., 1.)
-        #self.domain_max = None
-        #self.dx = (1.,1.)
-        self.dx = None
+        smoothImageConfig.configure(self, config_name)
+
         self.rg = regularGrid.RegularGrid(self.dim, self.num_points, \
                              self.domain_max, self.dx, "meta")
-        self.num_times = 11
-        self.time_min = 0.
-        self.time_max = 1.
         self.times = numpy.linspace(self.time_min, self.time_max, \
                             self.num_times)
         self.dt = (self.time_max - self.time_min) / (self.num_times - 1)
@@ -115,39 +107,8 @@ class SmoothImageMeta(object):
         self.id_x = self.rg.nodes[:,0].copy()
         self.id_y = self.rg.nodes[:,1].copy()
         self.m = numpy.zeros((rg.num_nodes, self.num_times))
-
-        self.kvn = 'laplacian'
-        self.khn = 'laplacian'
-        #self.kvs = .07 / 2.0
-        self.kvs = .015 / 2.2
-        self.khs = .015 / 3.0 / 2.2
-        self.kvo = 4
-        self.kho = 4
-        logging.info("KV params: name=%s, sigma=%f, order=%f" \
-                            % (self.kvn,self.kvs,self.kvo))
-        logging.info("KH params: name=%s, sigma=%f, order=%f" \
-                            % (self.khn,self.khs,self.kho))
-        #self.KV = kfun.Kernel(name = kvn, sigma=kvs, order=kvo)
-        #self.KH = kfun.Kernel(name = khn, sigma=khs, order=kho)
         self.alpha = numpy.zeros(rg.num_nodes)
         self.alpha_state = numpy.zeros_like(self.alpha)
-
-        # ****************************************************************
-
-        size = self.num_points
-        #im1 = Image.open("test_images/eight_1c.png").rotate(-90).resize(size)
-        #im2 = Image.open("test_images/eight_2c.png").rotate(-90).resize(size)
-        im1 = Image.open("test_images/leaf200_1_reg.png").rotate(-90).resize(size)
-        im2 = Image.open("test_images/leaf200_2.png").rotate(-90).resize(size)
-        ims = [im1, im2]
-        tp = numpy.zeros(size)
-        tr = numpy.zeros(size)
-        for j in range(size[0]):
-            for k in range(size[1]):
-                tp[j,k] = ims[0].getpixel((j,k)) / 255.
-                tr[j,k] = ims[1].getpixel((j,k)) / 255.
-        self.template_in = tp.ravel()
-        self.target_in = tr.ravel()
 
         rg.create_vtk_sg()
         rg.add_vtk_point_data(self.template_in, "template_in")
@@ -703,11 +664,12 @@ class SmoothImageMeta(object):
         if (self.optimize_iteration % self.write_iter == 0):
             self.writeData("iter%d" % (self.optimize_iteration))
 
-def setup_default_logging(output_dir):
+def setup_default_logging(output_dir, config):
     logger = logging.getLogger()
     logger.setLevel(logging.INFO)
     formatter = logging.Formatter("%(asctime)s-%(levelname)s-%(message)s")
-    fh = logging.FileHandler("%s/metamorphosis.log" % (output_dir))
+    log_file_name = config.log_file_name
+    fh = logging.FileHandler("%s/%s" % (output_dir, log_file_name))
     fh.setFormatter(formatter)
     logger.addHandler(fh)
     ch = logging.StreamHandler()
@@ -722,14 +684,15 @@ if __name__ == "__main__":
     # set options from command line
     parser = optparse.OptionParser()
     parser.add_option("-o", "--output_dir", dest="output_dir")
+    parser.add_option("-c", "--config_name", dest="config_name")
     (options, args) = parser.parse_args()
     output_dir = output_directory_base + options.output_dir
     # remove any old results in the output directory
     if os.access(output_dir, os.F_OK):
         shutil.rmtree(output_dir)
     os.mkdir(output_dir)
-    setup_default_logging(output_dir)
+    setup_default_logging(output_dir, smoothImageConfig)
     logging.info(options)
-    sim = SmoothImageMeta(output_dir)
+    sim = SmoothImageMeta(output_dir, options.config_name)
     sim.computeMatching()
     sim.writeData("final")

@@ -67,24 +67,9 @@ class ImageTimeSeries(object):
     def __init__(self, output_dir, config_name):
         # can override these in configuration scripts
         self.output_dir = output_dir
-        self.write_iter = 1
+        self.write_iter = 25
+        self.verbose_file_output = False
         imageTimeSeriesConfig.configure(self, config_name)
-
-#        Kv = self.get_kernelv()
-#        Kv = numpy.fft.fftshift(Kv)
-#        fr = Kv.astype(complex)
-#        #fr = numpy.ones_like(Kv).astype(complex)
-#        out = numpy.fft.ifftn(fr)
-#        out = numpy.fft.fftshift(out) / self.rg.element_volumes[0]
-#        out2 = numpy.reshape(out.real, (self.rg.num_nodes))
-#        self.rg.create_vtk_sg()
-#        Kv = self.get_kernelv()
-#        self.rg.add_vtk_point_data(out2, "out2")
-#        self.rg.add_vtk_point_data(Kv.real.ravel(), "Kv")
-#        self.rg.vtk_write(0, "testing", self.output_dir)
-#        print numpy.max(out2)
-#        import pdb
-#        pdb.set_trace()
 
         # general configuration
         self.mu = numpy.zeros((self.rg.num_nodes, 3, self.num_times))
@@ -109,6 +94,16 @@ class ImageTimeSeries(object):
         self.pool_size = 16
         self.pool = multiprocessing.Pool(self.pool_size)
         self.pool_timeout = 5000
+
+        test_mu = numpy.zeros_like(self.mu[...,0])
+        test_mu[1850,0] = 1.0
+        test_v = apply_kernel_V_for_async(test_mu, self.rg.dims, \
+                            self.rg.num_nodes, self.get_kernelv(), \
+                            self.rg.element_volumes[0])
+        self.rg.create_vtk_sg()
+        self.rg.add_vtk_point_data(test_v.real, "test_v")
+        self.rg.vtk_write(0, "kernel_test", self.output_dir)
+
         self.update_evolutions()
 
     def get_sim_data(self):
@@ -191,15 +186,6 @@ class ImageTimeSeries(object):
               krho[:,j] = numpy.reshape(out.real, (rg.num_nodes))
         return krho
 
-    def kernel_norm_V(self, right):
-        rg, N, T = self.get_sim_data()
-        kright = self.apply_kernel_V(right)
-        kn = 0.
-        kn += numpy.dot(right[:,0], kright[:,0])
-        kn += numpy.dot(right[:,1], kright[:,1])
-        kn += numpy.dot(right[:,2], kright[:,2])
-        return kn
-
     def k_mu_async(self):
         rg, N, T = self.get_sim_data()
         Kv = self.get_kernelv()
@@ -239,7 +225,8 @@ class ImageTimeSeries(object):
                             rg.dx[0], rg.dx[1], rg.dx[2], rg.num_nodes,
                             rg.dims[0], rg.dims[1], \
                             rg.dims[2]).reshape(rg.num_nodes)
-        #self.writeData("debug%d" % (self.optimize_iteration))
+        if self.verbose_file_output:
+            self.writeData("evolutions%d" % (self.optimize_iteration))
 
     def writeData(self, name):
         rg, N, T = self.get_sim_data()
@@ -250,7 +237,6 @@ class ImageTimeSeries(object):
             rg.add_vtk_point_data(self.I_interp[:,t], "I_interp")
             rg.add_vtk_point_data(self.I[:,t]-self.I_interp[:,t], "diff")
             rg.add_vtk_point_data(self.p[:,t], "p")
-            #rg.add_vtk_point_data(grd[:,:,t], "grad")
             rg.add_vtk_point_data(self.mu[:,:,t], "mu")
             rg.vtk_write(t, name, output_dir=self.output_dir)
             self.sc.data = self.I_interp[:,t]
@@ -292,15 +278,12 @@ class ImageTimeSeries(object):
             self.mu = mu_old
             self.v = v_old
             self.I_interp = Ii_old
-            #self.update_evolutions()
         return objTry
 
     def acceptVarTry(self):
         rg, N, T = self.get_sim_data()
         for t in range(T):
             self.mu_state[:,:,t] = self.mu[:,:,t].copy()
-        #self.mu_state = self.mu.copy()
-        #self.update_evolutions()
 
     def getGradient(self, coeff=1.0):
         rg, N, T = self.get_sim_data()
@@ -337,36 +320,12 @@ class ImageTimeSeries(object):
         grad = ne.evaluate("2*mu - pr * gIi")
         self.p = pr[:,0,:]
         retGrad = ne.evaluate("coeff * grad")
-        #for t in range(T):
-        #    rg.create_vtk_sg()
-        #    rg.add_vtk_point_data(gIi[...,t], "gIi")
-        #    rg.vtk_write(t, "gradtest", self.output_dir)
-        #import pdb
-        #pdb.set_trace()
+        if self.verbose_file_output:
+            for t in range(T):
+                rg.create_vtk_sg()
+                rg.add_vtk_point_data(gIi[...,t], "gIi")
+                rg.vtk_write(t, "gradE", self.output_dir)
         return retGrad
-
-    def computeMatching(self):
-        conjugateGradient.cg(self, True, maxIter = 500, TestGradient=False,
-                                epsInit=self.cg_init_eps)
-        #gradientDescent.descend(self, True, maxIter=1000, TestGradient=True, \
-        #                    epsInit=100.)
-        return self
-
-    def reset(self):
-        from tvtk.api import tvtk
-        rg, N, T = self.get_sim_data()
-        fbase = "/cis/home/clr/compute/time_series/lung_data_1/iter250_mesh256_"
-        for t in range(T):
-            r = tvtk.XMLStructuredGridReader(file_name="%s%d.vts" % (fbase, t))
-            r.update()
-            self.v[...,t] = numpy.array(r.output.point_data.get_array("v")).astype(float)
-            self.I[...,t] = numpy.array(r.output.point_data.get_array("I")).astype(float)
-            self.I_interp[...,t] = numpy.array(r.output.point_data.get_array("I_interp")).astype(float)
-            self.p[...,t] = numpy.array(r.output.point_data.get_array("p")).astype(float)
-            self.mu[...,t] = numpy.array(r.output.point_data.get_array("mu")).astype(float)
-            self.mu_state[...,t] = numpy.array(r.output.point_data.get_array("mu")).astype(float)
-            logging.info("reloaded time %d." % (t))
-        self.update_evolutions()
 
     def dotProduct(self, g1, g2):
         rg, N, T = self.get_sim_data()
@@ -391,6 +350,32 @@ class ImageTimeSeries(object):
         self.optimize_iteration += 1
         if (self.optimize_iteration % self.write_iter == 0):
             self.writeData("iter%d" % (self.optimize_iteration))
+
+    def endOptim(self):
+        self.writeData("final")
+
+    def computeMatching(self):
+        conjugateGradient.cg(self, True, maxIter = 500, TestGradient=False, \
+                           epsInit=self.cg_init_eps)
+        #gradientDescent.descend(self, True, maxIter=1000, TestGradient=False,\
+        #                    epsInit=self.cg_init_eps)
+        return self
+
+    def reset(self):
+        from tvtk.api import tvtk
+        rg, N, T = self.get_sim_data()
+        fbase = "/cis/home/clr/compute/time_series/lung_data_1/iter250_mesh256_"
+        for t in range(T):
+            r = tvtk.XMLStructuredGridReader(file_name="%s%d.vts" % (fbase, t))
+            r.update()
+            self.v[...,t] = numpy.array(r.output.point_data.get_array("v")).astype(float)
+            self.I[...,t] = numpy.array(r.output.point_data.get_array("I")).astype(float)
+            self.I_interp[...,t] = numpy.array(r.output.point_data.get_array("I_interp")).astype(float)
+            self.p[...,t] = numpy.array(r.output.point_data.get_array("p")).astype(float)
+            self.mu[...,t] = numpy.array(r.output.point_data.get_array("mu")).astype(float)
+            self.mu_state[...,t] = numpy.array(r.output.point_data.get_array("mu")).astype(float)
+            logging.info("reloaded time %d." % (t))
+        self.update_evolutions()
 
 def setup_default_logging(output_dir, config):
     logger = logging.getLogger()
