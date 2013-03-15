@@ -16,7 +16,7 @@ def configure(sim, config_name):
 
 def d72(sim):
     sim.dim = 2
-    sim.sigma = 10.
+    sim.sigma = 20.
     sim.sfactor = 1./numpy.power(sim.sigma, 2)
     sim.num_points = (72,72)
     sim.domain_max = (1., 1.)
@@ -28,7 +28,7 @@ def d72(sim):
     sim.kvn = 'laplacian'
     sim.khn = 'laplacian'
     sim.kvs = .07
-    sim.khs = .015 / 2.0
+    sim.khs = .015 / 1.5 #/ 2.0
     sim.kvo = 4
     sim.kho = 4
     logging.info("KV params: name=%s, sigma=%f, order=%f" \
@@ -50,7 +50,7 @@ def d72(sim):
 
 def leaf200(sim):
     sim.dim = 2
-    sim.sigma = 15.
+    sim.sigma = 20.
     sim.sfactor = 1./numpy.power(sim.sigma, 2)
     sim.num_points = (200,200)
     sim.domain_max = (1., 1.)
@@ -62,7 +62,7 @@ def leaf200(sim):
     sim.kvn = 'laplacian'
     sim.khn = 'laplacian'
     sim.kvs = .03
-    sim.khs = .015 / 3.0 / 2.0
+    sim.khs = .015 / 3.0 #/ 2.0
     sim.kvo = 4
     sim.kho = 4
     logging.info("KV params: name=%s, sigma=%f, order=%f" \

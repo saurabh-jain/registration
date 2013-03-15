@@ -522,7 +522,7 @@ indexx, indexy, indexz, dx1, dx2, dx3, dt, num_nodes, dim1, dim2, dim3, f_out, f
 !                   f2(pindex_z_y)*(1-ax)*(ay)*(1/dx3) + &
 !                   f2(pindex_z_xy)*(ax)*(ay)*(1/dx3)
   if ((i/=1).and.(i/=dim1).and.(j/=1).and.(j/=dim2).and.(k/=1).and.(k/=dim3)) then
-	f2_out(f2_out_index,1) = (f2(pindex+1) - f2(pindexi-1))/(2*dx1)
+	f2_out(f2_out_index,1) = (f2(pindex+1) - f2(pindex-1))/(2*dx1)
 	f2_out(f2_out_index,2) = (f2(pindex+num_points1) - f2(pindex-num_points1))/(2*dx2)
 	f2_out(f2_out_index,3) = (f2(pindex+nsqr) - f2(pindex-nsqr))/(2*dx3)
   end if

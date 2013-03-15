@@ -12,6 +12,7 @@ import rg_fort
 #import fftw3
 import imageTimeSeriesConfig
 import gradientDescent
+import loggingUtils
 
 import numexpr as ne
 
@@ -67,7 +68,7 @@ class ImageTimeSeries(object):
     def __init__(self, output_dir, config_name):
         # can override these in configuration scripts
         self.output_dir = output_dir
-        self.write_iter = 25
+        self.write_iter = 10
         self.verbose_file_output = False
         imageTimeSeriesConfig.configure(self, config_name)
 
@@ -361,10 +362,69 @@ class ImageTimeSeries(object):
         #                    epsInit=self.cg_init_eps)
         return self
 
-    def reset(self):
+    def computeMaps(self):
+        rg, N, T = self.get_sim_data()
+        h = numpy.zeros_like(self.v)
+        b = numpy.zeros_like(self.v)
+        h[...,0] = rg.nodes
+        b[...,0] = rg.nodes
+        Jh = numpy.zeros((rg.num_nodes, T))
+        Jh[:,0] = numpy.ones(rg.num_nodes)
+        Jb = numpy.zeros((rg.num_nodes, T))
+        Jb[:,0] = numpy.ones(rg.num_nodes)
+        for t in range(T-1):
+            vt = self.v[:,:,t]
+            dt = self.dt
+            w = ne.evaluate("-1.0 *  vt * dt")
+            w = w.reshape((rg.dims[0], rg.dims[1], rg.dims[2], 3))
+            for d in range(self.dim):
+                h[:,d,t+1] = rg_fort.interpolate_3d( \
+                                h[:,d,t], w, \
+                                rg.num_points[0], rg.num_points[1], \
+                                rg.num_points[2], \
+                                rg.interp_mesh[0], \
+                                rg.interp_mesh[1], rg.interp_mesh[2], \
+                                rg.dx[0], rg.dx[1], rg.dx[2], rg.num_nodes,
+                                rg.dims[0], rg.dims[1], \
+                                rg.dims[2]).reshape(rg.num_nodes)
+            w = ne.evaluate("1.0 *  vt * dt")
+            w = w.reshape((rg.dims[0], rg.dims[1], rg.dims[2], 3))
+            for d in range(self.dim):
+                b[:,d,t+1] = rg_fort.interpolate_3d( \
+                                b[:,d,t], w, \
+                                rg.num_points[0], rg.num_points[1], \
+                                rg.num_points[2], \
+                                rg.interp_mesh[0], \
+                                rg.interp_mesh[1], rg.interp_mesh[2], \
+                                rg.dx[0], rg.dx[1], rg.dx[2], rg.num_nodes,
+                                rg.dims[0], rg.dims[1], \
+                                rg.dims[2]).reshape(rg.num_nodes)
+            dh0 = rg.gradient(h[:,0,t+1]).real
+            dh1 = rg.gradient(h[:,1,t+1]).real
+            dh2 = rg.gradient(h[:,2,t+1]).real
+            db0 = rg.gradient(b[:,0,t+1]).real
+            db1 = rg.gradient(b[:,1,t+1]).real
+            db2 = rg.gradient(b[:,2,t+1]).real
+            Jh[:,t+1] = dh0[:,0]*(dh1[:,1]*dh2[:,2]-dh2[:,1]*dh1[:,2]) - \
+                dh0[:,1]*(dh1[:,0]*dh2[:,2]-dh2[:,0]*dh1[:,2]) + \
+                dh0[:,2]*(dh1[:,0]*dh2[:,1]-dh2[:,0]*dh1[:,1])
+            Jb[:,t+1] = db0[:,0]*(db1[:,1]*db2[:,2]-db2[:,1]*db1[:,2]) - \
+                db0[:,1]*(db1[:,0]*db2[:,2]-db2[:,0]*db1[:,2]) + \
+                db0[:,2]*(db1[:,0]*db2[:,1]-db2[:,0]*db1[:,1])
+        for t in range(T):
+            rg.create_vtk_sg()
+            rg.add_vtk_point_data(h[...,t], "h")
+            rg.add_vtk_point_data(h[...,t]-rg.nodes, "hd")
+            rg.add_vtk_point_data(b[...,t], "b")
+            rg.add_vtk_point_data(b[...,t]-rg.nodes, "bd")
+            rg.add_vtk_point_data(self.v[...,t], "v")
+            rg.add_vtk_point_data(Jh[:,t], "Jh")
+            rg.add_vtk_point_data(Jb[:,t], "Jb")
+            rg.vtk_write(t, "maps", self.output_dir)
+
+    def loadData(self, fbase):
         from tvtk.api import tvtk
         rg, N, T = self.get_sim_data()
-        fbase = "/cis/home/clr/compute/time_series/lung_data_1/iter250_mesh256_"
         for t in range(T):
             r = tvtk.XMLStructuredGridReader(file_name="%s%d.vts" % (fbase, t))
             r.update()
@@ -375,20 +435,11 @@ class ImageTimeSeries(object):
             self.mu[...,t] = numpy.array(r.output.point_data.get_array("mu")).astype(float)
             self.mu_state[...,t] = numpy.array(r.output.point_data.get_array("mu")).astype(float)
             logging.info("reloaded time %d." % (t))
-        self.update_evolutions()
+        #self.update_evolutions()
 
-def setup_default_logging(output_dir, config):
-    logger = logging.getLogger()
-    logger.setLevel(logging.INFO)
-    formatter = logging.Formatter("%(asctime)s-%(levelname)s-%(message)s")
-    log_file_name = config.log_file_name
-    fh = logging.FileHandler("%s/%s" % (output_dir, log_file_name))
-    fh.setFormatter(formatter)
-    logger.addHandler(fh)
-    ch = logging.StreamHandler()
-    ch.setLevel(logging.INFO)
-    ch.setFormatter(formatter)
-    logger.addHandler(ch)
+    def reset(self):
+        fbase = "/cis/home/clr/compute/time_series/lung_data_1/iter250_mesh256_"
+        self.load_data(fbase)
 
 if __name__ == "__main__":
     output_directory_base = imageTimeSeriesConfig.compute_output_dir
@@ -402,7 +453,7 @@ if __name__ == "__main__":
     if os.access(output_dir, os.F_OK):
         shutil.rmtree(output_dir)
     os.mkdir(output_dir)
-    setup_default_logging(output_dir, imageTimeSeriesConfig)
+    loggingUtils.setup_default_logging(output_dir, imageTimeSeriesConfig)
     logging.info(options)
     its = ImageTimeSeries(output_dir, options.config_name)
     #its.reset()

@@ -47,7 +47,7 @@ u, K, K_diff, K_diff2)
 end subroutine kernelMatrixLaplacianPrecompute
 
 subroutine shoot(dt,sfactor,kvs,kvo,khs,kho,alpha,x0,m0,z0,&
-num_times,num_nodes,x,m,z,J)
+num_times,num_nodes,x,m,z,J,v)
   implicit none
   integer :: num_nodes, num_times, kvo, kho
   real(8) :: sfactor, dt
@@ -60,6 +60,7 @@ num_times,num_nodes,x,m,z,J)
   real(8) :: z0(num_nodes, 3)
   real(8) :: J(num_nodes, num_times)
   real(8) :: alpha(num_nodes)
+  real(8) :: v(num_nodes, 3, num_times)
 
   real(8) :: kv_ut, kh_ut, Kv, Kv_diff, Kh, Kh_diff, lpt
   real(8) :: zdz, kvz
@@ -77,6 +78,7 @@ num_times,num_nodes,x,m,z,J)
 !f2py real(8), intent(out), dimension(num_nodes, num_times) :: J
 !f2py real(8), intent(out), dimension(num_nodes, num_times) :: m
 !f2py real(8), intent(out), dimension(num_nodes, 3, num_times) :: z
+!f2py real(8), intent(out), dimension(num_nodes, 3, num_times) :: v
 
   x(:,:,1) = x0
   m(:,1) = m0
@@ -124,6 +126,7 @@ num_times,num_nodes,x,m,z,J)
 
 	end do !l
 	x(k,:,t+1) = x(k,:,t) + dt*dx
+	v(k,:,t) = dx
 	m(k,t+1) = m(k,t) + dt*dm
 	z(k,:,t+1) = z(k,:,t) + dt*dz
 	J(k,t+1) = J(k,t) + dt*dJ

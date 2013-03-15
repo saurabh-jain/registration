@@ -18,13 +18,13 @@ def configure(sim, config_name):
 
 def lung(sim):
     sim.dim = 3
-    sim.num_target_times = 1
+    sim.num_target_times = 4
     sim.num_times_disc = 10
     sim.num_times = sim.num_times_disc * sim.num_target_times + 1
     sim.times = numpy.linspace(0, 1, sim.num_times)
     sim.dt = 1. / (sim.num_times - 1)
     sim.sigma = 1.
-    sim.alpha = 80.
+    sim.alpha = 10.
     sim.gamma = 1.
     sim.Lpower = 2.
     sim.num_points = numpy.array([256,190,160])
@@ -45,12 +45,12 @@ def lung(sim):
     sim.I[:,0.*sim.num_times_disc] = sim.sc.data.reshape(sim.rg.num_nodes)
     sim.sc.loadAnalyze(lung_image_dir + "ic009.hdr")
     sim.I[:,1.*sim.num_times_disc] = sim.sc.data.reshape(sim.rg.num_nodes)
-    #sim.sc.loadAnalyze(lung_image_dir + "ic011.hdr")
-    #sim.I[:,2.*sim.num_times_disc] = sim.sc.data.reshape(sim.rg.num_nodes)
-    #sim.sc.loadAnalyze(lung_image_dir + "ic013.hdr")
-    #sim.I[:,3.*sim.num_times_disc] = sim.sc.data.reshape(sim.rg.num_nodes)
-    #sim.sc.loadAnalyze(lung_image_dir + "ic015.hdr")
-    #sim.I[:,4.*sim.num_times_disc] = sim.sc.data.reshape(sim.rg.num_nodes)
+    sim.sc.loadAnalyze(lung_image_dir + "ic011.hdr")
+    sim.I[:,2.*sim.num_times_disc] = sim.sc.data.reshape(sim.rg.num_nodes)
+    sim.sc.loadAnalyze(lung_image_dir + "ic013.hdr")
+    sim.I[:,3.*sim.num_times_disc] = sim.sc.data.reshape(sim.rg.num_nodes)
+    sim.sc.loadAnalyze(lung_image_dir + "ic015.hdr")
+    sim.I[:,4.*sim.num_times_disc] = sim.sc.data.reshape(sim.rg.num_nodes)
 
     for t in range(sim.num_target_times):
         sim.rg.create_vtk_sg()
@@ -64,6 +64,8 @@ def lung(sim):
     logging.info("dx: %s" % (str(sim.rg.dx)))
     logging.info("sigma: %f" % (sim.sigma))
     logging.info("dt: %f" % (sim.dt))
+    logging.info("kernel params- alpha: %f, gamma: %f, Lpower: %f" % \
+                        (sim.alpha, sim.gamma, sim.Lpower))
 
 def biocard(sim):
     sim.dim = 3
@@ -104,6 +106,8 @@ def biocard(sim):
     logging.info("dx: %s" % (str(sim.rg.dx)))
     logging.info("sigma: %f" % (sim.sigma))
     logging.info("dt: %f" % (sim.dt))
+    logging.info("kernel params- alpha: %f, gamma: %f, Lpower: %f" % \
+                        (sim.alpha, sim.gamma, sim.Lpower))
 
 def lung_downsample(sim):
     sim.dim = 3

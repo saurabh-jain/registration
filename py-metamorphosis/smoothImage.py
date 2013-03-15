@@ -12,6 +12,7 @@ import smoothImageConfig
 import pointEvolution
 import conjugateGradient
 import kernelFunctions as kfun
+import loggingUtils
 
 import kernelMatrix_fort
 from PIL import Image
@@ -101,6 +102,7 @@ class SmoothImageMeta(object):
         rg = self.rg
         self.x0 = self.rg.nodes.copy()
         self.xt = numpy.zeros((rg.num_nodes, 3, self.num_times))
+        self.v = numpy.zeros((rg.num_nodes, 3, self.num_times))
         self.m = numpy.zeros((rg.num_nodes, self.num_times))
         self.z = numpy.zeros((rg.num_nodes, 3, self.num_times))
         self.J = numpy.ones((rg.num_nodes, self.num_times))
@@ -312,7 +314,7 @@ class SmoothImageMeta(object):
 
     def shoot(self):
         rg, N, T = self.get_sim_data()
-        (x,m,z,J) = kernelMatrix_fort.shoot(self.dt, \
+        (x,m,z,J,v) = kernelMatrix_fort.shoot(self.dt, \
                             self.sfactor, self.kvs, self.kvo, \
                             self.khs, self.kho, \
                             self.alpha, self.x0, self.template, \
@@ -322,6 +324,7 @@ class SmoothImageMeta(object):
         self.m = m
         self.z = z
         self.J = J
+        self.v = v
 
     def shoot_old(self):
         rg, N, T = self.get_sim_data()
@@ -633,21 +636,16 @@ class SmoothImageMeta(object):
         rg, N, T = self.get_sim_data()
         for t in range(T):
             rg.create_vtk_sg()
-            #temp = numpy.zeros(rg.num_nodes)
-            #temp[100] = 1.
-            #kvt = self.KV.applyK(self.xt[...,t], temp)
-            #kht = self.KH.applyK(self.xt[...,t], temp)
             xtc = self.xt[:,:,t].copy()
             xtc[:,0] = xtc[:,0] - self.id_x
             xtc[:,1] = xtc[:,1] - self.id_y
             rg.add_vtk_point_data(self.xt[:,:,t], "x")
             rg.add_vtk_point_data(xtc, "xtc")
-            #rg.add_vtk_point_data(kvt, "kvt")
-            #rg.add_vtk_point_data(kht, "kht")
             rg.add_vtk_point_data(self.z[:,:,t], "z")
             rg.add_vtk_point_data(self.m[:,t], "m")
             rg.add_vtk_point_data(self.J[:,t], "J")
             rg.add_vtk_point_data(self.alpha, "alpha")
+            rg.add_vtk_point_data(self.v[...,t], "v")
             rg.add_vtk_point_data(self.template, "template")
             rg.add_vtk_point_data(self.target, "target")
 
@@ -664,19 +662,6 @@ class SmoothImageMeta(object):
         if (self.optimize_iteration % self.write_iter == 0):
             self.writeData("iter%d" % (self.optimize_iteration))
 
-def setup_default_logging(output_dir, config):
-    logger = logging.getLogger()
-    logger.setLevel(logging.INFO)
-    formatter = logging.Formatter("%(asctime)s-%(levelname)s-%(message)s")
-    log_file_name = config.log_file_name
-    fh = logging.FileHandler("%s/%s" % (output_dir, log_file_name))
-    fh.setFormatter(formatter)
-    logger.addHandler(fh)
-    ch = logging.StreamHandler()
-    ch.setLevel(logging.INFO)
-    ch.setFormatter(formatter)
-    logger.addHandler(ch)
-
 if __name__ == "__main__":
     # set permanent options
     output_directory_base = "/cis/home/clr/compute/smoothImage_meta/"
@@ -691,7 +676,7 @@ if __name__ == "__main__":
     if os.access(output_dir, os.F_OK):
         shutil.rmtree(output_dir)
     os.mkdir(output_dir)
-    setup_default_logging(output_dir, smoothImageConfig)
+    loggingUtils.setup_default_logging(output_dir, smoothImageConfig)
     logging.info(options)
     sim = SmoothImageMeta(output_dir, options.config_name)
     sim.computeMatching()
