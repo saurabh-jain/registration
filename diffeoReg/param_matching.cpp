@@ -76,6 +76,7 @@ param_matching::param_matching() {
   paramMap[(string) "saveMovie:"] = SAVEMOVIE ;
   paramMap[(string) "periodic:"] = PERIODIC ;
   paramMap[(string) "quiet:"] = QUIET ;
+  paramMap[(string) "normalizeKernel:"] = NORMALIZEKERNEL ;
 
   affMap[(string) "none"] = ID ;
   affMap[(string) "translation"] = TRANSLATION ;
@@ -156,7 +157,8 @@ param_matching::param_matching() {
   expand_value = -1 ;
   Tmax = 10 ; 
   parallelTimeDisc = 20 ;
-  kernelNormalization = 1 ; 
+  kernelNormalization = 1 ;
+  normalizeKernel = true ; 
   doDefor = true ;
   periodic = 0 ;
 }

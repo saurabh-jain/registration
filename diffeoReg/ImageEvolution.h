@@ -491,7 +491,7 @@ class ImageEvolution: public ImageMatching
     }
     
     //cout << "Starting iterations " << endl ;
-    _real mu=0, muold, alfa, be, ener2, ener  ;
+    _real mu=0, muold, alfa, be, ener2  ;
     for (unsigned int i2 =0; i2<K; i2++) {
       if (i2 == 0) {
 	mu = r.norm2() ;
@@ -526,7 +526,7 @@ class ImageEvolution: public ImageMatching
       foo1.copy(AZ) ;
       foo1 /= 2 ;
       foo1 -= b ;
-      ener = Z.sumProd(foo1) ;
+      //ener = Z.sumProd(foo1) ;
       
       foo1.copy(AZ) ;
       foo1 -= b ;

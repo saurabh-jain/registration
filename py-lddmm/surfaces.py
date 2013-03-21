@@ -307,11 +307,12 @@ class Surface:
             smoother.Update()
             g = smoother.GetOutput()
 
-        dc = vtkDecimatePro()
+            #dc = vtkDecimatePro()
+        dc = vtkQuadricDecimation()
         red = 1 - min(np.float(target)/g.GetNumberOfPoints(), 1)
         print 'Reduction: ', red
         dc.SetTargetReduction(red)
-        dc.PreserveTopologyOn()
+        #dc.PreserveTopologyOn()
         #dc.SetSplitting(0)
         dc.SetInput(g)
         #print dc
@@ -326,6 +327,11 @@ class Surface:
         cp.Update()
         g = cp.GetOutput()
         self.fromPolyData(g,scales)
+        z= self.surfVolume()
+        if (z > 0):
+            self.faces = self.faces[:, [0,2,1]]
+            print 'flipping volume', z, self.surfVolume()
+
         #print g
         # npoints = int(g.GetNumberOfPoints())
         # nfaces = int(g.GetNumberOfPolys())
