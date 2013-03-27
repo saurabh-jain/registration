@@ -33,11 +33,11 @@ def main():
         if args.zeroPad:
             v.zeroPad(1)
         #print v.resol
-        if args.smooth:
-            sf.Isosurface(v.data, value=0.5, target = args.targetSize, scales = v.resol, smooth=.5)
-        else:
-            sf.Isosurface(v.data, value=0.5, target = args.targetSize, scales = v.resol, smooth =-1)
-        t =  0.5 * (v.data.max() + v.data.min())
+        #if args.smooth:
+        #    sf.Isosurface(v.data, value=0.5, target = args.targetSize, scales = v.resol, smooth=.5)
+        #else:
+        #    sf.Isosurface(v.data, value=0.5, target = args.targetSize, scales = v.resol, smooth =-1)
+        #t =  0.5 * (v.data.max() + v.data.min())
         #print v.resol
         if args.smooth:
             sf.Isosurface(v.data, value=t, target = args.targetSize, scales = v.resol, smooth=.75)
