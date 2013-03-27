@@ -37,7 +37,7 @@ def main():
         #    sf.Isosurface(v.data, value=0.5, target = args.targetSize, scales = v.resol, smooth=.5)
         #else:
         #    sf.Isosurface(v.data, value=0.5, target = args.targetSize, scales = v.resol, smooth =-1)
-        #t =  0.5 * (v.data.max() + v.data.min())
+        t =  0.5 * (v.data.max() + v.data.min())
         #print v.resol
         if args.smooth:
             sf.Isosurface(v.data, value=t, target = args.targetSize, scales = v.resol, smooth=.75)
