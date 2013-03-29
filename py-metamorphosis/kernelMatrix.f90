@@ -138,7 +138,7 @@ num_times,num_nodes,x,m,z,J,v)
 end subroutine shoot
 
 subroutine adjointSystem(dt,sfactor,kvs,kvo,khs,kho,alpha,x,m,z,J,&
-dx,dm,dJ,num_times,num_nodes,ealpha)
+dx,dm,dJ,num_times,num_nodes,ealpha,ex)
   implicit none
   integer :: num_nodes, num_times, kvo, kho
   real(8) :: sfactor, dt
@@ -174,6 +174,7 @@ dx,dm,dJ,num_times,num_nodes,ealpha)
 !f2py real(8), intent(in), dimension(num_nodes, num_times) :: m
 !f2py real(8), intent(in), dimension(num_nodes, 3, num_times) :: z
 !f2py real(8), intent(out), dimension(num_nodes, num_times) :: ealpha 
+!f2py real(8), intent(out), dimension(num_nodes, 3, num_times) :: ex 
 
   ex(:,:,num_times) = dx
   em(:,num_times) = dm
