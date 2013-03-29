@@ -16,7 +16,12 @@ import loggingUtils
 
 import numexpr as ne
 
+
 def apply_kernel_V_for_async(right, dims, num_nodes, Kv, el_vol):
+    """
+    Apply the V kernel to momentum, with numpy fft, used for multi-threaded
+    processing.
+    """
     krho = numpy.zeros((num_nodes, 3))
     # for now assume 3 dimensions
     for j in range(3):
@@ -32,7 +37,10 @@ def apply_kernel_V_for_async(right, dims, num_nodes, Kv, el_vol):
     return krho
 
 def apply_kernel_V_for_async_w(right, dims, num_nodes, Kv, el_vol):
-
+    """
+    Apply the V kernel to momentum, with fftw, used for multi-threaded
+    processing.
+    """
     in_vec = numpy.zeros(dims, dtype=complex)
     fft_vec = numpy.zeros(dims, dtype=complex)
     out_vec = numpy.zeros(dims, dtype=complex)
@@ -74,7 +82,6 @@ class ImageTimeSeries(object):
 
         # general configuration
         self.mu = numpy.zeros((self.rg.num_nodes, 3, self.num_times))
-        self.mu_state = numpy.zeros((self.rg.num_nodes, 3, self.num_times))
         self.v = numpy.zeros((self.rg.num_nodes, 3, self.num_times))
         self.objTry = 0.
         self.mu_state = self.mu.copy()
@@ -374,6 +381,7 @@ class ImageTimeSeries(object):
         Jb[:,0] = numpy.ones(rg.num_nodes)
         for t in range(T-1):
             vt = self.v[:,:,t]
+            vt_flip = self.v[:,:,T-1-t]
             dt = self.dt
             w = ne.evaluate("-1.0 *  vt * dt")
             w = w.reshape((rg.dims[0], rg.dims[1], rg.dims[2], 3))
@@ -387,7 +395,7 @@ class ImageTimeSeries(object):
                                 rg.dx[0], rg.dx[1], rg.dx[2], rg.num_nodes,
                                 rg.dims[0], rg.dims[1], \
                                 rg.dims[2]).reshape(rg.num_nodes)
-            w = ne.evaluate("1.0 *  vt * dt")
+            w = ne.evaluate("1.0 *  vt_flip * dt")
             w = w.reshape((rg.dims[0], rg.dims[1], rg.dims[2], 3))
             for d in range(self.dim):
                 b[:,d,t+1] = rg_fort.interpolate_3d( \

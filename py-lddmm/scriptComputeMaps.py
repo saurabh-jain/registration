@@ -20,7 +20,9 @@ os.mkdir(output_dir)
 loggingUtils.setup_default_logging(output_dir, imageTimeSeriesConfig)
 logging.info(options)
 its = imageTimeSeries.ImageTimeSeries(output_dir, options.config_name)
-#fbase = "/cis/home/clr/compute/time_series/biocard_test/iter240_mesh40_"
-fbase = "/cis/home/clr/compute/time_series/lung_data_s10/iter10_mesh256_"
+fbase = "/cis/home/clr/compute/time_series/biocard_test/iter240_mesh40_"
+#fbase = "/cis/home/clr/compute/time_series/lung_data_s10/iter10_mesh256_"
 its.loadData(fbase)
+logging.info("Begin computing maps.")
 its.computeMaps()
+logging.info("Done.")
