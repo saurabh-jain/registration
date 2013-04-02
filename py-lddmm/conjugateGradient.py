@@ -126,6 +126,9 @@ def cg(opt, verb = True, maxIter=1000, TestGradient = False, epsInit=10.):
                 oldDir = np.copy(dir0)
                 grdOld = np.copy(grd)
 
+        if hasattr(opt, 'cacheDir'):
+            opt.cacheDir(dir0)
+
         objTry = opt.updateTry(dir0, eps, obj)
 
         noUpdate = 0

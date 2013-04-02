@@ -17,6 +17,19 @@ import loggingUtils
 import numexpr as ne
 
 
+def loadData_for_async(fbase, t):
+    from tvtk.api import tvtk
+    r = tvtk.XMLStructuredGridReader(file_name="%s%d.vts" % (fbase, t))
+    r.update()
+    v = numpy.array(r.output.point_data.get_array("v")).astype(float)
+    I = numpy.array(r.output.point_data.get_array("I")).astype(float)
+    I_interp = numpy.array(r.output.point_data.get_array("I_interp")).astype(float)
+    p = numpy.array(r.output.point_data.get_array("p")).astype(float)
+    mu = numpy.array(r.output.point_data.get_array("mu")).astype(float)
+    mu_state = numpy.array(r.output.point_data.get_array("mu")).astype(float)
+    logging.info("reloaded time %d." % (t))
+    return (v,I,I_interp,p,mu,mu_state)
+
 def apply_kernel_V_for_async(right, dims, num_nodes, Kv, el_vol):
     """
     Apply the V kernel to momentum, with numpy fft, used for multi-threaded
@@ -112,7 +125,9 @@ class ImageTimeSeries(object):
         self.rg.add_vtk_point_data(test_v.real, "test_v")
         self.rg.vtk_write(0, "kernel_test", self.output_dir)
 
+        self.cache_v = False
         self.update_evolutions()
+        self.v_state = self.v.copy()
 
     def get_sim_data(self):
         return [self.rg, self.num_points, self.num_times]
@@ -217,7 +232,6 @@ class ImageTimeSeries(object):
 
     def update_evolutions(self):
         rg, N, T = self.get_sim_data()
-        self.k_mu_async()
         self.I_interp[:,0] = self.I[:,0].copy()
         for t in range(T-1):
             vt = self.v[:,:,t]
@@ -272,14 +286,31 @@ class ImageTimeSeries(object):
         logging.info("term1: %e, term2: %e, tot: %e" % (obj, term2, total_fun))
         return total_fun
 
+    def cacheDir(self, mu_dir):
+        self.cache_v = True
+        self.cache_v_dir = numpy.zeros_like(self.v)
+        rg, N, T = self.get_sim_data()
+        Kv = self.get_kernelv()
+        res = []
+        for t in range(T):
+            res.append(self.pool.apply_async(apply_kernel_V_for_async, \
+                            args=(mu_dir[:,:,t].copy(), rg.dims, rg.num_nodes,\
+                            Kv, rg.element_volumes[0])))
+        for t in range(T):
+            self.cache_v_dir[:,:,t] = res[t].get(timeout=self.pool_timeout)
+
     def updateTry(self, direction, eps, objRef=None):
         rg, N, T = self.get_sim_data()
         self.last_dir = eps * direction
         mu_old = self.mu.copy()
         v_old = self.v.copy()
         Ii_old = self.I_interp.copy()
-        for t in range(T):
-            self.mu[:,:,t] = self.mu_state[:,:,t] - direction[:,:,t] * eps
+        #for t in range(T):
+        self.mu = self.mu_state - direction * eps
+        if not self.cache_v:
+            self.k_mu_async()
+        else:
+            self.v = self.v_state - self.cache_v_dir * eps
         self.update_evolutions()
         objTry = self.objectiveFun()
         if (objRef != None) and (objTry > objRef):
@@ -292,6 +323,8 @@ class ImageTimeSeries(object):
         rg, N, T = self.get_sim_data()
         for t in range(T):
             self.mu_state[:,:,t] = self.mu[:,:,t].copy()
+            self.v_state[...,t] = self.v[...,t].copy()
+        self.cache_v = False
 
     def getGradient(self, coeff=1.0):
         rg, N, T = self.get_sim_data()
@@ -419,31 +452,42 @@ class ImageTimeSeries(object):
             Jb[:,t+1] = db0[:,0]*(db1[:,1]*db2[:,2]-db2[:,1]*db1[:,2]) - \
                 db0[:,1]*(db1[:,0]*db2[:,2]-db2[:,0]*db1[:,2]) + \
                 db0[:,2]*(db1[:,0]*db2[:,1]-db2[:,0]*db1[:,1])
+            # gradient above not computed at boundary, set J to 1 there
+            Jh[rg.edge_nodes, t+1] = 1.
+            Jb[rg.edge_nodes, t+1] = 1.
         for t in range(T):
             rg.create_vtk_sg()
             rg.add_vtk_point_data(h[...,t], "h")
             rg.add_vtk_point_data(h[...,t]-rg.nodes, "hd")
             rg.add_vtk_point_data(b[...,t], "b")
             rg.add_vtk_point_data(b[...,t]-rg.nodes, "bd")
-            rg.add_vtk_point_data(self.v[...,t], "v")
             rg.add_vtk_point_data(Jh[:,t], "Jh")
             rg.add_vtk_point_data(Jb[:,t], "Jb")
+            rg.add_vtk_point_data(self.v[:,:,t], "v")
+            rg.add_vtk_point_data(self.I[:,t], "I")
+            rg.add_vtk_point_data(self.I_interp[:,t], "I_interp")
+            rg.add_vtk_point_data(self.I[:,t]-self.I_interp[:,t], "diff")
+            rg.add_vtk_point_data(self.p[:,t], "p")
+            rg.add_vtk_point_data(self.mu[:,:,t], "mu")
             rg.vtk_write(t, "maps", self.output_dir)
 
     def loadData(self, fbase):
         from tvtk.api import tvtk
         rg, N, T = self.get_sim_data()
+        res = []
         for t in range(T):
-            r = tvtk.XMLStructuredGridReader(file_name="%s%d.vts" % (fbase, t))
-            r.update()
-            self.v[...,t] = numpy.array(r.output.point_data.get_array("v")).astype(float)
-            self.I[...,t] = numpy.array(r.output.point_data.get_array("I")).astype(float)
-            self.I_interp[...,t] = numpy.array(r.output.point_data.get_array("I_interp")).astype(float)
-            self.p[...,t] = numpy.array(r.output.point_data.get_array("p")).astype(float)
-            self.mu[...,t] = numpy.array(r.output.point_data.get_array("mu")).astype(float)
-            self.mu_state[...,t] = numpy.array(r.output.point_data.get_array("mu")).astype(float)
-            logging.info("reloaded time %d." % (t))
-        #self.update_evolutions()
+            res.append(self.pool.apply_async(loadData_for_async, \
+                                args=(fbase, t)))
+        for t in range(T):
+            (v,I,I_interp,p,mu,mu_state) = \
+                                res[t].get(timeout=self.pool_timeout)
+            self.v[...,t] = v
+            self.I[...,t] = I
+            self.I_interp[...,t] = I_interp
+            self.p[...,t] = p
+            self.mu[...,t] = mu
+            self.mu_state[...,t] = mu_state
+            logging.info("set data for time %d." % (t))
 
     def reset(self):
         fbase = "/cis/home/clr/compute/time_series/lung_data_1/iter250_mesh256_"

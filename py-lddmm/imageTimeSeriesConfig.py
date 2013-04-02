@@ -24,7 +24,7 @@ def lung(sim):
     sim.times = numpy.linspace(0, 1, sim.num_times)
     sim.dt = 1. / (sim.num_times - 1)
     sim.sigma = 1.
-    sim.alpha = 5. #10.
+    sim.alpha = 5.
     sim.gamma = 1.
     sim.Lpower = 2.
     sim.num_points = numpy.array([256,190,160])

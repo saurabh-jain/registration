@@ -11,6 +11,7 @@ output_directory_base = imageTimeSeriesConfig.compute_output_dir
 parser = optparse.OptionParser()
 parser.add_option("-o", "--output_dir", dest="output_dir")
 parser.add_option("-c", "--config_name", dest="config_name")
+parser.add_option("-f", "--file_base", dest="fbase")
 (options, args) = parser.parse_args()
 output_dir = output_directory_base + options.output_dir
 # remove any old results in the output directory
@@ -20,9 +21,7 @@ os.mkdir(output_dir)
 loggingUtils.setup_default_logging(output_dir, imageTimeSeriesConfig)
 logging.info(options)
 its = imageTimeSeries.ImageTimeSeries(output_dir, options.config_name)
-fbase = "/cis/home/clr/compute/time_series/biocard_test/iter240_mesh40_"
-#fbase = "/cis/home/clr/compute/time_series/lung_data_s10/iter10_mesh256_"
-its.loadData(fbase)
+its.loadData(options.fbase)
 logging.info("Begin computing maps.")
 its.computeMaps()
 logging.info("Done.")
