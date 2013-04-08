@@ -90,6 +90,9 @@ class SmoothImageMeta(object):
     to match two images using RKHS metamorphosis via the shooting method.
     """
     def __init__(self, output_dir, config_name):
+        self.num_points = None
+        self.domain_max = None
+        self.dx = None
         self.verbose_file_output = False
         self.output_dir = output_dir
         self.spline_interp = False
@@ -636,7 +639,7 @@ class SmoothImageMeta(object):
 
     def computeMatching(self):
         conjugateGradient.cg(self, True, maxIter=1000, TestGradient=False, \
-                            epsInit=1e-3)
+                            epsInit=self.cg_init_eps)
         return self
 
     def writeData(self, name):

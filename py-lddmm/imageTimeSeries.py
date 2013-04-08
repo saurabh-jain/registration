@@ -69,7 +69,6 @@ def apply_kernel_V_for_async_w(right, dims, num_nodes, Kv, el_vol):
         rr = right[:,j].copy().astype(complex)
         fr = numpy.reshape(rr, dims)
         fr = numpy.fft.fftshift(fr)
-        fr *= el_vol
         in_vec[...] = fr[...]
         wfor.execute()
         fr[...] = fft_vec[...]
@@ -78,7 +77,7 @@ def apply_kernel_V_for_async_w(right, dims, num_nodes, Kv, el_vol):
         fft_vec[...] = fr[...]
         wback.execute()
         out = out_vec[...] / in_vec.size
-        out *= 1/el_vol
+        out *= 1./el_vol
         out = numpy.fft.fftshift(out)
         krho[:,j] = out.real.ravel()
     return krho
@@ -88,6 +87,9 @@ class ImageTimeSeries(object):
 
     def __init__(self, output_dir, config_name):
         # can override these in configuration scripts
+        self.num_points = None
+        self.domain_max = None
+        self.dx = None
         self.output_dir = output_dir
         self.write_iter = 10
         self.verbose_file_output = False
