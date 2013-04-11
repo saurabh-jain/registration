@@ -7,14 +7,22 @@ import kernelFunctions as kfun
 
 # General surface class
 class Curve:
-    def __init__(self, curve=None, filename=None, FV = None):
+    def __init__(self, curve=None, filename=None, FV = None, pointSet=None):
         if curve == None:
             if FV == None:
                 if filename == None:
-                    self.vertices = np.empty(0)
-                    self.centers = np.empty(0)
-                    self.faces = np.empty(0)
-                    self.lenel = np.empty(0)
+                    if pointSet == None:
+                        self.vertices = np.empty(0)
+                        self.centers = np.empty(0)
+                        self.faces = np.empty(0)
+                        self.lenel = np.empty(0)
+                    else:
+                        self.vertices = np.copy(pointSet)
+                        self.faces = np.int_(np.zeros([pointSet.shape[0], 2]))
+                        for k in range(pointSet.shape[0]-1):
+                            self.faces[k,:] = (k, k+1)
+                        self.faces[pointSet.shape[0]-1, :] = (pointSet.shape[0]-1, 0) ;
+                        self.computeCentersLengths()
                 else:
                     (mainPart, ext) = os.path.splitext(filename)
                     if ext == '.dat':

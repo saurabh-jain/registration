@@ -32,6 +32,7 @@ int main(int argc, char** argv)
   param.projectImage = true ;
   param.doNotModifyImages = true ;
   param.nb_semi = 0 ;
+  param.readBinaryTemplate = true ;
 
   ImageEvolution mo(param) ;
   cout << param.outDir << ";" << mo.param.outDir << endl ;
@@ -41,24 +42,37 @@ int main(int argc, char** argv)
   VectorMap Lv0 ;
   char path[256] ;
   Vector dphi ;
+  Vector foo ;
+  int nbFreeVar=0 ;
 
 
   cout << "reading data" << endl ;
   I0.copy(mo.Template) ;
   I0.computeGradient(mo.param.spaceRes,mo.param.gradientThreshold) ;
 
+  if (mo.param.normalizeKernel) {
+    mo.Template.gradient().norm(foo) ;
+    for (unsigned int k=0; k<foo.d.length;k++)
+      if (foo[k] > 0.01)
+	nbFreeVar++ ;
+    mo.kernelNormalization = nbFreeVar ; 
+    //      _sh->kernelNormalization = 1.0 ; 
+    cout << "Number of momentum variables: " << nbFreeVar << " out of " << foo.d.length << endl ;
+  }
+
   if (mo.param.useVectorMomentum) {
-    cout << "reading Vector Momentum" << mo.param.fileInitialMom << endl ;
+    cout << "reading Vector Momentum: " << mo.param.fileInitialMom << endl ;
     Lv0.read(mo.param.fileInitialMom) ;
   }
   else {
+    cout << "reading scalar momentum: " << mo.param.fileInitialMom << endl ;
     Z0.read(mo.param.fileInitialMom) ;
     I0.getMomentum(Z0, Lv0) ;
   }
 
-  sprintf(path, "%s/template", mo.param.outDir) ;
-  I0.img().write_image(path) ;
-  mo.geodesicImageEvolutionFromVelocity(mo.Template, Lv0, I2, 1) ;
+  //sprintf(path, "%s/template", mo.param.outDir) ;
+  //I0.img().write_image(path) ;
+  mo.geodesicImageEvolutionFromVelocity(I0, Lv0, I2, 1) ;
   mo._phi.logJacobian(dphi, mo.param.spaceRes) ;
   sprintf(path, "%s/jacobian", mo.param.outDir) ;
   dphi.write_imagesc(path) ;

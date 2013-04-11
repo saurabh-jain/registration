@@ -99,6 +99,15 @@ void ShootingSEG::Print(char* path)
     cout << "writing " << file << endl ;
   dphi.write_imagesc(file) ;
 
+  sprintf(file, "%s/template2targetMap", path) ;
+  if (param.verb)
+    cout << "writing " << file << endl ;
+  _phi.write(file) ;
+
+  sprintf(file, "%s/target2templateMap", path) ;
+  if (param.verb)
+    cout << "writing " << file << endl ;
+  _psi.write(file) ;
 }
 
 void ShootingSEG::initialPrint(char* path)

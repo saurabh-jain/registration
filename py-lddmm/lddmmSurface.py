@@ -21,6 +21,7 @@ def main():
     parser.add_argument('--typeError', metavar='typeError', type=str, dest='typeError', default = 'measure', help='type error term (default: measure)') 
     parser.add_argument('--dirOut', metavar = 'dirOut', type = str, dest = 'dirOut', default = '', help='Output directory')
     parser.add_argument('--tmpOut', metavar = 'tmpOut', type = str, dest = 'tmpOut', default = '', help='info files directory')
+    parser.add_argument('--rigid', action = 'store_true', dest = 'rigid', default = False, help='Perform Rigid Registration First')
     args = parser.parse_args()
 
     if args.dirOut == '':
@@ -36,9 +37,16 @@ def main():
 
     tmpl = surfaces.Surface(filename=args.template)
     K1 = Kernel(name='gauss', sigma = args.sigmaKernel)
-    sm = SurfaceMatchingParam(timeStep=0.1, KparDiff=K1, sigmaDist=args.sigmaDist, sigmaError=args.sigmaError, errorType=args.typeError)
-
+    sm = SurfaceMatchingParam(timeStep=0.05, KparDiff=K1, sigmaDist=args.sigmaDist, sigmaError=args.sigmaError, errorType=args.typeError)
     fv = surfaces.Surface(filename=args.target)
+    #print fv.vertices
+
+    if args.rigid:
+        R0, T0 = rigidRegistration(surfaces = (fv.vertices, tmpl.vertices),  verb=False, temperature=10., annealing=True)
+        fv.updateVertices(np.dot(fv.vertices, R0.T) + T0)
+
+        #print fv.vertices
+
     f = SurfaceMatching(Template=tmpl, Target=fv, outputDir=args.tmpOut,param=sm, testGradient=False,
                         maxIter=1000, affine= 'none', rotWeight=1., transWeight = 1., scaleWeight=10., affineWeight=100.)
 
