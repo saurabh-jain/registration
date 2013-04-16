@@ -2,13 +2,13 @@ subroutine interpolate_3d_gradient(f, w, num_points1, num_points2, num_points3, 
 indexx, indexy, indexz, dx1, dx2, dx3, num_nodes, dim1, dim2, dim3, f_out)
   implicit none
   integer :: num_nodes
+  integer :: dim1, dim2, dim3
   real(8) :: f(num_nodes)
   integer :: num_points1, num_points2, num_points3
   real(8) :: w(dim1, dim2, dim3, 3)
   integer :: indexx(dim1, dim2, dim3)
   integer :: indexy(dim1, dim2, dim3)
   integer :: indexz(dim1, dim2, dim3)
-  integer :: dim1, dim2, dim3
   real(8) :: f_out(dim1, dim2, dim3, 3)
   real(8) :: dx1, dx2, dx3
 
@@ -135,13 +135,13 @@ subroutine interpolate_3d(f, w, num_points1, num_points2, num_points3,  &
 indexx, indexy, indexz, dx1, dx2, dx3, num_nodes, dim1, dim2, dim3, f_out)
   implicit none
   integer :: num_nodes
+  integer :: dim1, dim2, dim3
   real(8) :: f(num_nodes)
   integer :: num_points1, num_points2, num_points3
   real(8) :: w(dim1, dim2, dim3, 3)
   integer :: indexx(dim1, dim2, dim3)
   integer :: indexy(dim1, dim2, dim3)
   integer :: indexz(dim1, dim2, dim3)
-  integer :: dim1, dim2, dim3
   real(8) :: f_out(dim1, dim2, dim3)
   real(8) :: dx1, dx2, dx3
 
@@ -259,13 +259,13 @@ subroutine interpolate_3d_dual(f, w, num_points1, num_points2, num_points3,  &
 indexx, indexy, indexz, dx1, dx2, dx3, num_nodes, dim1, dim2, dim3, f_out)
   implicit none
   integer :: num_nodes
+  integer :: dim1, dim2, dim3
   real(8) :: f(dim1,dim2,dim3)
   integer :: num_points1, num_points2, num_points3
   real(8) :: w(dim1, dim2, dim3, 3)
   integer :: indexx(dim1, dim2, dim3)
   integer :: indexy(dim1, dim2, dim3)
   integer :: indexz(dim1, dim2, dim3)
-  integer :: dim1, dim2, dim3
   real(8) :: f_out(num_nodes)
   real(8) :: dx1, dx2, dx3
 
@@ -378,6 +378,7 @@ subroutine interp_dual_and_grad(f, f2, w, num_points1, num_points2, num_points3,
 indexx, indexy, indexz, dx1, dx2, dx3, dt, num_nodes, dim1, dim2, dim3, f_out, f2_out)
   implicit none
   integer :: num_nodes
+  integer :: dim1, dim2, dim3
   real(8) :: f(dim1,dim2,dim3)
   real(8) :: f2(num_nodes)
   integer :: num_points1, num_points2, num_points3
@@ -385,7 +386,6 @@ indexx, indexy, indexz, dx1, dx2, dx3, dt, num_nodes, dim1, dim2, dim3, f_out, f
   integer :: indexx(dim1, dim2, dim3)
   integer :: indexy(dim1, dim2, dim3)
   integer :: indexz(dim1, dim2, dim3)
-  integer :: dim1, dim2, dim3
   real(8) :: f_out(num_nodes)
   real(8) :: f2_out(num_nodes, 3)
   real(8) :: dx1, dx2, dx3, dt
@@ -436,9 +436,9 @@ indexx, indexy, indexz, dx1, dx2, dx3, dt, num_nodes, dim1, dim2, dim3, f_out, f
 
   nsqr = num_points1 * num_points2
   
-  !$omp parallel do private(k,j,i,stepsx,stepsy,stepsz,px,py,pz,ax,ay, &
-  !$omp& az,pxindex,pyindex,pzindex,pxindex_x, f2_out_index, &
-  !$omp& pyindex_y,pzindex_z,pindex,pindex_x,pindex_y,pindex_xy,pindex_z,pindex_z_x,pindex_z_y,pindex_z_xy) shared(f_out, f)
+  !--$omp parallel do private(k,j,i,stepsx,stepsy,stepsz,px,py,pz,ax,ay, &
+  !--$omp& az,pxindex,pyindex,pzindex,pxindex_x, f2_out_index, &
+  !--$omp& pyindex_y,pzindex_z,pindex,pindex_x,pindex_y,pindex_xy,pindex_z,pindex_z_x,pindex_z_y,pindex_z_xy) shared(f_out,f2_out,f)
   do k = 1, dim3, 1
   do j = 1, dim2, 1
   do i = 1, dim1, 1
@@ -522,15 +522,19 @@ indexx, indexy, indexz, dx1, dx2, dx3, dt, num_nodes, dim1, dim2, dim3, f_out, f
 !                   f2(pindex_z_y)*(1-ax)*(ay)*(1/dx3) + &
 !                   f2(pindex_z_xy)*(ax)*(ay)*(1/dx3)
   if ((i/=1).and.(i/=dim1).and.(j/=1).and.(j/=dim2).and.(k/=1).and.(k/=dim3)) then
-	f2_out(f2_out_index,1) = (f2(pindex+1) - f2(pindex-1))/(2*dx1)
-	f2_out(f2_out_index,2) = (f2(pindex+num_points1) - f2(pindex-num_points1))/(2*dx2)
-	f2_out(f2_out_index,3) = (f2(pindex+nsqr) - f2(pindex-nsqr))/(2*dx3)
+        f2_out(f2_out_index,1) = (f2(f2_out_index+1) - f2(f2_out_index-1))/(2*dx1)
+        f2_out(f2_out_index,2) = (f2(f2_out_index+num_points1) - f2(f2_out_index-num_points1))/(2*dx2)
+        f2_out(f2_out_index,3) = (f2(f2_out_index+nsqr) - f2(f2_out_index-nsqr))/(2*dx3)
+  else
+        f2_out(f2_out_index,1) = 0.
+        f2_out(f2_out_index,2) = 0.
+        f2_out(f2_out_index,3) = 0.
   end if
 
   end do
   end do
   end do
-  !$omp end parallel do
+  !--$omp end parallel do
 end subroutine interp_dual_and_grad
 
 
@@ -538,13 +542,13 @@ subroutine interpolate_3d_old(f, w, num_points1, num_points2, num_points3,  &
 indexx, indexy, indexz, dx1, dx2, dx3, num_nodes, dim1, dim2, dim3, f_out)
   implicit none
   integer :: num_nodes
+  integer :: dim1, dim2, dim3
   real(8) :: f(num_nodes)
   integer :: num_points1, num_points2, num_points3
   real(8) :: w(num_nodes, 3)
   integer :: indexx(dim1, dim2, dim3)
   integer :: indexy(dim1, dim2, dim3)
   integer :: indexz(dim1, dim2, dim3)
-  integer :: dim1, dim2, dim3
   real(8) :: f_out(dim1, dim2, dim3)
   real(8) :: dx1, dx2, dx3
 

@@ -74,14 +74,14 @@ def biocard(sim):
     sim.num_times = sim.num_times_disc * sim.num_target_times + 1
     sim.times = numpy.linspace(0, 1, sim.num_times)
     sim.dt = 1. / (sim.num_times - 1)
-    sim.sigma = 1.
+    sim.sigma = (1./255.)
     sim.alpha = .01
     sim.gamma = 1.
-    sim.Lpower = 2
-    sim.num_points = (40, 32, 40)
-    sim.dx = (.9375, 2., .9375)
+    sim.Lpower = 2.
+    sim.num_points = numpy.array([40, 32, 40])
+    sim.dx = numpy.array([.9375, 2., .9375])
     sim.domain_max = None
-    sim.cg_init_eps = 1e-6
+    sim.cg_init_eps = 1e-3
     sim.rg = regularGrid.RegularGrid(sim.dim, \
                         num_points=sim.num_points, \
                         domain_max=sim.domain_max, \
@@ -92,9 +92,9 @@ def biocard(sim):
 
     sim.sc = diffeomorphisms.gridScalars()
     sim.sc.loadAnalyze(biocard_image_dir + "regR2_cut.hdr")
-    sim.I[:,0.*sim.num_times_disc] = sim.sc.data.reshape(sim.rg.num_nodes)
+    sim.I[:,0.*sim.num_times_disc] = sim.sc.data.reshape(sim.rg.num_nodes).copy()
     sim.sc.loadAnalyze(biocard_image_dir + "regR3_cut.hdr")
-    sim.I[:,1.*sim.num_times_disc] = sim.sc.data.reshape(sim.rg.num_nodes)
+    sim.I[:,1.*sim.num_times_disc] = sim.sc.data.reshape(sim.rg.num_nodes).copy()
     #sim.sc.loadAnalyze(biocard_image_dir + "regR4_cut.hdr")
     #sim.I[:,2.*sim.num_times_disc] = sim.sc.data.reshape(sim.rg.num_nodes)
     #sim.sc.loadAnalyze(biocard_image_dir + "regR5_cut.hdr")

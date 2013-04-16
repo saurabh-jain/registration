@@ -54,7 +54,7 @@ def d72(sim):
 
 def leaf200(sim):
     sim.dim = 2
-    sim.sigma = 4.
+    sim.sigma = 5.
     sim.sfactor = 1./numpy.power(sim.sigma, 2)
     sim.num_points = (200,200)
     #sim.domain_max = (1., 1.)
@@ -69,7 +69,7 @@ def leaf200(sim):
     sim.khn = 'laplacian'
     #sim.kvs = .03 / 2.0
     #sim.khs = .015 / 3.0 / 1.5
-    sim.kvs = 2.
+    sim.kvs = 7. # 2.
     sim.khs = .4
     sim.kvo = 4
     sim.kho = 4
@@ -163,7 +163,7 @@ def brains(sim):
 
 def inho(sim):
     sim.dim = 2
-    sim.sigma = 8.
+    sim.sigma = 7.
     sim.sfactor = 1./numpy.power(sim.sigma, 2)
     sim.num_points = (256,124)
     sim.domain_max = None
@@ -175,7 +175,7 @@ def inho(sim):
 
     sim.kvn = 'laplacian'
     sim.khn = 'laplacian'
-    sim.kvs = 3.
+    sim.kvs = 7.
     sim.khs = .4
     sim.kvo = 4
     sim.kho = 4

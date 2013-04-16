@@ -406,17 +406,21 @@ class RegularGrid(object):
     def barycentric_coordinates(self, point):
         x = point[0]
         y = point[1]
+        z = point[2]
         eps = 1e-8
         test1 = (self.nodes[self.elements[:,0],0] - eps <= x).astype(int)
         test2 = (self.nodes[self.elements[:,1],0] + eps >= x).astype(int)
         test3 = (self.nodes[self.elements[:,2],1] + eps >= y).astype(int)
         test4 = (self.nodes[self.elements[:,0],1] - eps <= y).astype(int)
-        test = test1 + test2 + test3 + test4
-        el = numpy.where(test==4)[0][0]
+        test5 = (self.nodes[self.elements[:,0],2] - eps <= z).astype(int)
+        test6 = (self.nodes[self.elements[:,5],2] + eps >= z).astype(int)
+        test = test1 + test2 + test3 + test4 + test5 + test6
+        el = numpy.where(test==6)[0][0]
         el_nodes = self.nodes[self.elements[el]]
-        bary = numpy.zeros(2)
-        bary[0] = (x - el_nodes[0,0])/self.dx
-        bary[1] = (y - el_nodes[0,1])/self.dx
+        bary = numpy.zeros(3)
+        bary[0] = (x - el_nodes[0,0])/self.dx[0]
+        bary[1] = (y - el_nodes[0,1])/self.dx[1]
+        bary[2] = (z - el_nodes[0,2])/self.dx[2]
         return [el, bary]
 
     def sync_filter(self, mults):

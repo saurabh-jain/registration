@@ -13,9 +13,7 @@ import rg_fort
 import imageTimeSeriesConfig
 import gradientDescent
 import loggingUtils
-
 import numexpr as ne
-
 
 def loadData_for_async(fbase, t):
     from tvtk.api import tvtk
@@ -91,7 +89,7 @@ class ImageTimeSeries(object):
         self.domain_max = None
         self.dx = None
         self.output_dir = output_dir
-        self.write_iter = 10
+        self.write_iter = 15
         self.verbose_file_output = False
         imageTimeSeriesConfig.configure(self, config_name)
 
@@ -238,6 +236,7 @@ class ImageTimeSeries(object):
         for t in range(T-1):
             vt = self.v[:,:,t]
             dt = self.dt
+            #w = -1.0 * vt * dt
             w = ne.evaluate("-1.0 *  vt * dt")
             w = w.reshape((rg.dims[0], rg.dims[1], rg.dims[2], 3))
             self.I_interp[:,t+1] = rg_fort.interpolate_3d( \
@@ -344,6 +343,7 @@ class ImageTimeSeries(object):
                     s = 2./numpy.power(self.sigma,2)
                     It = self.I[:,t]
                     Iit = self.I_interp[:,t]
+                    #p1 = (p1 - s * vol * (It - Iit))
                     p1 = ne.evaluate("(p1 - s * vol * (It - Iit))")
             v = self.v[:,:,t]
             v.shape = ((rg.dims[0], rg.dims[1], rg.dims[2], 3))
@@ -360,9 +360,13 @@ class ImageTimeSeries(object):
                 pr[:,0,t-1] = p_new[...]
             gIi[...,t] = gI_interp[...]
         mu = self.mu
+        #grad = 2*mu - pr * gIi
         grad = ne.evaluate("2*mu - pr * gIi")
         self.p = pr[:,0,:]
+        #retGrad = coeff * grad
         retGrad = ne.evaluate("coeff * grad")
+        #import pdb
+        #pdb.set_trace()
         if self.verbose_file_output:
             for t in range(T):
                 rg.create_vtk_sg()
@@ -404,7 +408,7 @@ class ImageTimeSeries(object):
         #                    epsInit=self.cg_init_eps)
         return self
 
-    def computeMaps(self):
+    def computeMaps(self, landmarks=[]):
         rg, N, T = self.get_sim_data()
         h = numpy.zeros_like(self.v)
         b = numpy.zeros_like(self.v)
@@ -414,10 +418,15 @@ class ImageTimeSeries(object):
         Jh[:,0] = numpy.ones(rg.num_nodes)
         Jb = numpy.zeros((rg.num_nodes, T))
         Jb[:,0] = numpy.ones(rg.num_nodes)
+        land_t = numpy.zeros((len(landmarks),3,T))
+        if len(landmarks) > 0:
+            land_t[...,0] = numpy.array(landmarks)
+            lmk_coords = [rg.barycentric_coordinates(lmk) for lmk in landmarks]
         for t in range(T-1):
             vt = self.v[:,:,t]
             vt_flip = self.v[:,:,T-1-t]
             dt = self.dt
+            #w = -1.0 *  vt * dt
             w = ne.evaluate("-1.0 *  vt * dt")
             w = w.reshape((rg.dims[0], rg.dims[1], rg.dims[2], 3))
             for d in range(self.dim):
@@ -430,6 +439,7 @@ class ImageTimeSeries(object):
                                 rg.dx[0], rg.dx[1], rg.dx[2], rg.num_nodes,
                                 rg.dims[0], rg.dims[1], \
                                 rg.dims[2]).reshape(rg.num_nodes)
+            #w = 1.0 *  vt_flip * dt
             w = ne.evaluate("1.0 *  vt_flip * dt")
             w = w.reshape((rg.dims[0], rg.dims[1], rg.dims[2], 3))
             for d in range(self.dim):
@@ -457,6 +467,22 @@ class ImageTimeSeries(object):
             # gradient above not computed at boundary, set J to 1 there
             Jh[rg.edge_nodes, t+1] = 1.
             Jb[rg.edge_nodes, t+1] = 1.
+            # evolve the landmark set
+            for lmk_j, lmk in enumerate(landmarks):
+                inodes = rg.elements[lmk_coords[lmk_j][0],:]
+                ax = lmk_coords[lmk_j][1][0]
+                ay = lmk_coords[lmk_j][1][1]
+                az = lmk_coords[lmk_j][1][2]
+                for d in range(self.dim):
+                    ib = b[:,d,t+1]
+                    land_t[lmk_j,d,t+1] = ib[inodes[0]]*(1-ax)*(1-ay)*(1-az) + \
+                                         ib[inodes[1]]*(ax)*(1-ay)*(1-az) + \
+                                         ib[inodes[3]]*(1-ax)*(ay)*(1-az) + \
+                                         ib[inodes[2]]*(ax)*(ay)*(1-az) + \
+                                         ib[inodes[4]]*(1-ax)*(1-ay)*(az) + \
+                                         ib[inodes[5]]*(ax)*(1-ay)*(az) + \
+                                         ib[inodes[7]]*(1-ax)*(ay)*(az) + \
+                                         ib[inodes[6]]*(ax)*(ay)*(az)
         for t in range(T):
             rg.create_vtk_sg()
             rg.add_vtk_point_data(h[...,t], "h")
