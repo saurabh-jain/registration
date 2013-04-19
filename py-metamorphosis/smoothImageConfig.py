@@ -19,6 +19,41 @@ def configure(sim, config_name):
 
 def d72(sim):
     sim.dim = 2
+    sim.sigma = 1.
+    sim.sfactor = 1./numpy.power(sim.sigma, 2)
+    sim.num_points = (72,72)
+    #sim.domain_max = (1., 1.)
+    sim.dx = (1.,1.)
+    sim.num_times = 11
+    sim.time_min = 0.
+    sim.time_max = 1.
+    sim.cg_init_eps = 1e-6
+
+    sim.kvn = 'laplacian'
+    sim.khn = 'laplacian'
+    sim.kvs = 90.
+    sim.khs = 12.
+    sim.kvo = 4
+    sim.kho = 4
+    logging.info("KV params: name=%s, sigma=%f, order=%f" \
+                        % (sim.kvn,sim.kvs,sim.kvo))
+    logging.info("KH params: name=%s, sigma=%f, order=%f" \
+                        % (sim.khn,sim.khs,sim.kho))
+    size = sim.num_points
+    im1 = Image.open(image_dir + "d72_1.png").rotate(-90).resize(size)
+    im2 = Image.open(image_dir + "d72_2.png").rotate(-90).resize(size)
+    ims = [im1, im2]
+    tp = numpy.zeros(size)
+    tr = numpy.zeros(size)
+    for j in range(size[0]):
+        for k in range(size[1]):
+            tp[j,k] = ims[0].getpixel((j,k))
+            tr[j,k] = ims[1].getpixel((j,k))
+    sim.template_in = tp.ravel()
+    sim.target_in = tr.ravel()
+
+def d72_OLD(sim):
+    sim.dim = 2
     sim.sigma = 20.
     sim.sfactor = 1./numpy.power(sim.sigma, 2)
     sim.num_points = (72,72)
@@ -163,7 +198,7 @@ def brains(sim):
 
 def inho(sim):
     sim.dim = 2
-    sim.sigma = 7.
+    sim.sigma = 10.
     sim.sfactor = 1./numpy.power(sim.sigma, 2)
     sim.num_points = (256,124)
     sim.domain_max = None
@@ -176,7 +211,7 @@ def inho(sim):
     sim.kvn = 'laplacian'
     sim.khn = 'laplacian'
     sim.kvs = 7.
-    sim.khs = .4
+    sim.khs = .3
     sim.kvo = 4
     sim.kho = 4
     logging.info("KV params: name=%s, sigma=%f, order=%f" \

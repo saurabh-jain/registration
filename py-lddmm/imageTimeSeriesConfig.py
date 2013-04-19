@@ -3,11 +3,15 @@ import numpy
 import regularGrid
 import diffeomorphisms
 import sys
+import os
 
 log_file_name = "imageTimeSeries.log"
 compute_output_dir = "/cis/home/clr/compute/time_series/"
 lung_image_dir = "/cis/home/clr/cawork/lung/"
 biocard_image_dir = "/cis/home/clr/cawork/biocard/"
+multiproc_pool_size = 16
+multiproc_pool_timeout = 5000
+file_write_iter = 20
 
 def configure(sim, config_name):
     sim.config_name = config_name
@@ -57,6 +61,11 @@ def lung(sim):
         sim.rg.add_vtk_point_data(sim.I[:,t*sim.num_times_disc], "I")
         sim.rg.vtk_write(t, "targets", output_dir=sim.output_dir)
 
+    sim.pool_size = multiproc_pool_size
+    sim.pool_timeout =  multiproc_pool_timeout
+    sim.write_iter = file_write_iter
+    sim.verbose_file_output = False
+
     logging.info("lung data image parameters: ")
     logging.info("dimension: %d" % (sim.dim))
     logging.info("num_points: %s" % (str(sim.rg.num_points)))
@@ -99,6 +108,12 @@ def biocard(sim):
     #sim.I[:,2.*sim.num_times_disc] = sim.sc.data.reshape(sim.rg.num_nodes)
     #sim.sc.loadAnalyze(biocard_image_dir + "regR5_cut.hdr")
     #sim.I[:,3.*sim.num_times_disc] = sim.sc.data.reshape(sim.rg.num_nodes)
+
+    sim.pool_size = multiproc_pool_size
+    sim.pool_timeout =  multiproc_pool_timeout
+    sim.write_iter = file_write_iter
+    sim.verbose_file_output = False
+
     logging.info("Biocard image parameters: ")
     logging.info("dimension: %d" % (sim.dim))
     logging.info("num_points: %s" % (str(sim.rg.num_points)))
@@ -161,6 +176,11 @@ def lung_downsample(sim):
         sim.rg.create_vtk_sg()
         sim.rg.add_vtk_point_data(sim.I[:,t*sim.num_times_disc], "I")
         sim.rg.vtk_write(t, "targets", output_dir=sim.output_dir)
+
+    sim.pool_size = multiproc_pool_size
+    sim.pool_timeout =  multiproc_pool_timeout
+    sim.write_iter = file_write_iter
+    sim.verbose_file_output = False
 
     logging.info("lung data image parameters: ")
     logging.info("dimension: %d" % (sim.dim))

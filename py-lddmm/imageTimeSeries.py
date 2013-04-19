@@ -89,8 +89,6 @@ class ImageTimeSeries(object):
         self.domain_max = None
         self.dx = None
         self.output_dir = output_dir
-        self.write_iter = 15
-        self.verbose_file_output = False
         imageTimeSeriesConfig.configure(self, config_name)
 
         # general configuration
@@ -112,9 +110,7 @@ class ImageTimeSeries(object):
 #                                direction='backward', flags=['measure'], \
 #                                )
 
-        self.pool_size = 16
         self.pool = multiprocessing.Pool(self.pool_size)
-        self.pool_timeout = 5000
 
         test_mu = numpy.zeros_like(self.mu[...,0])
         test_mu[1850,0] = 1.0
