@@ -12,7 +12,7 @@ import vtk.util.numpy_support as v2n
 # Useful functions for multidimensianal arrays
 class gridScalars:
    # initializes either form a previous array (data) or from a file 
-   def __init__(self, data=None, fileName = None, dim = 3, resol = [1., 1., 1.], force_axun=False):
+   def __init__(self, data=None, fileName = None, dim = 3, resol = [1., 1., 1.], force_axun=False, withBug=False):
       if not (data == None):
          self.data = np.copy(data)
          self.resol = np.copy(resol)
@@ -44,7 +44,7 @@ class gridScalars:
          elif (dim == 3):
             (nm, ext) = os.path.splitext(fileName)
             if ext=='.hdr':
-               self.loadAnalyze(fileName, force_axun= force_axun)
+               self.loadAnalyze(fileName, force_axun= force_axun, withBug=withBug)
             elif ext =='.vtk':
                self.readVTK(fileName)
          else:
@@ -86,18 +86,19 @@ class gridScalars:
          self.header[35] = self.data.shape[2]
          self.header[53] = 16
          self.header[57:60] = self.resol
-         self.header[178] = 0
+         self.header[178] = 1
          frmt = 28*'B'+'i'+'h'+2*'B'+8*'h'+12*'B'+4*'h'+16*'f'+2*'i'+168*'B'+8*'i'
          ff.write(struct.pack(frmt, *self.header.tolist()))
       with open(nm+'.img', 'w') as ff:
          print self.data.max()
-         array.array('f', self.data[::-1,::-1,::-1].T.flatten()).tofile(ff)
+         #array.array('f', self.data[::-1,::-1,::-1].T.flatten()).tofile(ff)
+         array.array('f', self.data.T.flatten()).tofile(ff)
          #uu = self.data[::-1,::-1,::-1].flatten()
          #print uu.max()
          #uu.tofile(ff)
 
    # Saves in analyze file
-   def loadAnalyze(self, filename, force_axun=False):
+   def loadAnalyze(self, filename, force_axun=False, withBug=False):
       [nm, ext] = os.path.splitext(filename)
       with open(nm+'.hdr', 'r') as ff:
          frmt = 28*'B'+'i'+'h'+2*'B'+8*'h'+12*'B'+4*'h'+16*'f'+2*'i'+168*'B'+8*'i'
@@ -119,7 +120,9 @@ class gridScalars:
          self.hist_orient = ls[178]
          if force_axun:
                self.hist_orient = 0
-               #print "Resolution: ", int(self.hist_orient)
+         if withBug:
+               self.hist_orient = 0
+         print "Orientation: ", int(self.hist_orient)
 
 
       with open(nm+'.img', 'r') as ff:
@@ -145,14 +148,20 @@ class gridScalars:
 
          #ls = np.array(ls)
          #print ls
+      #print 'size:', sz
       self.data = np.float_(ls2)
       self.data.resize(sz[::-1])
+      #self.data.resize(sz)
+      #print 'size:', self.data.shape
       self.data = self.data.T
+      #self.data = self.data[::-1,::-1,::-1]
+      #print 'size:', self.data.shape
       #print self.resol, ls[57]
       if self.hist_orient == 1:
             # self.resol = [ls[57],ls[58], ls[59]]
-            self.resol = [ls[57],ls[59], ls[58]]
-            self.data = self.data[::-1,::-1,::-1].swapaxes(1,2)
+            self.resol = [ls[58],ls[57], ls[59]]
+            #self.data = self.data.swapaxes(1,2)
+            #self.data = self.data[::-1,::-1,::-1].swapaxes(1,2)
             #print self.resol
             #print self.data.shape
       elif self.hist_orient == 2:
@@ -160,16 +169,17 @@ class gridScalars:
             self.data = self.data[::-1,::-1,::-1].swapaxes(0,1).swapaxes(1,2)
       elif self.hist_orient == 3:
             self.resol = [ls[57],ls[58], ls[59]]
-            self.data  = self.data[::-1,:,::-1]
+            self.data  = self.data[:, ::-1, :]
       elif self.hist_orient == 4:
-            self.resol = [ls[57],ls[59], ls[58]]
-            self.data = self.data[::-1,::-1,:].swapaxes(1,2)
+            self.resol = [ls[58],ls[57], ls[59]]
+            self.data = self.data[:,  ::-1, :].swapaxes(0,1)
       elif self.hist_orient == 5:
             self.resol = [ls[58],ls[59], ls[57]]
-            self.data = self.data[::-1,::-1,:].swapaxes(0,1).swapaxes(1,2)
+            self.data = self.data[:,::-1,:].swapaxes(0,1).swapaxes(1,2)
       else:
             self.resol = [ls[57],ls[58], ls[59]]
-            self.data  = self.data[::-1,::-1,::-1]
+            if withBug:
+               self.data  = self.data[::-1,::-1,::-1]
             #self.saveAnalyze('Data/foo.hdr')
 
    def zeroPad(self, h):

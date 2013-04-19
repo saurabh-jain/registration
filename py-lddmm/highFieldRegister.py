@@ -13,7 +13,7 @@ from surfaceMatching import *
 
 
 def main():
-    parser = argparse.ArgumentParser(description='runs surface matching registration over directories (relative to the template)')
+    parser = argparse.ArgumentParser(description='runs surface matching registration and exports labels from subregions')
     parser.add_argument('target', metavar='target', type = str, help='target')
     parser.add_argument('highfield', metavar='highfield', type = str, help='highfield (global)')
     parser.add_argument('highfield_parts', metavar='highfield_parts', nargs='+', type = str, help='highfield segments (list)')
@@ -51,7 +51,7 @@ def main():
 
     # Find Labels
     nv = hf.vertices.shape[0] 
-    print 'vertices', nv, nvSeg
+    #print 'vertices', nv, nvSeg
     dist = np.zeros([nv,nsub])
     for k in range(nsub):
         dist[:,k] = ((hf.vertices.reshape(nv, 1, 3) - hfSeg[k].vertices.reshape(1, nvSeg[k], 3))**2).sum(axis=2).min(axis=1)
@@ -59,7 +59,7 @@ def main():
     K1 = Kernel(name='gauss', sigma = args.sigmaKernel)
     sm = SurfaceMatchingParam(timeStep=0.1, KparDiff=K1, sigmaDist=args.sigmaDist, sigmaError=args.sigmaError, errorType=args.typeError)
 
-    R0, T0 = rigidRegistration(surfaces = (hf.vertices, targ.vertices),  verb=False, temperature=10., annealing=True)
+    R0, T0 = rigidRegistration(surfaces = (hf.vertices, targ.vertices),  rotWeight=5.0, flipMidPoint=True, verb=False, temperature=10., annealing=True, translationOnly=False)
     hf.vertices = np.dot(hf.vertices, R0.T) + T0
     u = path.split(args.highfield)
     [nm,ext] = path.splitext(u[1])
@@ -73,6 +73,7 @@ def main():
     u = path.split(args.target)
     [nm,ext] = path.splitext(u[1])
     f.fvDef.savebyu(args.dirOut+'/'+nm+'Def.byu')
+    f.fvDef.saveVTK(args.dirOut+'/'+nm+'Def.vtk', scalars=hfLabel, scal_name='Labels')
     nvTarg = targ.vertices.shape[0]
     closest = np.int_(((f.fvDef.vertices.reshape(nv, 1, 3) - targ.vertices.reshape(1, nvTarg, 3))**2).sum(axis=2).argmin(axis=0))
     targLabel = np.zeros(nvTarg) ;

@@ -786,6 +786,7 @@ class Surface:
         u.SetFileName(fileName)
         u.Update()
         v = u.GetOutput()
+        print v
         npoints = int(v.GetNumberOfPoints())
         nfaces = int(v.GetNumberOfPolys())
         V = np.zeros([npoints, 3])
