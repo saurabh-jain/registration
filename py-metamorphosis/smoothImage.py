@@ -662,7 +662,7 @@ class SmoothImageMeta(object):
 
 if __name__ == "__main__":
     # set permanent options
-    output_directory_base = "/cis/home/clr/compute/smoothImage_meta/"
+    output_directory_base = smoothImageConfig.compute_output_dir
     #output_directory_base = "./"
     # set options from command line
     parser = optparse.OptionParser()

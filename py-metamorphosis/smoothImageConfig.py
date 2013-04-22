@@ -19,7 +19,7 @@ def configure(sim, config_name):
 
 def d72(sim):
     sim.dim = 2
-    sim.sigma = 1.
+    sim.sigma = 5.
     sim.sfactor = 1./numpy.power(sim.sigma, 2)
     sim.num_points = (72,72)
     #sim.domain_max = (1., 1.)
@@ -31,8 +31,8 @@ def d72(sim):
 
     sim.kvn = 'laplacian'
     sim.khn = 'laplacian'
-    sim.kvs = 90.
-    sim.khs = 12.
+    sim.kvs = 3.
+    sim.khs = .15
     sim.kvo = 4
     sim.kho = 4
     logging.info("KV params: name=%s, sigma=%f, order=%f" \
@@ -198,7 +198,7 @@ def brains(sim):
 
 def inho(sim):
     sim.dim = 2
-    sim.sigma = 10.
+    sim.sigma = 12.
     sim.sfactor = 1./numpy.power(sim.sigma, 2)
     sim.num_points = (256,124)
     sim.domain_max = None
@@ -210,7 +210,7 @@ def inho(sim):
 
     sim.kvn = 'laplacian'
     sim.khn = 'laplacian'
-    sim.kvs = 7.
+    sim.kvs = 10.
     sim.khs = .3
     sim.kvo = 4
     sim.kho = 4
