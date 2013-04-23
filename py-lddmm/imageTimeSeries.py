@@ -73,7 +73,7 @@ class ImageTimeSeries(object):
         if async:
             res = []
             for t in range(T):
-                res.append(self.pool.apply_async(fftHelper.apply_kernel, \
+                res.append(self.pool.apply_async(fftHelper.applyKernel, \
                         args=(self.mu[:,:,t].copy(), rg.dims, rg.num_nodes,\
                         self.KernelV, rg.element_volumes[0])))
             for t in range(T):
@@ -230,9 +230,8 @@ class ImageTimeSeries(object):
                         self.KernelV, rg.element_volumes[0])))
             for t in range(T):
                 kgr = res[t].get(timeout=self.pool_timeout)
-                prod[ll] += self.dt * numpy.dot(g1[:,0,t], kgr[:,0])
-                prod[ll] += self.dt * numpy.dot(g1[:,1,t], kgr[:,1])
-                prod[ll] += self.dt * numpy.dot(g1[:,2,t], kgr[:,2])
+                for d in range(self.dim):
+                    prod[ll] += self.dt * numpy.dot(g1[:,d,t], kgr[:,d])
         return prod
 
     def endOfIteration(self):
