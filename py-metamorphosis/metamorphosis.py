@@ -19,7 +19,7 @@ class ImageOptimizeCallbacks(object):
         self.n = meta.n.copy()
 
     def solveCallback(self, vec):
-        pass
+        self.meta.objectiveFun()
 
     def kernelMult(self, in_vec, full=True, ic=False):
         rg, N, T = self.meta.getSimData()
@@ -30,7 +30,7 @@ class ImageOptimizeCallbacks(object):
           n_t = in_vec[t*rg.num_nodes:(t+1)*rg.num_nodes].copy()
           n_t_1 = in_vec[(t+1)*rg.num_nodes:(t+2)*rg.num_nodes].copy()
           dtv = rg.nodes + 1.0*dt*v[:,:,t]
-          interp_n_1 = rg.grid_interpolate_dual_2d(n_t_1, dtv).real
+          interp_n_1 = rg.grid_interpolate(n_t_1, dtv).real
           #divv = rg.divergence(self.mm.v[:,:,t])
           if (full or t>0):
             right = interp_n_1 - n_t
@@ -38,8 +38,8 @@ class ImageOptimizeCallbacks(object):
             right = interp_n_1
           if ic:
             right = -2.0*n_t
-          right = rg.integrate_dual(right)
-          right = rg.grid_interpolate(right, dtv).real
+          #right = rg.integrate_dual(right)
+          right = rg.grid_interpolate_dual_2d(right, dtv).real
           vec[(t+1)*rg.num_nodes:(t+2)*rg.num_nodes] += right
           if (full or t<T-2):
             right = -interp_n_1 + n_t
@@ -47,7 +47,7 @@ class ImageOptimizeCallbacks(object):
             right = n_t
           if ic:
             right = -2.0*interp_n_1
-          right = rg.integrate_dual(right)
+          #right = rg.integrate_dual(right)
           vec[t*rg.num_nodes:(t+1)*rg.num_nodes] += right
         return vec
 
@@ -76,8 +76,9 @@ class Metamorphosis(object):
         # initialize the V kernel multiplier
         i = complex(0,1)
         r_sqr_xsi = (numpy.power(i*self.rg.xsi_1,2) + \
-                            numpy.power(i*self.rg.xsi_2,2) + \
-                            numpy.power(i*self.rg.xsi_3,2))
+                            numpy.power(i*self.rg.xsi_2,2))
+        if self.dim == 3:
+            r_sqr_xsi += numpy.power(i*self.rg.xsi_3,2)
         self.KernelV = 1.0 / numpy.power(self.gamma - self.alpha * (r_sqr_xsi), \
                             self.Lpower)
 
@@ -90,12 +91,15 @@ class Metamorphosis(object):
     def optimizeN(self):
         (rg,N,T) = self.getSimData()
         logging.info("Minimize n.")
-        self.input_state = self.n.ravel(order="F")
+        temp = numpy.zeros_like(self.n)
+        temp[:,0] = self.n[:,0].copy()
+        temp[:,T-1] = self.n[:,T-1].copy()
+        self.input_state = temp.ravel(order="F")
         logging.info("Setting up right hand side.")
         ioc = ImageOptimizeCallbacks(self)
         initial_mult = ioc.kernelMult(self.input_state, full=False, ic=True)
         rhs = -1.0 * initial_mult
-        input_state2 = self.n.ravel()[1*rg.num_nodes:(T-1)*rg.num_nodes].copy()
+        input_state2 = self.input_state[1*rg.num_nodes:(T-1)*rg.num_nodes].copy()
         logging.info("Solving system with cg.")
         linop = scipy.sparse.linalg.LinearOperator((len(input_state2), \
                             len(input_state2)), ioc.solveMult, dtype=float)
@@ -117,17 +121,19 @@ class Metamorphosis(object):
             res = []
             for t in range(T):
                 res.append(self.pool.apply_async(fftHelper.applyKernel, \
-                        args=(self.mu[:,:,t].copy(), rg.dims, rg.num_nodes,\
-                        self.KernelV, rg.element_volumes[0])))
+                        args=(self.mu[:,0:self.dim,t].copy(), \
+                        rg.dims, rg.num_nodes,\
+                        self.KernelV, rg.element_volumes[0], True)))
             for t in range(T):
                 self.v[:,0:self.dim,t] = res[t].get( \
                                     timeout=self.pool_timeout).real
         else:
             for t in range(T):
-              self.v[:,0:self.dim,t] = fftHelper.applyKernel(self.mu[:,:,t], \
+              self.v[:,0:self.dim,t] = fftHelper.applyKernel(\
+                              self.mu[:,0:self.dim,t], \
                               rg.dims, \
                               rg.num_nodes, self.KernelV, \
-                              rg.element_volumes[0]).real
+                              rg.element_volumes[0], True).real
         self.v = self.v.real
 
     # **********************************************************************
@@ -183,9 +189,15 @@ class Metamorphosis(object):
             dtv = rg.nodes + self.v[...,t] * self.dt
             interp_grad = rg.grid_interpolate_gradient_2d(self.n[:,t+1], dtv).real
             interp_n_1 = rg.grid_interpolate(self.n[:,t+1], dtv).real
-            diff = numpy.reshape(1./self.dt*(interp_n_1 - self.n[:,t]), \
-                                (rg.num_nodes,1))
-            gE[...,t] = self.mu[...,t] + self.sfactor * diff * interp_grad
+            diff = 1./self.dt*(interp_n_1 - self.n[:,t])
+            for d in range(self.dim):
+                gE[:,d,t] = self.mu[:,d,t] + rg.element_volumes[0] * \
+                                 self.sfactor * diff * interp_grad[:,d]
+            rg.create_vtk_sg()
+            rg.add_vtk_point_data(interp_grad, "interp_grad")
+            rg.add_vtk_point_data(gE[...,t], "gE")
+            rg.add_vtk_point_data(diff, "diff")
+            rg.vtk_write(t, "grad_test", output_dir=self.output_dir)
         return coeff * gE
 
     def dotProduct(self, g1, g2):
@@ -197,8 +209,8 @@ class Metamorphosis(object):
             res = []
             for t in range(T):
                 res.append(self.pool.apply_async(fftHelper.applyKernel, \
-                        args=(gr[:,:,t].copy(), rg.dims, rg.num_nodes,\
-                        self.KernelV, vol)))
+                        args=(gr[:,0:self.dim,t].copy(), rg.dims, rg.num_nodes,\
+                        self.KernelV, vol, True)))
             for t in range(T):
                 kgr = res[t].get(timeout=self.pool_timeout).real
                 for d in range(self.dim):
@@ -215,17 +227,19 @@ class Metamorphosis(object):
 
     def computeMatching(self):
         (rg,N,T) = self.getSimData()
-        for iter in range(100):
+        for iter in range(50):
+            print self.objectiveFun()
             self.optimizeN()
-            conjugateGradient.cg(self, True, maxIter = 25, TestGradient=False,\
-                               epsInit=self.cg_init_eps)
+            print self.objectiveFun()
+            conjugateGradient.cg(self, True, \
+                        maxIter = self.nonlinear_cg_max_iter, \
+                        TestGradient=False, epsInit=self.cg_init_eps)
             for t in range(T):
                 rg.create_vtk_sg()
                 rg.add_vtk_point_data(self.n[:,t], "n")
+                rg.add_vtk_point_data(self.mu[...,t], "mu")
                 rg.add_vtk_point_data(self.v[...,t], "v")
                 rg.vtk_write(t, "test", output_dir=self.output_dir)
-            import pdb
-            pdb.set_trace()
         return self
 
 if __name__ == "__main__":

@@ -23,7 +23,7 @@ def configure(sim, config_name):
 
 def eight(sim):
     sim.dim = 2
-    sim.sigma = 1.
+    sim.sigma = .005
     sim.sfactor = 1./numpy.power(sim.sigma, 2)
     sim.num_points = (40,40)
     #sim.domain_max = (1., 1.)
@@ -40,11 +40,12 @@ def eight(sim):
                             sim.num_times)
     sim.dt = (sim.time_max - sim.time_min) / (sim.num_times - 1)
 
-    sim.cg_max_iter = 100
+    sim.cg_max_iter = 25
+    sim.nonlinear_cg_max_iter = 25
     sim.pool_size = multiproc_pool_size
     sim.pool_timeout =  multiproc_pool_timeout
 
-    sim.alpha = 5.
+    sim.alpha = 8.
     sim.gamma = 1.
     sim.Lpower = 2.
 

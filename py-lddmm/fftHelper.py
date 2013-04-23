@@ -3,7 +3,7 @@
 import numpy
 #import fftw3
 
-def applyKernel(right, dims, num_nodes, Kv, el_vol):
+def applyKernel(right, dims, num_nodes, Kv, el_vol, scale=True):
     """
     Apply the V kernel to momentum, with numpy fft, used for multi-threaded
     processing.
@@ -14,12 +14,14 @@ def applyKernel(right, dims, num_nodes, Kv, el_vol):
       fr = numpy.reshape(rr, dims)
       fr = numpy.fft.fftshift(fr)
       fr = numpy.fft.fftn(fr)
-      Kv = numpy.fft.fftshift(Kv)
-      fr = fr * Kv
-      out = numpy.fft.ifftn(fr) * 1./el_vol
+      Kv_shift = numpy.fft.fftshift(Kv)
+      fr = fr * Kv_shift
+      out = numpy.fft.ifftn(fr)
+      if scale:
+          out *= 1./el_vol
       out = numpy.fft.fftshift(out)
       krho[:,j] = numpy.reshape(out.real, (num_nodes))
-    return krho
+    return krho.real
 
 # initialize fftw information
 #        self.fft_thread_count = 8
