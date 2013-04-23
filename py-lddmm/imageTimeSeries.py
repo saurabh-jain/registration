@@ -17,7 +17,8 @@ def loadData_for_async(fbase, t):
     r.update()
     v = numpy.array(r.output.point_data.get_array("v")).astype(float)
     I = numpy.array(r.output.point_data.get_array("I")).astype(float)
-    I_interp = numpy.array(r.output.point_data.get_array("I_interp")).astype(float)
+    I_interp = numpy.array(r.output.point_data.get_array("I_interp") \
+                        ).astype(float)
     p = numpy.array(r.output.point_data.get_array("p")).astype(float)
     mu = numpy.array(r.output.point_data.get_array("mu")).astype(float)
     mu_state = numpy.array(r.output.point_data.get_array("mu")).astype(float)
@@ -365,3 +366,4 @@ if __name__ == "__main__":
     its = ImageTimeSeries(output_dir, options.config_name)
     #its.reset()
     its.computeMatching()
+    sim.writeData("final")

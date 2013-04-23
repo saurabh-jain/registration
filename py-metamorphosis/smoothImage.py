@@ -96,7 +96,7 @@ class SmoothImageMeta(object):
         self.verbose_file_output = False
         self.output_dir = output_dir
         self.spline_interp = False
-        self.write_iter = 5
+
         smoothImageConfig.configure(self, config_name)
 
         self.rg = regularGrid.RegularGrid(self.dim, self.num_points, \
@@ -422,7 +422,7 @@ class SmoothImageMeta(object):
             ge = ealpha[:,0]
         return ge, ex
 
-    def adjointSystem_old(self, dx, dm, dJ):
+    def adjointSystem_numpy(self, dx, dm, dJ):
         rg, N, T = self.getSimData()
         ex = numpy.zeros((rg.num_nodes, 3, T))
         ez = numpy.zeros((rg.num_nodes, 3, T))

@@ -651,7 +651,6 @@ class RegularGrid(object):
         f_interp += self.spread(F*(ax)*(ay), pindex_xy)
         return f_interp
 
-
     def inner_prod(self, f, g):
         f_c = .25 * (f[self.elements[:,0]] + f[self.elements[:,1]] + f[self.elements[:,2]] + f[self.elements[:,3]])
         g_c = .25 * (g[self.elements[:,0]] + g[self.elements[:,1]] + g[self.elements[:,2]] + g[self.elements[:,3]])

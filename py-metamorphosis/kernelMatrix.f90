@@ -43,7 +43,6 @@ u, K, K_diff, K_diff2)
   end do
   end do
   !$omp end parallel do
-
 end subroutine kernelMatrixLaplacianPrecompute
 
 subroutine shoot(dt,sfactor,kvs,kvo,khs,kho,alpha,x0,m0,z0,&
@@ -308,7 +307,6 @@ subroutine applyK(x, y, beta, sig, ord, num_nodes, f)
   f(k) = df
   end do
   !$omp end parallel do
-
 end subroutine applyK
 
 subroutine applyK_and_Diff(x, y, beta, sig, ord, num_nodes, f, f2)
@@ -360,5 +358,4 @@ subroutine applyK_and_Diff(x, y, beta, sig, ord, num_nodes, f, f2)
   f2(k,:) = f2(k,:) + df2
   end do
   !$omp end parallel do
-
 end subroutine applyK_and_Diff
