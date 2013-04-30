@@ -210,10 +210,10 @@ class Surface:
         polydata = self.toPolyData()
         # polydata.SetPoints(points)
         # polydata.SetPolys(polys)
-        dc = vtkDecimatePro()
+        dc = vtkQuadricDecimation()
         red = 1 - min(np.float(target)/polydata.GetNumberOfPoints(), 1)
         dc.SetTargetReduction(red)
-        dc.PreserveTopologyOn()
+        #dc.PreserveTopologyOn()
         #dc.SetSplitting(0)
         dc.SetInput(polydata)
         #print dc
