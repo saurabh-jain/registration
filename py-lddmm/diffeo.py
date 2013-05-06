@@ -12,13 +12,15 @@ import vtk.util.numpy_support as v2n
 # Useful functions for multidimensianal arrays
 class gridScalars:
    # initializes either form a previous array (data) or from a file 
-   def __init__(self, data=None, fileName = None, dim = 3, resol = [1., 1., 1.], force_axun=False, withBug=False):
+   def __init__(self, data=None, fileName = None, dim = 3, resol = [1., 1., 1.], origin=[0.,0.,0.], force_axun=False, withBug=False):
       if not (data == None):
          self.data = np.copy(data)
          self.resol = np.copy(resol)
+         self.origin = np.copy(origin)
       elif not (fileName==None):
          if (dim == 1):
             self.resol = 1.
+            self.origin = 0.
             with open(filename, 'r') as ff:
                ln0 = ff.readline()
                while (len(ln0) == 0) | (ln0=='\n'):
@@ -34,6 +36,7 @@ class gridScalars:
                      j += 1
          elif (dim==2):
             self.resol  = [1., 1.]
+            self.origin = [0., 0.]
             # u = vtkImageReader2()
             # u.setFileName(fileName)
             # u.Update()
@@ -59,6 +62,7 @@ class gridScalars:
       v = u.GetOutput()
       dim = np.zeros(3)
       dim = v.GetDimensions()
+      self.origin = v.GetOrigin() ;
       self.resol = v.GetSpacing()
       self.data = np.ndarray(shape=dim, order='F', buffer = v.GetPointData().GetScalars())
 
@@ -67,7 +71,7 @@ class gridScalars:
       with open(filename, 'w') as ff:
          ff.write('# vtk DataFile Version 2.0\n'+title+'\nBINARY\nDATASET STRUCTURED_POINTS\nDIMENSIONS {0: d} {1: d} {2: d}\n'.format(self.data.shape[0], self.data.shape[1], self.data.shape[2]))
          nbVox = np.array(self.data.shape).prod()
-         ff.write('ORIGIN 0 0 0\nSPACING {0: f} {1: f} {2: f}\nPOINT_DATA {3: d}\n'.format(self.resol[0], self.resol[1], self.resol[2], nbVox))
+         ff.write('ORIGIN {0: f} {1: f} {2: f}\nSPACING {3: f} {4: f} {5: f}\nPOINT_DATA {6: d}\n'.format(self.origin[0], self.origin[1], self.origin[2], self.resol[0], self.resol[1], self.resol[2], nbVox))
          ff.write('SCALARS '+scalarName+' double 1\nLOOKUP_TABLE default\n')
          if sys.byteorder[0] == 'l':
             tmp = self.data.byteswap()

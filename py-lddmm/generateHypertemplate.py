@@ -14,7 +14,8 @@ def main():
     parser.add_argument('fileout', metavar='fileout', type = str, help='output file') 
     parser.add_argument('--pattern', metavar = 'pattern', type = str, dest='pattern', default='*.byu', help='Regular expression for files to process (default: *.byu)')
     parser.add_argument('--targetSize', metavar = 'targetSize', type = int, dest = 'targetSize', default = 1000, help='targeted number of vertices')
-    parser.add_argument('--imageDisc', metavar = 'imageDisc', type = float, dest = 'disc', default = 100, help='discretization step for triangulation')
+    parser.add_argument('--imageDisc', metavar = 'imageDisc', type = int, dest = 'disc', default = 100, help='discretization step for triangulation')
+    parser.add_argument('--smooth', metavar = 'smooth', type = float, dest = 'smooth', default = 0.1, help='smoothing parameter before decimation')
 
     args = parser.parse_args()
 
@@ -29,7 +30,7 @@ def main():
         k+=1
 
     mean = z.sum() / z.shape[0]
-    print mean
+    #print mean
     k0 = np.argmin(np.fabs(z-mean))
     fv = surfaces.Surface(filename = files[k0])
     minx = fv.vertices[:,0].min() 
@@ -39,24 +40,30 @@ def main():
     minz = fv.vertices[:,2].min() 
     maxz = fv.vertices[:,2].max()
 
-    dx = (maxx-minx)/ args.disc ;
-    dy = (maxy-miny)/ args.disc ;
-    dz = (maxz-minz)/ args.disc ;
+    delta = np.array([maxx-minx, maxy-miny, maxz-minz]).max()
+
+    dx = delta/ args.disc
+    #dy = (maxy-miny)/ args.disc
+    #dz = (maxz-minz)/ args.disc
+    resol = [dx, dx, dx] 
+    origin = [minx-10*dx, miny-10*dx, minz-10*dx] 
 
     g = fv.toPolyData() ;
-    h = vtkSelectEnclosedPoints() ;
-    #h.SetSurface(g) ;
-    h.Initialize(g) ;
+    h = vtkImplicitPolyDataDistance()
+    h.SetInput(g)
 
-    grd = np.mgrid[(minx-10*dx):(maxx+10*dx):dx, miny-10*dy:maxy+10*dy:dy, minz-10*dz:maxz+10*dz:dz]
+    grd = np.mgrid[(minx-10*dx):(maxx+10*dx):dx, miny-10*dx:maxy+10*dx:dx, minz-10*dx:maxz+10*dx:dx]
     img = np.zeros([grd.shape[1], grd.shape[2], grd.shape[3]])
     for k1 in range(img.shape[0]):
         for k2 in range(img.shape[1]):
             for k3 in range(img.shape[2]):
-                img[k1,k2,k3] = h.IsInsideSurface(grd[:,k1,k2,k3]) ;
+                img[k1,k2,k3] = h.EvaluateFunction(grd[:,k1,k2,k3]) ;
 
-    fv.Isosurface(img, (img.max() + img.min())/2, target = args.targetSize, smooth=1) ;
-    fv.vertices = (np.array([minx, miny, minz]) - 10*np.array([dx, dy, dz])) + np.array([dx, dy, dz]) * fv.vertices ;
+                #[u,v] = path.splitext(args.fileout) ;
+    #diffeo.gridScalars(data=img,resol=resol,origin=origin).saveVTK(u+'.vtk')
+
+    fv.Isosurface(img, 0., target = args.targetSize, smooth=args.smooth) ;
+    fv.vertices = np.array([minx, miny, minz]) - 10*dx + dx * fv.vertices ;
 
     fv.savebyu(args.fileout) 
 

@@ -266,16 +266,20 @@ class Surface:
     # Computes isosurfaces using vtk               
     def Isosurface(self, data, value=0.5, target=1000.0, scales = [1., 1., 1.], smooth = -1, fill_holes = 1.):
         #data = self.LocalSignedDistance(data0, value)
-        img = vtkImageData()
-        img.SetDimensions(data.shape)
-        img.SetNumberOfScalarComponents(1)
-        img.SetOrigin(0,0,0)
-        v = vtkDoubleArray()
-        v.SetNumberOfValues(data.size)
-        v.SetNumberOfComponents(1)
-        for ii,tmp in enumerate(np.ravel(data, order='F')):
-            v.SetValue(ii,tmp)
-        img.GetPointData().SetScalars(v)
+        if isinstance(data, vtkImageData):
+            img = data
+        else:
+            img = vtkImageData()
+            img.SetDimensions(data.shape)
+            img.SetNumberOfScalarComponents(1)
+            img.SetOrigin(0,0,0)
+            v = vtkDoubleArray()
+            v.SetNumberOfValues(data.size)
+            v.SetNumberOfComponents(1)
+            for ii,tmp in enumerate(np.ravel(data, order='F')):
+                v.SetValue(ii,tmp)
+                img.GetPointData().SetScalars(v)
+                
         cf = vtkContourFilter()
         cf.SetInput(img)
         cf.SetValue(0,value)
