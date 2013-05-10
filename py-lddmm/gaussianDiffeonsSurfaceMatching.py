@@ -14,7 +14,7 @@ from affineBasis import *
 #      timeStep: time discretization
 #      KparDiff: object kernel: if not specified, use typeKernel with width sigmaKernel
 #      KparDist: kernel in current/measure space: if not specified, use gauss kernel with width sigmaDist
-#      sigmaError: normlization for error term
+#      sigmaError: normalization for error term
 #      errorType: 'measure' or 'current'
 #      typeKernel: 'gauss' or 'laplacian'
 class SurfaceMatchingParam(surfaceMatching.SurfaceMatchingParam):
@@ -45,8 +45,7 @@ class Direction:
 #        affine: 'affine', 'similitude', 'euclidean', 'translation' or 'none'
 #        maxIter: max iterations in conjugate gradient
 class SurfaceMatching(surfaceMatching.SurfaceMatching):
-
-    def __init__(self, Template=None, Target=None, Diffeons=None, DiffeonRatio=None, zeroVar=False, fileTempl=None,
+    def __init__(self, Template=None, Target=None, Diffeons=None, EpsilonNet=None, DiffeonEpsForNet=None, DiffeonSegmentationRatio=None, zeroVar=False, fileTempl=None,
                  fileTarg=None, param=None, maxIter=1000, regWeight = 1.0, affineWeight = 1.0, verb=True,
                  rotWeight = None, scaleWeight = None, transWeight = None, testGradient=False, saveFile = 'evolution', affine = 'none', outputDir = '.'):
         if Template==None:
@@ -65,8 +64,6 @@ class SurfaceMatching(surfaceMatching.SurfaceMatching):
                 self.fv1 = surfaces.Surface(filename=fileTarg)
         else:
             self.fv1 = surfaces.Surface(surf=Target)
-
-
 
         self.npt = self.fv0.vertices.shape[0]
         self.dim = self.fv0.vertices.shape[1]
@@ -100,13 +97,19 @@ class SurfaceMatching(surfaceMatching.SurfaceMatching):
             self.param = param
         self.x0 = self.fv0.vertices
         if Diffeons==None:
-            if DiffeonRatio==None:
-                self.c0 = np.copy(self.x0) ;
-                self.S0 = np.zeros([self.x0.shape[0], self.x0.shape[1], self.x0.shape[1]])
-                self.idx = None
+            if EpsilonNet==None:
+                if DiffeonEpsForNet==None:
+                    if DiffeonSegmentationRatio==None:
+                        self.c0 = np.copy(self.x0) ;
+                        self.S0 = np.zeros([self.x0.shape[0], self.x0.shape[1], self.x0.shape[1]])
+                        self.idx = None
+                    else:
+                        (self.c0, self.S0, self.idx) = gd.generateDiffeonsFromSegmentation(self.fv0, DiffeonSegmentationRatio)
+                        #self.S0 *= self.param.sigmaKernel**2;
+                else:
+                    (self.c0, self.S0, self.idx) = gd.generateDiffeonsFromNet(self.fv0, DiffeonEpsForNet)
             else:
-                (self.c0, self.S0, self.idx) = gd.generateDiffeons(self.fv0, DiffeonRatio)
-                #self.S0 *= self.param.sigmaKernel**2;
+                (self.c0, self.S0, self.idx) = gd.generateDiffeons(self.fv0, EpsilonNet[0], EpsilonNet[1])
         else:
             (self.c0, self.S0, self.idx) = Diffeons
         if zeroVar:
@@ -306,6 +309,50 @@ class SurfaceMatching(surfaceMatching.SurfaceMatching):
             else:
                 self.fvDef.saveVTK(self.outputDir +'/'+ self.saveFile+str(kk)+'.vtk', scalars = self.idx, scal_name='Labels')
             gd.saveDiffeons(self.outputDir +'/'+ self.saveFile+'Diffeons'+str(kk)+'.vtk', self.ct[kk,:,:], self.St[kk,:,:,:])
+
+    def restart(self, EpsilonNet=None, DiffeonEpsForNet=None, DiffeonSegmentationRatio=None):
+        if EpsilonNet==None:
+            if DiffeonEpsForNet==None:
+                if DiffeonSegmentationRatio==None:
+                    c0 = np.copy(self.x0) ;
+                    S0 = np.zeros([self.x0.shape[0], self.x0.shape[1], self.x0.shape[1]])
+                    #net = range(c0.shape[0])
+                    idx = range(c0.shape[0])
+                else:
+                    (c0, S0, idx) = gd.generateDiffeonsFromSegmentation(self.fv0, DiffeonSegmentationRatio)
+                    #self.S0 *= self.param.sigmaKernel**2;
+            else:
+                (c0, S0, idx) = gd.generateDiffeonsFromNet(self.fv0, DiffeonEpsForNet)
+        else:
+            net = EspilonNet[2] 
+            (c0, S0, idx) = gd.generateDiffeons(self.fv0, EpsilonNet[0], EpsilonNet[1])
+
+        at = np.zeros([self.Tsize, c0.shape[0], self.x0.shape[1]])
+        fvDef = surfaces.Surface(surf=self.fvDef)
+        for t in range(self.Tsize):
+            fvDef.updateVertices(np.squeeze(self.xt[t, :, :]))
+            (AV, AF) = fvDef.computeVertexArea()
+            weights = np.zeros([c0.shape[0], self.c0.shape[0]])
+            diffArea = np.zeros(self.c0.shape[0])
+            diffArea2 = np.zeros(c0.shape[0])
+            for k in range(self.npt):
+                diffArea[self.idx[k]] += AV[k] 
+                diffArea2[idx[k]] += AV[k]
+                weights[idx[k], self.idx[k]] += AV[k]
+            weights /= diffArea.reshape([1, self.c0.shape[0]])
+            at[t] = np.dot(weights, self.at[t, :, :])
+        self.c0 = c0
+        self.idx = idx
+        self.S0 = S0
+        self.at = at
+        self.ndf = self.c0.shape[0]
+        self.ct = np.tile(self.c0, [self.Tsize+1, 1, 1])
+        self.St = np.tile(self.S0, [self.Tsize+1, 1, 1, 1])
+        self.obj = None
+        self.objTry = None
+        self.gradCoeff = self.ndf
+        self.optimizeMatching()
+
 
     def optimizeMatching(self):
         grd = self.getGradient(self.gradCoeff)

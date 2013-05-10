@@ -81,3 +81,38 @@ def  savelmk(x, filename):
             str = str + '\n'
             fn.write(str)
         fn.write('1 1 \n')
+
+
+
+def epsilonNet(x, epsilon):
+    #print 'in epsilon net'
+    n = x.shape[0]
+    dim = x.shape[1]
+    inNet = np.zeros(n, dtype=int)
+    inNet[0]=1
+    net = np.nonzero(inNet)[0]
+    survivors = np.ones(n, dtype=np.int)
+    survivors[0] = 0 ;
+    dist2 = ((x.reshape([n, 1, dim]) - x.reshape([1,n,dim]))**2).sum(axis=2)
+    eps2 = epsilon**2
+
+    i1 = np.nonzero(dist2[net, :] < eps2)
+    survivors[i1[1]] = 0
+    i2 = np.nonzero(survivors)[0]
+    while len(i2) > 0:
+        closest = np.unravel_index(np.argmin(dist2[net.reshape([len(net),1]), i2.reshape([1, len(i2)])].ravel()), [len(net), len(i2)])
+        inNet[i2[closest[1]]] = 1 
+        net = np.nonzero(inNet)[0]
+        i1 = np.nonzero(dist2[net, :] < eps2)
+        survivors[i1[1]] = 0
+        i2 = np.nonzero(survivors)[0]
+        #print len(net), len(i2)
+    idx = - np.ones(n, dtype=np.int)
+    for p in range(n):
+        closest = np.unravel_index(np.argmin(dist2[net, p].ravel()), [len(net), 1])
+        #print 'p=', p, closest, len(net)
+        idx[p] = closest[0]
+        
+        #print idx
+    return net, idx
+        

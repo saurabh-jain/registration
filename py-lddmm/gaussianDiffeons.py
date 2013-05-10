@@ -1,30 +1,49 @@
 import numpy as np
 import numpy.linalg as LA
+import scipy.linalg as spLA
 import kernelFunctions as kfun
+from pointSets import epsilonNet
 
-def generateDiffeons(fv, rate):
+
+def generateDiffeonsFromSegmentation(fv, rate):
     nc = int(np.floor(fv.vertices.shape[0] * rate))
     (idx, c) = fv.laplacianSegmentation(nc)
+    for k in range(c.shape[0]):
+        dst = ((c[k, :] - fv.vertices)**2).sum(axis=1)
+        I = np.argmin(dst)
+        c[k, :] = fv.vertices[I]
+    return generateDiffeons(fv, c, idx)
+
+def generateDiffeonsFromNet(fv, eps):
+    (L, AA) =  fv.laplacianMatrix()
+    (D, y) = spLA.eigh(L, AA, eigvals= (L.shape[0]-10, L.shape[0]-1))
+    (net, idx) = epsilonNet(y, eps)
+    c = fv.vertices[net, :]
+    #print c
+    return generateDiffeons(fv, c, idx)
+
+def generateDiffeons(fv, c, idx):
     a, foo = fv.computeVertexArea()
     #print idx
-    #print c.shape
     nc = idx.max()
-    S = np.zeros([nc, 3, 3])
-    C = np.zeros([nc, 3])
+    print 'Computed', nc+1, 'diffeons'
+    S = np.zeros([nc+1, 3, 3])
+    #C = np.zeros([nc, 3])
     for k in range(nc):
         I = np.flatnonzero(idx==k)
 	#print I
         nI = len(I)
         aI = a[I]
         ak = aI.sum()
-	C[k, :] = (fv.vertices[I, :]*a[I]).sum(axis=0)/ak ; 
-        y = (fv.vertices[I, :] - C[k, :])
+	#C[k, :] = (fv.vertices[I, :]*a[I]).sum(axis=0)/ak ; 
+        y = (fv.vertices[I, :] - c[k, :])
         S[k, :, :] = (y.reshape([nI, 3, 1]) * aI.reshape([nI, 1, 1]) * y.reshape([nI, 1, 3])).sum(axis=0)/ak
         [D,V] = LA.eig(S[k, :, :])
         D = np.sort(D, axis=None)
         S[k, :, :] = S[k, :, :] * np.sqrt(ak/(np.pi * (D[1]*D[2])))
         #print np.pi * (D[1]*D[2]), ak
-    return C, S, idx
+    return c, S, idx
+
         
 
 # Saves in .vtk format
