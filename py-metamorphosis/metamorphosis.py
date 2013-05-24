@@ -19,6 +19,10 @@ class ImageOptimizeCallbacks(object):
         self.n = meta.n.copy()
 
     def solveCallback(self, vec):
+        rg, N, T = self.meta.getSimData()
+        self.meta.n = self.meta.input_state.copy()
+        self.meta.n[1*rg.num_nodes:(T-1)*rg.num_nodes] = vec.copy()
+        self.meta.n = numpy.reshape(self.meta.n, (self.meta.rg.num_nodes, self.meta.num_times), order="F")
         self.meta.objectiveFun()
 
     def kernelMult(self, in_vec, full=True, ic=False):
@@ -136,6 +140,15 @@ class Metamorphosis(object):
                               rg.element_volumes[0], True).real
         self.v = self.v.real
 
+    def writeData(self, name):
+        rg, N, T = self.getSimData()
+        for t in range(T):
+            rg.create_vtk_sg()
+            rg.add_vtk_point_data(self.v[:,:,t], "v")
+            rg.add_vtk_point_data(self.n[:,t], "n")
+            rg.add_vtk_point_data(self.mu[:,:,t], "mu")
+            rg.vtk_write(t, name, output_dir=self.output_dir)
+
     # **********************************************************************
     # Implementation of Callback functions for non-linear conjugate gradient
     # **********************************************************************
@@ -154,10 +167,10 @@ class Metamorphosis(object):
             obj += self.dt * kn
             dtv = rg.nodes + self.dt * self.v[...,t]
             interp_n_1 = rg.grid_interpolate(self.n[:,t+1], dtv).real
-            term2 += numpy.power(1./self.dt*(interp_n_1 - self.n[:,t]), 2).sum()
-            term2 *= self.dt
+            term2 += self.dt * \
+                    numpy.power(1./self.dt*(interp_n_1 - self.n[:,t]), 2).sum()
         term2 *= rg.element_volumes[0]
-        total_fun = obj + 1./numpy.power(self.sigma,2) * term2
+        total_fun = obj + self.sfactor * term2
         logging.info("term1: %e, term2: %e, tot: %e" % (obj, term2, total_fun))
         return total_fun
 
@@ -193,11 +206,6 @@ class Metamorphosis(object):
             for d in range(self.dim):
                 gE[:,d,t] = self.mu[:,d,t] + rg.element_volumes[0] * \
                                  self.sfactor * diff * interp_grad[:,d]
-            rg.create_vtk_sg()
-            rg.add_vtk_point_data(interp_grad, "interp_grad")
-            rg.add_vtk_point_data(gE[...,t], "gE")
-            rg.add_vtk_point_data(diff, "diff")
-            rg.vtk_write(t, "grad_test", output_dir=self.output_dir)
         return coeff * gE
 
     def dotProduct(self, g1, g2):
@@ -219,27 +227,21 @@ class Metamorphosis(object):
 
     def endOfIteration(self):
         self.optimize_iteration += 1
-#        #if (self.optimize_iteration % self.write_iter == 0):
-#        #    self.writeData("iter%d" % (self.optimize_iteration))
+        #if (self.optimize_iteration % self.write_iter == 0):
+        #    self.writeData("iter%d" % (self.optimize_iteration))
     # ***********************************************************************
     # end of non-linear cg callbacks
     # ***********************************************************************
 
     def computeMatching(self):
         (rg,N,T) = self.getSimData()
-        for iter in range(50):
-            print self.objectiveFun()
+        for it in range(500):
             self.optimizeN()
-            print self.objectiveFun()
             conjugateGradient.cg(self, True, \
                         maxIter = self.nonlinear_cg_max_iter, \
-                        TestGradient=False, epsInit=self.cg_init_eps)
-            for t in range(T):
-                rg.create_vtk_sg()
-                rg.add_vtk_point_data(self.n[:,t], "n")
-                rg.add_vtk_point_data(self.mu[...,t], "mu")
-                rg.add_vtk_point_data(self.v[...,t], "v")
-                rg.vtk_write(t, "test", output_dir=self.output_dir)
+                        TestGradient=True, epsInit=self.cg_init_eps)
+            if (it % self.write_iter == 0):
+                self.writeData("iter%d" % (it))
         return self
 
 if __name__ == "__main__":

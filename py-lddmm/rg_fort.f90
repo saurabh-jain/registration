@@ -438,7 +438,8 @@ indexx, indexy, indexz, dx1, dx2, dx3, dt, num_nodes, dim1, dim2, dim3, f_out, f
   
   !$omp parallel do private(k,j,i,stepsx,stepsy,stepsz,px,py,pz,ax,ay, &
   !$omp& az,pxindex,pyindex,pzindex,pxindex_x, f2_out_index, &
-  !$omp& pyindex_y,pzindex_z,pindex,pindex_x,pindex_y,pindex_xy,pindex_z,pindex_z_x,pindex_z_y,pindex_z_xy) shared(f2_out,f) reduction(+:f_out)
+  !$omp& pyindex_y,pzindex_z,pindex,pindex_x,pindex_y,pindex_xy,pindex_z, &
+  !$omp& pindex_z_x,pindex_z_y,pindex_z_xy) shared(f2_out,f) reduction(+:f_out)
   do k = 1, dim3, 1
   do j = 1, dim2, 1
   do i = 1, dim1, 1

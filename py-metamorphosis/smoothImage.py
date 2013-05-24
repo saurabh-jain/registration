@@ -42,20 +42,24 @@ class SplineInterp(object):
     """
     Implements the RKHS spline interpolation problem using cg
     """
-    def __init__(self, rg, K, h, verbose=False):
+    def __init__(self, rg, K, khs, kho, verbose=False):
         self.rg = rg
-        self.K = K
-        self.h = h
         self.cg_iter = 0
-        self.verbose_loggging = verbose
-        mat = self.K.precompute(self.rg.nodes, diff=False)
-        self.nm = numpy.sqrt(numpy.power(mat,2).sum())
+        self.khs = khs
+        self.kho = kho
+        self.verbose_logging = verbose
+        #mat = self.K.precompute(self.rg.nodes, diff=False)
+        #self.nm = numpy.sqrt(numpy.power(mat,2).sum())
         #self.nm = 30.
         #logging.info("eigenvalue: %f" % self.nm)
 
     def solve_mult(self, a):
-        ka = self.K.applyK(self.rg.nodes, a)
-        ka += (1./self.nm) * a
+        rg = self.rg
+        ka = kernelMatrix_fort.applyk( \
+                    rg.nodes, rg.nodes, a,
+                    self.khs, self.kho, self.rg.num_nodes)
+        #ka = self.K.applyK(self.rg.nodes, a)
+        #ka += (1./self.nm) * a
         return ka
 
     def solve_callback(self, sol_k):
@@ -89,13 +93,15 @@ class SmoothImageMeta(object):
     This class implements the non-linear conjugate gradient interface
     to match two images using RKHS metamorphosis via the shooting method.
     """
-    def __init__(self, output_dir, config_name):
+    def __init__(self, output_dir, config_name, letter_match=None):
         self.num_points = None
         self.domain_max = None
         self.dx = None
         self.verbose_file_output = False
         self.output_dir = output_dir
         self.spline_interp = False
+        # used only for letter examples
+        self.letter_match = letter_match
 
         smoothImageConfig.configure(self, config_name)
 
@@ -137,10 +143,9 @@ class SmoothImageMeta(object):
             self.dual_template = si.minimize()
             si = SplineInterp(rg, self.KH, self.target_in)
             self.dual_target = si.minimize()
-
-
-        self.dual_template = self.template_in.copy()
-        self.dual_target = self.target_in.copy()
+        else:
+            self.dual_template = self.template_in.copy()
+            self.dual_target = self.target_in.copy()
 
         (templ, dtempl) = kernelMatrix_fort.applyk_and_diff( \
                     rg.nodes, rg.nodes, self.dual_template,
@@ -153,7 +158,7 @@ class SmoothImageMeta(object):
 
         if True:
             temp = numpy.zeros(rg.num_nodes)
-            temp[250] = 1.
+            temp[50] = 1.
             kvt = kernelMatrix_fort.applyk( \
                         rg.nodes, rg.nodes, temp,
                         self.kvs, self.kvo, self.rg.num_nodes)
@@ -670,12 +675,33 @@ if __name__ == "__main__":
     parser.add_option("-c", "--config_name", dest="config_name")
     (options, args) = parser.parse_args()
     output_dir = output_directory_base + options.output_dir
-    # remove any old results in the output directory
-    if os.access(output_dir, os.F_OK):
-        shutil.rmtree(output_dir)
-    os.mkdir(output_dir)
-    loggingUtils.setup_default_logging(output_dir, smoothImageConfig)
-    logging.info(options)
-    sim = SmoothImageMeta(output_dir, options.config_name)
-    sim.computeMatching()
-    sim.writeData("final")
+
+    letter_match = None
+    if options.config_name == "letter":
+        digitId = 11
+        templateId = 18
+        output_dir_old = output_dir
+        for targetId in range(39):
+            letter_match = (digitId,templateId,targetId)
+            output_dir = "%s_%d_%d_%d" % (output_dir_old, letter_match[0],\
+                            letter_match[1], letter_match[2])
+                # remove any old results in the output directory
+            if os.access(output_dir, os.F_OK):
+                shutil.rmtree(output_dir)
+            os.mkdir(output_dir)
+            if targetId == 0:
+                loggingUtils.setup_default_logging(output_dir, smoothImageConfig)
+            logging.info(options)
+            sim = SmoothImageMeta(output_dir, options.config_name, letter_match)
+            sim.computeMatching()
+            sim.writeData("final")
+    else:
+        # remove any old results in the output directory
+        if os.access(output_dir, os.F_OK):
+            shutil.rmtree(output_dir)
+        os.mkdir(output_dir)
+        loggingUtils.setup_default_logging(output_dir, smoothImageConfig)
+        logging.info(options)
+        sim = SmoothImageMeta(output_dir, options.config_name, None)
+        sim.computeMatching()
+        sim.writeData("final")

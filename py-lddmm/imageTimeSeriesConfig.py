@@ -5,10 +5,11 @@ import diffeomorphisms
 import sys
 import os
 
+compute_path = os.environ["PYLDDMM_COMPUTE_PATH"]
 log_file_name = "imageTimeSeries.log"
-compute_output_dir = "/cis/home/clr/compute/time_series/"
-lung_image_dir = "/cis/home/clr/cawork/lung/"
-biocard_image_dir = "/cis/home/clr/cawork/biocard/"
+compute_output_dir = compute_path + "/output/time_series/"
+lung_image_dir = compute_path + "/input/time_series/lung/"
+biocard_image_dir = compute_path + "/input/time_series/biocard/"
 multiproc_pool_size = 16
 multiproc_pool_timeout = 5000
 file_write_iter = 20
