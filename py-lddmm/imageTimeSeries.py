@@ -365,4 +365,4 @@ if __name__ == "__main__":
     its = ImageTimeSeries(output_dir, options.config_name)
     #its.reset()
     its.computeMatching()
-    sim.writeData("final")
+    its.writeData("final")
