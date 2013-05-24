@@ -1,6 +1,5 @@
 import numpy as np
 import scipy as sp
-import logging
 
 # Class running noninear conjugate gradient
 # opt is an optimizable class that must provide the following functions:
@@ -54,7 +53,7 @@ def cg(opt, verb = True, maxIter=1000, TestGradient = False, epsInit=10.):
     opt.converged = False
 
     obj = opt.objectiveFun()
-    logging.info('iteration 0: obj = {0: .5f}'.format( obj))
+    print 'iteration 0: obj = {0: .5f}'.format( obj)
     # if (obj < 1e-10):
     #     return opt.getVariable()
 
@@ -73,16 +72,14 @@ def cg(opt, verb = True, maxIter=1000, TestGradient = False, epsInit=10.):
                 dirfoo = opt.randomDir()
             else:
                 dirfoo = np.random.randn(grd.shape[0], grd.shape[1], grd.shape[2])
-                #dirfoo = np.random.randn(grd.shape[0])
-            epsfoo = 1e-8
+            epsfoo = 1e-7
             objfoo = opt.updateTry(dirfoo, epsfoo, obj-1e10)
             if hasattr(opt, 'dotProduct'):
                 [grdfoo] = opt.dotProduct(grd, [dirfoo])
             else:
                 grdfoo = np.multiply(grd, dirfoo).sum()
-            logging.info("obj info: %f, %f" % (objfoo, obj))
-            logging.info('Test Gradient: %f, %f ' % ( \
-                                (objfoo - obj)/epsfoo, -grdfoo * gradCoeff) )
+            print 'Test Gradient: ', (objfoo - obj)/epsfoo, -grdfoo * gradCoeff 
+
         if it == 0:
             if hasattr(opt, 'dotProduct'):
                 [grdOld2] = opt.dotProduct(grd, [grd])
@@ -126,9 +123,6 @@ def cg(opt, verb = True, maxIter=1000, TestGradient = False, epsInit=10.):
                 oldDir = np.copy(dir0)
                 grdOld = np.copy(grd)
 
-        if hasattr(opt, 'cacheDir'):
-            opt.cacheDir(dir0)
-
         objTry = opt.updateTry(dir0, eps, obj)
 
         noUpdate = 0
@@ -139,12 +133,12 @@ def cg(opt, verb = True, maxIter=1000, TestGradient = False, epsInit=10.):
             objTry0 = opt.updateTry(dir0, epsSmall, obj)
             if objTry0 > obj:
                 if (skipCG == 1) | (beta < 1e-10):
-                    logging.info('iteration {0:d}: obj = {1:.5f}, eps = {2:.5f}, beta = {3:.5f}, gradient: {4:.5f}'.format(it+1, obj, eps, beta, np.sqrt(grd2)))
-                    logging.info('Stopping Gradient Descent: bad direction')
+                    print 'iteration {0:d}: obj = {1:.5f}, eps = {2:.5f}, beta = {3:.5f}, gradient: {4:.5f}'.format(it+1, obj, eps, beta, np.sqrt(grd2))
+                    print 'Stopping Gradient Descent: bad direction'
                     break
                 else:
                     if verb:
-                        logging.info('Disabling CG: bad direction')
+                        print 'Disabling CG: bad direction'
                         skipCG = 1
                         noUpdate = 1
             else:
@@ -165,7 +159,7 @@ def cg(opt, verb = True, maxIter=1000, TestGradient = False, epsInit=10.):
                 else:
                     contt=0
 
-
+       
         # increasing step if improves
             contt = 1
             #eps0 = eps / 4
@@ -178,30 +172,29 @@ def cg(opt, verb = True, maxIter=1000, TestGradient = False, epsInit=10.):
                     contt=0
 
             #print obj+obj0, objTry+obj0
-            #if (np.fabs(obj-objTry) < .000001):
-            if (np.fabs(obj-objTry) < 1e-10):
+            if (np.fabs(obj-objTry) < .000001):
                 if (skipCG==1) | (beta < 1e-10) :
-                    logging.info('iteration {0:d}: obj = {1:.5f}, eps = {2:.5f}, beta = {3:.5f}, gradient: {4:.5f}'.format(it+1, obj, eps, beta, np.sqrt(grd2)))
-                    logging.info('Stopping Gradient Descent: small variation')
+                    print 'iteration {0:d}: obj = {1:.5f}, eps = {2:.5f}, beta = {3:.5f}, gradient: {4:.5f}'.format(it+1, obj, eps, beta, np.sqrt(grd2))
+                    print 'Stopping Gradient Descent: small variation'
                     opt.converged = True
                     break
                 else:
                     if verb:
-                        logging.info('Disabling CG: small variation')
+                        print 'Disabling CG: small variation'
                     skipCG = 1
-                    eps = epsInit
+                    eps = 1.0
             else:
                 skipCG = 0
 
             opt.acceptVarTry()
             obj = objTry
             if verb | (it == maxIter):
-                logging.info('iteration {0:d}: obj = {1:.5f}, eps = {2:.5f}, beta = {3:.5f}, gradient: {4:.5f}'.format(it+1, obj, eps, beta, np.sqrt(grd2)))
+                print 'iteration {0:d}: obj = {1:.5f}, eps = {2:.5f}, beta = {3:.5f}, gradient: {4:.5f}'.format(it+1, obj, eps, beta, np.sqrt(grd2))
 
-            #if np.sqrt(grd2) <gradEps:
-            #    logging.info('Stopping Gradient Descent: small gradient')
-            #    opt.converged = True
-            #    break
+            if np.sqrt(grd2) <gradEps:
+                print 'Stopping Gradient Descent: small gradient'
+                opt.converged = True 
+                break
             eps = 2*eps
 
             if hasattr(opt, 'endOfIteration'):
