@@ -83,8 +83,10 @@ class CurveMatching(curveMatching.CurveMatching):
 
 
         self.fvDef = [] 
+        self.fvDefB = [] 
         for fv in self.fv0:
             self.fvDef.append(curves.Curve(curve=fv))
+            self.fvDefB.append(curves.Curve(curve=fv))
         self.maxIter_cg = maxIter_cg
         self.maxIter_al = maxIter_al
         self.verb = verb
@@ -511,11 +513,16 @@ class CurveMatching(curveMatching.CurveMatching):
                 self.obj0 += self.param.fun_obj0(fv1, self.param.KparDist) / (self.param.sigmaError**2)
 
             (self.obj, self.xt, self.cval) = self.objectiveFunDef(self.at, self.Afft, withTrajectory=True)
-            selfobj = self.obj0
+            selfobj = 2*self.obj0
 
+            npt = 0 
             for k in range(self.ncurve):
+                npt1 = npt + self.npt[k]
+                self.fvDefB[k].updateVertices(np.squeeze(self.xt[-1][self.Tsize, npt:npt1, :]))
+                selfobj += self.param.fun_obj(self.fvDefB[k], self.fv1[k], self.param.KparDist) / (self.param.sigmaError**2)
                 self.fvDef[k].updateVertices(np.squeeze(self.xt[k][self.Tsize, :, :]))
                 selfobj += self.param.fun_obj(self.fvDef[k], self.fv1[k], self.param.KparDist) / (self.param.sigmaError**2)
+                npt = npt1
 
                 #print 'Deformation based:', self.obj, 'data term:', selfobj, self.regweightOut
             self.obj += selfobj
@@ -540,12 +547,17 @@ class CurveMatching(curveMatching.CurveMatching):
         objTry = 0
 
         ff = []
+        npt = 0
         for k in range(self.ncurve):
+            npt1 = npt + self.npt[k]
             ff = curves.Curve(curve=self.fvDef[k])
+            ff.updateVertices(np.squeeze(foo[1][self.ncurve][self.Tsize, npt:npt1, :]))
+            objTry += self.param.fun_obj(ff, self.fv1[k], self.param.KparDist) / (self.param.sigmaError**2)
             ff.updateVertices(np.squeeze(foo[1][k][self.Tsize, :, :]))
             objTry +=  self.param.fun_obj(ff, self.fv1[k], self.param.KparDist) / (self.param.sigmaError**2)
+            npt = npt1
             #print 'Deformation based:', foo[0], 'data term:', objTry+self.obj0
-        objTry += foo[0]+self.obj0
+        objTry += foo[0]+ 2*self.obj0
 
         if np.isnan(objTry):
             print 'Warning: nan in updateTry'
@@ -666,9 +678,16 @@ class CurveMatching(curveMatching.CurveMatching):
 
     def endPointGradient(self):
         px1 = []
+        pxB = np.zeros([self.npoints, self.dim])
+        npt = 0 
         for k in range(self.ncurve):
+            npt1 = npt + self.npt[k]
             px = -self.param.fun_objGrad(self.fvDef[k], self.fv1[k], self.param.KparDist) / self.param.sigmaError**2
+            pxB[npt:npt1, :] = -self.param.fun_objGrad(self.fvDefB[k], self.fv1[k], self.param.KparDist) / self.param.sigmaError**2
             px1.append(px)            
+            npt = npt1
+
+        px1.append(pxB)
         return px1
 
     def addProd(self, dir1, dir2, beta):
@@ -740,7 +759,7 @@ class CurveMatching(curveMatching.CurveMatching):
 
     def getGradient(self, coeff=1.0):
         px1 = self.endPointGradient()
-        px1.append(np.zeros([self.npoints, self.dim]))
+        #px1.append(np.zeros([self.npoints, self.dim]))
         pnu1 = []
         for k in range(self.ncurve):
             pnu1.append(np.zeros(self.nu0[k].shape))
@@ -791,8 +810,8 @@ class CurveMatching(curveMatching.CurveMatching):
                     #print xt.shape, yt.shape
                 n1 = self.xt[k].shape[1] ;
                 for kk in range(self.Tsize+1):
-                    self.fvDef[k].updateVertices(np.squeeze(self.xt[-1][kk, nn:nn+n1, :]))
-                    self.fvDef[k].saveVTK(self.outputDir +'/'+ self.saveFile+str(k)+'Out'+str(kk)+'.vtk', scalars = Jt[-1][kk, nn:nn+n1], scal_name='Jacobian')
+                    self.fvDefB[k].updateVertices(np.squeeze(self.xt[-1][kk, nn:nn+n1, :]))
+                    self.fvDefB[k].saveVTK(self.outputDir +'/'+ self.saveFile+str(k)+'Out'+str(kk)+'.vtk', scalars = Jt[-1][kk, nn:nn+n1], scal_name='Jacobian')
                     self.fvDef[k].updateVertices(np.squeeze(self.xt[k][kk, :, :]))
                     self.fvDef[k].saveVTK(self.outputDir +'/'+self.saveFile+str(k)+'In'+str(kk)+'.vtk', scalars = Jt[k][kk, :], scal_name='Jacobian')
                     if self.dim == 2:
@@ -806,8 +825,12 @@ class CurveMatching(curveMatching.CurveMatching):
                     self.gridDef[-1].vertices = np.copy(yt[kk, :, :])
                     self.gridDef[-1].saveVTK(self.outputDir +'/gridOut'+str(kk)+'.vtk')
         else:
+            nn = 0 
             for k in range(self.ncurve):
+                n1 = self.xt[k].shape[1] ;
+                self.fvDefB[k].updateVertices(np.squeeze(self.xt[-1][-1, nn:nn+n1, :]))
                 self.fvDef[k].updateVertices(np.squeeze(self.xt[k][-1, :, :]))
+                nn += n1
 
     def endOptim(self):
         if self.iter %10 > 0:
@@ -843,7 +866,7 @@ class CurveMatching(curveMatching.CurveMatching):
         self.gradEps = np.sqrt(grd2) / 100
         self.muEps = 1.0
         it = 0
-        while (self.muEps > 0.05) & (it<self.maxIter_al)  :
+        while (self.muEps > 0.005) & (it<self.maxIter_al)  :
             print 'Starting Minimization: gradEps = ', self.gradEps, ' muEps = ', self.muEps, ' mu = ', self.mu
             self.iter = 0 
             #self.coeffZ = max(1.0, self.mu)

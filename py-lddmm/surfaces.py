@@ -210,10 +210,10 @@ class Surface:
         polydata = self.toPolyData()
         # polydata.SetPoints(points)
         # polydata.SetPolys(polys)
-        dc = vtkDecimatePro()
+        dc = vtkQuadricDecimation()
         red = 1 - min(np.float(target)/polydata.GetNumberOfPoints(), 1)
         dc.SetTargetReduction(red)
-        dc.PreserveTopologyOn()
+        #dc.PreserveTopologyOn()
         #dc.SetSplitting(0)
         dc.SetInput(polydata)
         #print dc
@@ -266,16 +266,20 @@ class Surface:
     # Computes isosurfaces using vtk               
     def Isosurface(self, data, value=0.5, target=1000.0, scales = [1., 1., 1.], smooth = -1, fill_holes = 1.):
         #data = self.LocalSignedDistance(data0, value)
-        img = vtkImageData()
-        img.SetDimensions(data.shape)
-        img.SetNumberOfScalarComponents(1)
-        img.SetOrigin(0,0,0)
-        v = vtkDoubleArray()
-        v.SetNumberOfValues(data.size)
-        v.SetNumberOfComponents(1)
-        for ii,tmp in enumerate(np.ravel(data, order='F')):
-            v.SetValue(ii,tmp)
-        img.GetPointData().SetScalars(v)
+        if isinstance(data, vtkImageData):
+            img = data
+        else:
+            img = vtkImageData()
+            img.SetDimensions(data.shape)
+            img.SetNumberOfScalarComponents(1)
+            img.SetOrigin(0,0,0)
+            v = vtkDoubleArray()
+            v.SetNumberOfValues(data.size)
+            v.SetNumberOfComponents(1)
+            for ii,tmp in enumerate(np.ravel(data, order='F')):
+                v.SetValue(ii,tmp)
+                img.GetPointData().SetScalars(v)
+                
         cf = vtkContourFilter()
         cf.SetInput(img)
         cf.SetValue(0,value)
@@ -301,8 +305,8 @@ class Surface:
             #smoother.SetFeatureAngle(120.0)
             smoother.SetPassBand(smooth)        #this increases the error a lot!
             smoother.NonManifoldSmoothingOn()
-            smoother.NormalizeCoordinatesOn()
-            smoother.GenerateErrorScalarsOn() 
+            #smoother.NormalizeCoordinatesOn()
+            #smoother.GenerateErrorScalarsOn() 
             #smoother.GenerateErrorVectorsOn()
             smoother.Update()
             g = smoother.GetOutput()
@@ -312,7 +316,9 @@ class Surface:
         red = 1 - min(np.float(target)/g.GetNumberOfPoints(), 1)
         print 'Reduction: ', red
         dc.SetTargetReduction(red)
+        dc.AttributeErrorMetricOn()
         #dc.PreserveTopologyOn()
+        #dc.SetDegree(10)
         #dc.SetSplitting(0)
         dc.SetInput(g)
         #print dc
@@ -585,7 +591,7 @@ class Surface:
 
     def laplacianSegmentation(self, k):
         (L, AA) =  self.laplacianMatrix()
-        print (L.shape[0]-k-1, L.shape[0]-2)
+        #print (L.shape[0]-k-1, L.shape[0]-2)
         (D, y) = spLA.eigh(L, AA, eigvals= (L.shape[0]-k, L.shape[0]-1))
         #V = real(V) ;
         #print D
@@ -637,7 +643,19 @@ class Surface:
         idx = I[idx]
         if idx.max() < (k-1):
             print 'Warning: kmeans convergence with', idx.max(), 'clusters instead of', k
-        ml = w.sum(axis=1)/N
+            #ml = w.sum(axis=1)/N
+        nc = idx.max()+1
+        C = np.zeros([nc, self.vertices.shape[1]])
+        a, foo = self.computeVertexArea()
+        for k in range(nc):
+            I = np.flatnonzero(idx==k)
+            nI = len(I)
+            #print a.shape, nI
+            aI = a[I]
+            ak = aI.sum()
+            C[k, :] = (self.vertices[I, :]*aI).sum(axis=0)/ak ; 
+        
+        
 
         return idx, C
 
@@ -786,6 +804,7 @@ class Surface:
         u.SetFileName(fileName)
         u.Update()
         v = u.GetOutput()
+        #print v
         npoints = int(v.GetNumberOfPoints())
         nfaces = int(v.GetNumberOfPolys())
         V = np.zeros([npoints, 3])

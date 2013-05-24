@@ -7,11 +7,21 @@ import os
 def loadlmk(filename, dim=3):
 # [x, label] = loadlmk(filename, dim)
 # Loads 3D landmarks from filename in .lmk format.
+# Determines format version from first line in file
+#   if version number indicates scaling and centering, transform coordinates...
 # the optional parameter s in a 3D scaling factor
 
     try:
         with open(filename, 'r') as fn:
             ln0 = fn.readline()
+            versionNum = 1
+            versionStrs = ln0.split("-")
+            if len(versionStrs) == 2:
+                try:
+                    versionNum = int(float(versionStrs[1]))
+                except:
+                    pass
+
             #print fn
             ln = fn.readline().split()
             #print ln0, ln
@@ -27,10 +37,31 @@ def loadlmk(filename, dim=3):
                 #print ln0
                 for k in range(dim):
                     x[i,k] = float(ln0[k])
+            if versionNum >= 6:
+                lastLine = ''
+                nextToLastLine = ''
+                # read the rest of the file
+                # the last two lines contain the center and the scale variables
+                while 1:
+                    thisLine = fn.readline()
+                    if not thisLine:
+                        break
+                    nextToLastLine = lastLine
+                    lastLine = thisLine
+                    
+                centers = nextToLastLine.rstrip('\r\n').split(',')
+                scales = lastLine.rstrip('\r\n').split(',')
+                if len(scales) == dim and len(centers) == dim:
+                    if scales[0].isdigit and scales[1].isdigit and scales[2].isdigit and centers[0].isdigit and centers[1].isdigit and centers[2].isdigit:
+                        x[:, 0] = x[:, 0] * float(scales[0]) + float(centers[0])
+                        x[:, 1] = x[:, 1] * float(scales[1]) + float(centers[1])
+                        x[:, 2] = x[:, 2] * float(scales[2]) + float(centers[2])
+                
     except IOError:
         print 'cannot open ', filename
         raise
     return x, label
+
 
 
 
@@ -50,3 +81,38 @@ def  savelmk(x, filename):
             str = str + '\n'
             fn.write(str)
         fn.write('1 1 \n')
+
+
+
+def epsilonNet(x, epsilon):
+    #print 'in epsilon net'
+    n = x.shape[0]
+    dim = x.shape[1]
+    inNet = np.zeros(n, dtype=int)
+    inNet[0]=1
+    net = np.nonzero(inNet)[0]
+    survivors = np.ones(n, dtype=np.int)
+    survivors[0] = 0 ;
+    dist2 = ((x.reshape([n, 1, dim]) - x.reshape([1,n,dim]))**2).sum(axis=2)
+    eps2 = epsilon**2
+
+    i1 = np.nonzero(dist2[net, :] < eps2)
+    survivors[i1[1]] = 0
+    i2 = np.nonzero(survivors)[0]
+    while len(i2) > 0:
+        closest = np.unravel_index(np.argmin(dist2[net.reshape([len(net),1]), i2.reshape([1, len(i2)])].ravel()), [len(net), len(i2)])
+        inNet[i2[closest[1]]] = 1 
+        net = np.nonzero(inNet)[0]
+        i1 = np.nonzero(dist2[net, :] < eps2)
+        survivors[i1[1]] = 0
+        i2 = np.nonzero(survivors)[0]
+        #print len(net), len(i2)
+    idx = - np.ones(n, dtype=np.int)
+    for p in range(n):
+        closest = np.unravel_index(np.argmin(dist2[net, p].ravel()), [len(net), 1])
+        #print 'p=', p, closest, len(net)
+        idx[p] = closest[0]
+        
+        #print idx
+    return net, idx
+        
