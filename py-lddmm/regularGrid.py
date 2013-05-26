@@ -6,8 +6,9 @@ import scipy.integrate
 import scipy.linalg
 import scipy.sparse
 import scipy.interpolate
+import scipy.ndimage.interpolation
 from tvtk.api import tvtk
-
+import rg_fort
 
 def meshgrid2(arrs):
     arrs = tuple(reversed(arrs))
@@ -29,7 +30,6 @@ def meshgrid2(arrs):
         ans.append(arr2)
 
     return tuple(ans[::-1])
-
 
 class RegularGrid(object):
 
@@ -76,6 +76,7 @@ class RegularGrid(object):
         self.corner_nodes = None
         self.interior_nodes = None
         self.elements_of_node = None
+        self.__grid_neighbors = None
         self.create(mesh_only)
 
     def __getGridZeros(self):
@@ -186,6 +187,14 @@ class RegularGrid(object):
             self.element_volumes = numpy.ones(len(self.elements))
             for d in range(self.dim):
                 self.element_volumes *= self.dx[d]
+
+        if self.dim==3:
+            self.interp_mesh = meshgrid2((range(self.num_points[0]), \
+                                range(self.num_points[1]), \
+                                range(self.num_points[2])))
+            for l in self.interp_mesh:
+                l = l.astype(int)
+            self.interp_data = None
         logging.info("Mesh %s created." % (self.mesh_name))
         logging.info("dx: %s." % (self.dx))
 
@@ -211,14 +220,11 @@ class RegularGrid(object):
         self.sg.point_data.get_array(arr_id).name = name
 
     def vtk_write(self, iter, mesh_name="", output_dir="."):
-      if mesh_name == "":
-        mesh_name = self.mesh_name
-      w = tvtk.XMLStructuredGridWriter(input=self.sg, file_name="%s/%s_mesh%d_%d.vts" % (output_dir, mesh_name, self.num_points[0], iter))
-      w.write()
-      self.sg = None
-
-    def conv(self, f,s):
-        return s * self.num_points + f
+        if mesh_name == "":
+            mesh_name = self.mesh_name
+        w = tvtk.XMLStructuredGridWriter(input=self.sg, file_name="%s/%s_mesh%d_%d.vts" % (output_dir, mesh_name, self.num_points[0], iter))
+        w.write()
+        self.sg = None
 
     def neighbors(self, node):
         assert(not node in self.boundary_nodes)
@@ -236,41 +242,73 @@ class RegularGrid(object):
 
     def grid_neighbors(self):
         # return neighbor lists at interior nodes
-        interior = self.interior_nodes
-        w = numpy.zeros(len(self.nodes)).astype(int)
-        e = numpy.zeros(len(self.nodes)).astype(int)
-        s = numpy.zeros(len(self.nodes)).astype(int)
-        n = numpy.zeros(len(self.nodes)).astype(int)
-        d = numpy.zeros(len(self.nodes)).astype(int)
-        u = numpy.zeros(len(self.nodes)).astype(int)
-        w[interior] = interior - 1
-        e[interior] = interior + 1
-        s[interior] = interior - self.num_points[0]
-        n[interior] = interior + self.num_points[0]
-        c = numpy.arange(self.num_nodes)
-        if self.dim==2:
-            return [w, e, s, n, c, c]
-        elif self.dim==3:
-            nsqr = self.num_points[0] * self.num_points[1]
-            d[interior] = interior - nsqr
-            u[interior] = interior + nsqr
-            return [w, e, s, n, d, u]
+        if self.__grid_neighbors == None:
+            interior = self.interior_nodes
+            w = numpy.zeros(len(self.nodes)).astype(int)
+            e = numpy.zeros(len(self.nodes)).astype(int)
+            s = numpy.zeros(len(self.nodes)).astype(int)
+            n = numpy.zeros(len(self.nodes)).astype(int)
+            d = numpy.zeros(len(self.nodes)).astype(int)
+            u = numpy.zeros(len(self.nodes)).astype(int)
+            w[interior] = interior - 1
+            e[interior] = interior + 1
+            s[interior] = interior - self.num_points[0]
+            n[interior] = interior + self.num_points[0]
+            c = numpy.arange(self.num_nodes)
+            if self.dim==2:
+                self.__grid_neighbors = [w, e, s, n, c, c]
+            elif self.dim==3:
+                nsqr = self.num_points[0] * self.num_points[1]
+                d[interior] = interior - nsqr
+                u[interior] = interior + nsqr
+                self.__grid_neighbors = [w, e, s, n, d, u]
+        return self.__grid_neighbors
 
     def barycentric_coordinates(self, point):
         x = point[0]
         y = point[1]
+        z = point[2]
         eps = 1e-8
         test1 = (self.nodes[self.elements[:,0],0] - eps <= x).astype(int)
         test2 = (self.nodes[self.elements[:,1],0] + eps >= x).astype(int)
         test3 = (self.nodes[self.elements[:,2],1] + eps >= y).astype(int)
         test4 = (self.nodes[self.elements[:,0],1] - eps <= y).astype(int)
-        test = test1 + test2 + test3 + test4
-        el = numpy.where(test==4)[0][0]
+        test5 = (self.nodes[self.elements[:,0],2] - eps <= z).astype(int)
+        test6 = (self.nodes[self.elements[:,5],2] + eps >= z).astype(int)
+        test = test1 + test2 + test3 + test4 + test5 + test6
+        el = numpy.where(test==6)[0][0]
         el_nodes = self.nodes[self.elements[el]]
-        bary = numpy.zeros(2)
-        bary[0] = (x - el_nodes[0,0])/self.dx
-        bary[1] = (y - el_nodes[0,1])/self.dx
+        bary = numpy.zeros(3)
+        bary[0] = (x - el_nodes[0,0])/self.dx[0]
+        bary[1] = (y - el_nodes[0,1])/self.dx[1]
+        bary[2] = (z - el_nodes[0,2])/self.dx[2]
         return [el, bary]
+
+    def sync_filter(self, mults):
+        max1 = numpy.array(self.domain_max) / (numpy.pi * numpy.array(mults))
+        a = (numpy.abs(self.xsi_1) <= max1[0]).astype(int)
+        b = (numpy.abs(self.xsi_2) <= max1[1]).astype(int)
+        c = (numpy.abs(self.xsi_3) <= max1[2]).astype(int)
+        filt = a*b*c
+        return filt
+
+    def raised_cosine_x(self, mf):
+        outer_cut = numpy.ones(self.dims)
+        for d in range(self.dim):
+            abn = numpy.abs(self.nodes[:,d].reshape(self.dims))
+            M = numpy.max(self.nodes[:,d])
+            beta = 1-(2.*mf)
+            ic = M*(1-beta)/2.
+            #oc = M*(1+beta)/2.
+            inner = abn <= ic
+            outer = abn > ic
+            outer_cut_temp = numpy.zeros(self.dims)
+            outer_cut_temp[inner] = 1.0/M
+            outer_cut_temp[outer] = 1.0/(2.*M) *(1 + numpy.cos(numpy.pi/(M*beta) *\
+                                (abn[outer] - (1-beta)*M/2.)) )
+            outer_cut *= outer_cut_temp
+        outer_cut /= numpy.max(outer_cut)
+        return outer_cut
 
     def raised_cosine(self, mf, beta):
         f_x = 1./(2.0*numpy.pi) * self.xsi_1
@@ -337,6 +375,9 @@ class RegularGrid(object):
       dxv1 = (v[e,0] - v[w,0])/(2.0*self.dx[0])
       dyv2 = (v[n,1] - v[s,1])/(2.0*self.dx[1])
       div = dxv1 + dyv2
+      if self.dim==3:
+          dzv3 = (v[u,3] - v[d,3])/(2.0*self.dx[2])
+          div += dzv3
       return div
 
     def gradient(self, f):
@@ -405,77 +446,101 @@ class RegularGrid(object):
         F[:,:] = f[pindex]*(1-ax)*(1-ay) + f[pindex_x]*(ax)*(1-ay) + f[pindex_y]*(1-ax)*(ay) + f[pindex_xy]*(ax)*(ay)
         return numpy.reshape(F[:,:], N[0]*N[1])
 
-    def grid_interpolate3d(self, f, pts):
-        diffpts = pts - self.nodes
-        x = diffpts[:,0]
-        y = diffpts[:,1]
-        z = diffpts[:,2]
-        N = self.num_points
+    def grid_interpolate3d(self, f, pts, useFortran=True):
+        assert useFortran, \
+            "3d interpolation is currently only implemented using fortran."
+        return rg_fort.interpolate_3d( \
+                            f, pts, \
+                            self.num_points[0], self.num_points[1], \
+                            self.num_points[2], \
+                            self.interp_mesh[0], \
+                            self.interp_mesh[1], self.interp_mesh[2], \
+                            self.dx[0], self.dx[1], self.dx[2], self.num_nodes,
+                            self.dims[0], self.dims[1], \
+                            self.dims[2]).reshape(self.num_nodes)
 
-        (indexx, indexy, indexz) = meshgrid2( \
-                            (range(N[0]), range(N[1]), range(N[2])))
-        indexx = indexx.astype(int)
-        indexy = indexy.astype(int)
-        indexz = indexz.astype(int)
+    def grid_interpolate3d_dual_and_grad(self, p, f, v, dt, useFortran=True):
+        assert useFortran, \
+            "3d interpolation is currently only implemented using fortran."
+        return rg_fort.interp_dual_and_grad( \
+                            p, f, v, \
+                            self.num_points[0], self.num_points[1], \
+                            self.num_points[2], \
+                            self.interp_mesh[0], \
+                            self.interp_mesh[1], self.interp_mesh[2], \
+                            self.dx[0], self.dx[1], self.dx[2], dt, \
+                            self.num_nodes,
+                            self.dims[0], self.dims[1], \
+                            self.dims[2])
 
-        F = numpy.reshape(f.copy(), self.dims)
-        X = numpy.reshape(x, self.dims)
-        Y = numpy.reshape(y, self.dims)
-        Z = numpy.reshape(z, self.dims)
-
-        stepsx = X / self.dx[0]
-        stepsy = Y / self.dx[1]
-        stepsz = Z / self.dx[2]
-
-        px = numpy.floor(stepsx)
-        py = numpy.floor(stepsy)
-        pz = numpy.floor(stepsz)
-
-        ax = stepsx - px
-        ay = stepsy - py
-        az = stepsz - pz
-
-        pxindex = (indexx + px).astype(int)
-        pyindex = (indexy + py).astype(int)
-        pzindex = (indexz + pz).astype(int)
-        pxindex_x = (pxindex + 1).astype(int)
-        pyindex_y = (pyindex + 1).astype(int)
-        pzindex_z = (pzindex + 1).astype(int)
-
-        pxindex[(pxindex<0)] = 0
-        pyindex[(pyindex<0)] = 0
-        pxindex_x[(pxindex_x<0)] = 0
-        pyindex_y[(pyindex_y<0)] = 0
-        pzindex[(pzindex<0)] = 0
-        pzindex_z[(pzindex_z<0)] = 0
-
-        pxindex[(pxindex>N[0]-1)] = N[0]-1
-        pyindex[(pyindex>N[1]-1)] = N[1]-1
-        pxindex_x[(pxindex_x>N[0]-1)] = N[0]-1
-        pyindex_y[(pyindex_y>N[1]-1)] = N[1]-1
-        pzindex[(pzindex>N[2]-1)] = N[2]-1
-        pzindex_z[(pzindex_z>N[2]-1)] = N[2]-1
-
-        nsqr = N[0] * N[1]
-        pindex = (pxindex + (N[0])*(pyindex) + nsqr*pzindex).astype(int)
-        pindex_x = (pxindex_x + (N[0])*(pyindex) + nsqr*pzindex).astype(int)
-        pindex_y = (pxindex + (N[0])*(pyindex_y) + nsqr*pzindex).astype(int)
-        pindex_xy = (pxindex_x + (N[0])*(pyindex_y) + nsqr*pzindex).astype(int)
-
-        pindex_z = (pxindex + (N[0])*(pyindex) + nsqr*pzindex_z).astype(int)
-        pindex_z_x = (pxindex_x + (N[0])*(pyindex) + nsqr*pzindex_z).astype(int)
-        pindex_z_y = (pxindex + (N[0])*(pyindex_y) + nsqr*pzindex_z).astype(int)
-        pindex_z_xy = (pxindex_x + (N[0])*(pyindex_y) + nsqr*pzindex_z).astype(int)
-
-        F[:,:] = f[pindex]*(1-ax)*(1-ay)*(1-az) + \
-                         f[pindex_x]*(ax)*(1-ay)*(1-az) + \
-                         f[pindex_y]*(1-ax)*(ay)*(1-az) + \
-                         f[pindex_xy]*(ax)*(ay)*(1-az)
-        F[:,:] += f[pindex_z]*(1-ax)*(1-ay)*(az) + \
-                         f[pindex_z_x]*(ax)*(1-ay)*(az) + \
-                         f[pindex_z_y]*(1-ax)*(ay)*(az) + \
-                         f[pindex_z_xy]*(ax)*(ay)*(az)
-        return numpy.reshape(F[:,:], N[0]*N[1]*N[2])
+# CLR: REMOVE?
+#    def grid_interpolate_3d(self, f, pts):
+#        diffpts = pts - self.nodes
+#        x = diffpts[:,0]
+#        y = diffpts[:,1]
+#        z = diffpts[:,2]
+#        N = self.num_points
+#
+#        (indexx, indexy, indexz) = self.interp_mesh
+#
+#        F = numpy.reshape(f.copy(), self.dims)
+#        X = numpy.reshape(x, self.dims)
+#        Y = numpy.reshape(y, self.dims)
+#        Z = numpy.reshape(z, self.dims)
+#
+#        stepsx = X / self.dx[0]
+#        stepsy = Y / self.dx[1]
+#        stepsz = Z / self.dx[2]
+#
+#        px = numpy.floor(stepsx)
+#        py = numpy.floor(stepsy)
+#        pz = numpy.floor(stepsz)
+#
+#        ax = stepsx - px
+#        ay = stepsy - py
+#        az = stepsz - pz
+#
+#        pxindex = (indexx + px).astype(int)
+#        pyindex = (indexy + py).astype(int)
+#        pzindex = (indexz + pz).astype(int)
+#        pxindex_x = (pxindex + 1).astype(int)
+#        pyindex_y = (pyindex + 1).astype(int)
+#        pzindex_z = (pzindex + 1).astype(int)
+#
+#        pxindex[(pxindex<0)] = 0
+#        pyindex[(pyindex<0)] = 0
+#        pxindex_x[(pxindex_x<0)] = 0
+#        pyindex_y[(pyindex_y<0)] = 0
+#        pzindex[(pzindex<0)] = 0
+#        pzindex_z[(pzindex_z<0)] = 0
+#
+#        pxindex[(pxindex>N[0]-1)] = N[0]-1
+#        pyindex[(pyindex>N[1]-1)] = N[1]-1
+#        pxindex_x[(pxindex_x>N[0]-1)] = N[0]-1
+#        pyindex_y[(pyindex_y>N[1]-1)] = N[1]-1
+#        pzindex[(pzindex>N[2]-1)] = N[2]-1
+#        pzindex_z[(pzindex_z>N[2]-1)] = N[2]-1
+#
+#        nsqr = N[0] * N[1]
+#        pindex = (pxindex + (N[0])*(pyindex) + nsqr*pzindex).astype(int)
+#        pindex_x = (pxindex_x + (N[0])*(pyindex) + nsqr*pzindex).astype(int)
+#        pindex_y = (pxindex + (N[0])*(pyindex_y) + nsqr*pzindex).astype(int)
+#        pindex_xy = (pxindex_x + (N[0])*(pyindex_y) + nsqr*pzindex).astype(int)
+#
+#        pindex_z = (pxindex + (N[0])*(pyindex) + nsqr*pzindex_z).astype(int)
+#        pindex_z_x = (pxindex_x + (N[0])*(pyindex) + nsqr*pzindex_z).astype(int)
+#        pindex_z_y = (pxindex + (N[0])*(pyindex_y) + nsqr*pzindex_z).astype(int)
+#        pindex_z_xy = (pxindex_x + (N[0])*(pyindex_y) + nsqr*pzindex_z).astype(int)
+#
+#        F[:,:] = f[pindex]*(1-ax)*(1-ay)*(1-az) + \
+#                         f[pindex_x]*(ax)*(1-ay)*(1-az) + \
+#                         f[pindex_y]*(1-ax)*(ay)*(1-az) + \
+#                         f[pindex_xy]*(ax)*(ay)*(1-az)
+#        F[:,:] += f[pindex_z]*(1-ax)*(1-ay)*(az) + \
+#                         f[pindex_z_x]*(ax)*(1-ay)*(az) + \
+#                         f[pindex_z_y]*(1-ax)*(ay)*(az) + \
+#                         f[pindex_z_xy]*(ax)*(ay)*(az)
+#        return numpy.reshape(F[:,:], N[0]*N[1]*N[2])
 
     def grid_interpolate_gradient_2d(self, f, pts):
         x = pts[:,0]
@@ -586,7 +651,6 @@ class RegularGrid(object):
         f_interp += self.spread(F*(ax)*(ay), pindex_xy)
         return f_interp
 
-
     def inner_prod(self, f, g):
         f_c = .25 * (f[self.elements[:,0]] + f[self.elements[:,1]] + f[self.elements[:,2]] + f[self.elements[:,3]])
         g_c = .25 * (g[self.elements[:,0]] + g[self.elements[:,1]] + g[self.elements[:,2]] + g[self.elements[:,3]])
@@ -605,6 +669,3 @@ class RegularGrid(object):
                 int_b[self.elements[:,j]] += numpy.power(.5,3) * \
                                     b[self.elements[:,j]] * self.element_volumes
         return int_b
-
-
-

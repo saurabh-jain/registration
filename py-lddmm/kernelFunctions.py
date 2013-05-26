@@ -1,6 +1,8 @@
 import numpy as np
 from scipy.spatial import distance as dfun
 
+import kernelMatrix_fort
+
 ## Computes matrix associated with Gaussian kernel
 # par[0] = width
 # if y=None, computes K(x,x), otherwise computes K(x,y)
@@ -13,7 +15,6 @@ def kernelMatrixGauss(x, y=None, par=[1], diff = False, diff2 = False, constant_
             #        K = np.eye(x.shape[0]) + np.mat(dfun.squareform(u))
             K = dfun.squareform(u, checks=False)
             np.fill_diagonal(K, 1)
-            #print 'Ksum', K.sum()
             precomp = np.copy(K)
             if diff:
                 K = -K/sig2
@@ -44,7 +45,7 @@ def kernelMatrixGauss(x, y=None, par=[1], diff = False, diff2 = False, constant_
     else:
         return K, precomp
 
-# Polynomial factor for Laplacian kernel 
+# Polynomial factor for Laplacian kernel
 def lapPol(u, ord):
     if ord == 0:
         pol = 1.
@@ -95,37 +96,62 @@ def lapPolDiff2(u, ord):
 
 # computes matrix associated with polynomial kernel
 # par[0] = width, par[1] =  order
+#def kernelMatrixLaplacian(x, y=None, par=[1., 3], diff=False, diff2 = False, constant_plane=False, precomp = None):
+#    sig = par[0]
+#    ord=par[1]
+#    if precomp == None:
+#        if y==None:
+#            u = dfun.pdist(x)/sig
+#        else:
+#            u = dfun.cdist(x, y)/sig
+#        precomp = u
+#    else:
+#        u = precomp
+#
+#    #if diff==False & diff2==False:
+#    if diff==False and diff2==False:
+#        if y == None:
+#            K = dfun.squareform(np.multiply(lapPol(u,ord), np.exp(-u)))
+#            np.fill_diagonal(K, 1)
+#        else:
+#            K = np.multiply(lapPol(u,ord), np.exp(-u))
+#    elif diff2==False:
+#        if y == None:
+#            K = dfun.squareform(np.multiply(-lapPolDiff(u, ord), np.exp(-u)/(2*sig*sig)))
+#            np.fill_diagonal(K, -1./((2*ord-1)*2*sig*sig))
+#        else:
+#            K = np.multiply(-lapPolDiff(u, ord), np.exp(-u)/(2*sig*sig))
+#    else:
+#        if y == None:
+#            K = dfun.squareform(np.multiply(lapPolDiff2(u, ord), np.exp(-u)/(4*sig**4)))
+#            #np.fill_diagonal(K, 1./((2*ord-1)*4*sig**4))
+#            np.fill_diagonal(K, 1./((35)*4*sig**4))
+#        else:
+#            K = np.multiply(lapPolDiff2(u, ord), np.exp(-u)/(4*sig**4))
+#
+#
+#    if constant_plane:
+#        uu = dfun.pdist(x[:,x.shape[1]-1])/sig
+#        K2 = dfun.squareform(lapPol(uu,ord)*np.exp(-uu))
+#        np.fill_diagonal(K2, 1)
+#        return K,K2,precomp
+#    else:
+#        return K,precomp
+
+# computes matrix associated with polynomial kernel
+# par[0] = width, par[1] =  order
 def kernelMatrixLaplacian(x, y=None, par=[1., 3], diff=False, diff2 = False, constant_plane=False, precomp = None):
     sig = par[0]
     ord=par[1]
     if precomp == None:
-        if y==None:
-            u = dfun.pdist(x)/sig
-        else:
-            u = dfun.cdist(x, y)/sig
-        precomp = u
-    else:
-        u = precomp
-        
-    if diff==False & diff2==False:
-        if y == None:
-            K = dfun.squareform(np.multiply(lapPol(u,ord), np.exp(-u)))
-            np.fill_diagonal(K, 1)
-        else:
-            K = np.multiply(lapPol(u,ord), np.exp(-u))
+        precomp = kernelMatrixLaplacianPrecompute(x,y,par,diff,diff2,constant_plane)
+
+    if diff==False and diff2==False:
+        K = precomp[1]
     elif diff2==False:
-        if y == None:
-            K = dfun.squareform(np.multiply(-lapPolDiff(u, ord), np.exp(-u)/(2*sig*sig)))
-            np.fill_diagonal(K, -1./((2*ord-1)*2*sig*sig))
-        else:
-            K = np.multiply(-lapPolDiff(u, ord), np.exp(-u)/(2*sig*sig))
+        K = precomp[2]
     else:
-        if y == None:
-            K = dfun.squareform(np.multiply(lapPolDiff2(u, ord), np.exp(-u)/(4*sig**4)))
-            np.fill_diagonal(K, 1./((2*ord-1)*4*sig**4))
-        else:
-            K = np.multiply(lapPolDiff2(u, ord), np.exp(-u)/(4*sig**4))
- 
+        K = precomp[3]
 
     if constant_plane:
         uu = dfun.pdist(x[:,x.shape[1]-1])/sig
@@ -134,8 +160,35 @@ def kernelMatrixLaplacian(x, y=None, par=[1., 3], diff=False, diff2 = False, con
         return K,K2,precomp
     else:
         return K,precomp
-        
 
+def kernelMatrixLaplacianPrecompute(x, y=None, par=[1., 3], diff=False, diff2 = False, constant_plane=False):
+    sig = par[0]
+    ord=par[1]
+    if y==None:
+        (u,K,K_diff,K_diff2) = kernelMatrix_fort.kernelmatrixlaplacianprecompute(x, sig, ord)
+    else:
+        if y==None:
+            u = dfun.pdist(x)/sig
+        else:
+            u = dfun.cdist(x, y)/sig
+        if y == None:
+            K = dfun.squareform(np.multiply(lapPol(u,ord), np.exp(-u)))
+            np.fill_diagonal(K, 1)
+        else:
+            K = np.multiply(lapPol(u,ord), np.exp(-u))
+        if y == None:
+            K_diff = dfun.squareform(np.multiply(-lapPolDiff(u, ord), np.exp(-u)/(2*sig*sig)))
+            np.fill_diagonal(K_diff, -1./((2*ord-1)*2*sig*sig))
+        else:
+            K_diff = np.multiply(-lapPolDiff(u, ord), np.exp(-u)/(2*sig*sig))
+        if y == None:
+            K_diff2 = dfun.squareform(np.multiply(lapPolDiff2(u, ord), np.exp(-u)/(4*sig**4)))
+            #np.fill_diagonal(K, 1./((2*ord-1)*4*sig**4))
+            np.fill_diagonal(K_diff2, 1./((35)*4*sig**4))
+        else:
+            K_diff2 = np.multiply(lapPolDiff2(u, ord), np.exp(-u)/(4*sig**4))
+    precomp = [u, K, K_diff, K_diff2]
+    return precomp
 
 # Wrapper for kernel matrix computation
 def  kernelMatrix(Kpar, x, y=None, diff = False, diff2=False, constant_plane = False):
@@ -148,7 +201,7 @@ def  kernelMatrix(Kpar, x, y=None, diff = False, diff2=False, constant_plane = F
         precomp = np.copy(Kpar.precomp)
     else:
         precomp = None
-        
+
 
     if Kpar.name == 'gauss':
         res = kernelMatrixGauss(x=x,y=y, par = [Kpar.sigma], diff=diff, diff2=diff2, constant_plane = constant_plane, precomp=precomp)
@@ -268,7 +321,7 @@ class Kernel(KernelSpec):
         v = np.dot(a1, x.T)
         if not (self.kernelMatrix == None):
             r = self.precompute(x, diff=True)
-            u = -v + np.multiply(x, a1).sum(axis=1) 
+            u = -v + np.multiply(x, a1).sum(axis=1)
             zpx +=  2* np.dot(np.multiply(r, u), a2)
         if self.affine == 'affine':
             xx = x-self.center
@@ -287,7 +340,7 @@ class Kernel(KernelSpec):
         v = np.dot(x,a1.T)
         if not (self.kernelMatrix == None):
             r = self.precompute(x, diff=True)
-            u = (v - np.multiply(x, a1).sum(axis=1)).T 
+            u = (v - np.multiply(x, a1).sum(axis=1)).T
             zpx =  -2* np.dot(np.multiply(r, u), a2)
         if self.affine == 'affine':
             xx = x-self.center
@@ -341,30 +394,33 @@ class Kernel(KernelSpec):
         if not (self.kernelMatrix == None):
             r1 = self.precompute(x, diff=True)
             r2 = self.precompute(x, diff2=True)
-            xxp = -np.dot(p, x.T) + np.multiply(x, p).sum(axis=1)
+            #xxp = -np.dot(p, x.T) + np.multiply(x, p).sum(axis=1)
+            xxp = -np.dot(p, x.T) + np.multiply(x,p).sum(axis=1).\
+                                reshape([x.shape[0],1])
             na = np.dot(n, a.T)
             xpna = np.multiply(xxp, na)
             #u = np.multiply(xpna, x) - np.mutiply(xpna, x.T)
-            u = np.multiply(r2, xpna) 
-            zpx = 4 * (np.multiply(u.sum(axis=1), x) - np.dot(u, x))
+            u = np.multiply(r2, xpna)
+            zpx = 4 * (np.multiply(u.sum(axis=1).reshape([x.shape[0],1]), x) - np.dot(u, x))
             u = np.multiply(r1, na)
-            zpx += 2*np.multiply(u.sum(axis=1), p)
+            zpx += 2*np.multiply(u.sum(axis=1).reshape([x.shape[0],1]), p)
 
         return zpx
 
-    # Computes sum_(l) D_12[n(k)^T K(x(k), x(l))a(l)]p(l) 
+    # Computes sum_(l) D_12[n(k)^T K(x(k), x(l))a(l)]p(l)
     def applyDDiffK12(self, x, n, a, p):
         zpx = np.zeros(x.shape)
         na = np.dot(n, a.T)
         if not (self.kernelMatrix == None):
             r1 = self.precompute(x, diff=True)
             r2 = self.precompute(x, diff2=True)
-            xxp = (np.dot(p, x.T) - np.multiply(x, p).sum(axis=1)).T
+            #xxp = (np.dot(p, x.T) - np.multiply(x, p).sum(axis=1)).T
+            xxp = np.dot(x, p.T) - np.multiply(x,p).sum(axis=1)
             na = np.dot(n, a.T)
             xpna = np.multiply(xxp, na)
             #u = np.multiply(xpna, x) - np.mutiply(xpna, x.T)
-            u = np.multiply(r2, xpna) 
-            zpx = - 4 * (np.multiply(u.sum(axis=1), x) - np.dot(u, x))
+            u = np.multiply(r2, xpna)
+            zpx = - 4 * (np.multiply(u.sum(axis=1).reshape([x.shape[0],1]), x) - np.dot(u, x))
             u = np.multiply(r1, na)
             zpx -= 2* np.dot(u, p)
         if self.affine == 'affine':
