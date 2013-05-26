@@ -316,7 +316,7 @@ class Surface:
         red = 1 - min(np.float(target)/g.GetNumberOfPoints(), 1)
         print 'Reduction: ', red
         dc.SetTargetReduction(red)
-        dc.AttributeErrorMetricOn()
+        #dc.AttributeErrorMetricOn()
         #dc.PreserveTopologyOn()
         #dc.SetDegree(10)
         #dc.SetSplitting(0)
@@ -625,7 +625,7 @@ class Surface:
                 break
             j = j+1
             Cold = C.copy()
-            T = T*0.95
+            T = T*0.99
 
             #print k, d, C.shape
         dst = ((C.reshape([k,1,d]) - y.reshape([1,N,d]))**2).sum(axis=2)

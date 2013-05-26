@@ -67,13 +67,7 @@ class SurfaceMatching(surfaceMatching.SurfaceMatching):
 
         self.npt = self.fv0.vertices.shape[0]
         self.dim = self.fv0.vertices.shape[1]
-        self.outputDir = outputDir
-        if not os.access(outputDir, os.W_OK):
-            if os.access(outputDir, os.F_OK):
-                print 'Cannot save in ' + outputDir
-                return
-            else:
-                os.mkdir(outputDir)
+        self.setOutputDir(outputDir)
         self.fvDef = surfaces.Surface(surf=self.fv0)
         self.maxIter = maxIter
         self.verb = verb

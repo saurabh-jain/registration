@@ -5,14 +5,14 @@ CC = gcc
 PROJECT=.
 
 ## include paths for fft3, magick++ and gsl
-FFTW3_IPATH = -I/usr/local/include
-IMAGICK_IPATH = -I/usr/local/include/ImageMagick
-GSL_IPATH = -I/usr/local/include/gsl
+FFTW3_IPATH = -I/opt/local/include
+IMAGICK_IPATH = -I/opt/local/include/ImageMagick
+GSL_IPATH = -I/opt/local/include/gsl
 
 ## library paths for fft3, magick++ and gsl
-FFTW3_LPATH = -L/usr/local/lib
-IMAGICK_LPATH = -L/usr/local/lib
-GSL_LPATH = -L/usr/local/lib
+FFTW3_LPATH = -L/opt/local/lib
+IMAGICK_LPATH = -L/opt/local/lib
+GSL_LPATH = -L/opt/local/lib
 
 
 ## In principle, no change should be needed beyond this line

@@ -84,7 +84,7 @@ def  savelmk(x, filename):
 
 
 
-def epsilonNet(x, epsilon):
+def epsilonNet(x, rate):
     #print 'in epsilon net'
     n = x.shape[0]
     dim = x.shape[1]
@@ -93,8 +93,13 @@ def epsilonNet(x, epsilon):
     net = np.nonzero(inNet)[0]
     survivors = np.ones(n, dtype=np.int)
     survivors[0] = 0 ;
-    dist2 = ((x.reshape([n, 1, dim]) - x.reshape([1,n,dim]))**2).sum(axis=2)
-    eps2 = epsilon**2
+    dist2 = ((x.reshape([n, 1, dim]) -
+              x.reshape([1,n,dim]))**2).sum(axis=2)
+    d2 = np.sort(dist2, axis=0)
+    i = np.int_(1.0/rate)
+    eps2 = (np.sqrt(d2[i,:]).sum()/n)**2
+    #print n, d2.shape, i, np.sqrt(eps2)
+    
 
     i1 = np.nonzero(dist2[net, :] < eps2)
     survivors[i1[1]] = 0

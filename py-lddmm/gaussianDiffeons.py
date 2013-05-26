@@ -14,10 +14,11 @@ def generateDiffeonsFromSegmentation(fv, rate):
         c[k, :] = fv.vertices[I]
     return generateDiffeons(fv, c, idx)
 
-def generateDiffeonsFromNet(fv, eps):
+def generateDiffeonsFromNet(fv, rate):
     (L, AA) =  fv.laplacianMatrix()
+    #eps = rate * AA.sum()
     (D, y) = spLA.eigh(L, AA, eigvals= (L.shape[0]-10, L.shape[0]-1))
-    (net, idx) = epsilonNet(y, eps)
+    (net, idx) = epsilonNet(y, rate)
     c = fv.vertices[net, :]
     #print c
     return generateDiffeons(fv, c, idx)
@@ -40,7 +41,7 @@ def generateDiffeons(fv, c, idx):
         S[k, :, :] = (y.reshape([nI, 3, 1]) * aI.reshape([nI, 1, 1]) * y.reshape([nI, 1, 3])).sum(axis=0)/ak
         [D,V] = LA.eig(S[k, :, :])
         D = np.sort(D, axis=None)
-        S[k, :, :] = S[k, :, :] * np.sqrt(ak/(np.pi * (D[1]*D[2])))
+        S[k, :, :] = S[k, :, :] * np.sqrt(ak/(1e-10+2*np.pi * (D[1]*D[2])))
         #print np.pi * (D[1]*D[2]), ak
     return c, S, idx
 
