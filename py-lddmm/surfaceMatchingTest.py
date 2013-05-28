@@ -22,6 +22,8 @@ def compute():
     fv2 = Surface() ;
     fv2.Isosurface(I1, value = 0, target=500, scales=[1, 1, 1], smooth=0.1)
 
+    return fv1,fv2
+
     ## Object kernel
     K1 = Kernel(name='gauss', sigma = 10.0)
 

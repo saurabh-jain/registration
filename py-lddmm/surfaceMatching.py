@@ -130,6 +130,16 @@ class SurfaceMatching:
         self.fv0.saveVTK(self.outputDir+'/Template.vtk')
         self.fv1.saveVTK(self.outputDir+'/Target.vtk')
 
+    def setOutputDir(self, outputDir):
+        self.outputDir = outputDir
+        if not os.access(outputDir, os.W_OK):
+            if os.access(outputDir, os.F_OK):
+                print 'Cannot save in ' + outputDir
+                return
+            else:
+                os.makedirs(outputDir)
+
+
     def dataTerm(self, _fvDef):
         obj = self.param.fun_obj(_fvDef, self.fv1, self.param.KparDist) / (self.param.sigmaError**2)
         return obj

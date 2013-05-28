@@ -111,15 +111,23 @@ class Surface:
     def getEdges(self):
         self.edges = []
         for k in range(self.faces.shape[0]):
-            u = [self.faces[k, 0], self.faces[k, 1]]
-            if (u not in self.edges) & (u.reverse() not in self.edges):
-                self.edges.append(u)
-            u = [self.faces[k, 1], self.faces[k, 2]]
-            if (u not in self.edges) & (u.reverse() not in self.edges):
-                self.edges.append(u)
-            u = [self.faces[k, 2], self.faces[k, 0]]
-            if (u not in self.edges) & (u.reverse() not in self.edges):
-                self.edges.append(u)
+            for kj in (0,1,2):
+                u = [self.faces[k, kj], self.faces[k, (kj+1)%3]]
+                if (u not in self.edges) & (u.reverse() not in self.edges):
+                    self.edges.append(u)
+
+        self.edgeFaces = []
+        for u in self.edges:
+            self.edgeFaces.append([])
+        for k in range(self.faces.shape[0]):
+            for kj in (0,1,2):
+                u = [self.faces[k, kj], self.faces[k, (kj+1)%3]]
+                if u in self.edges:
+                    kk = self.edges.index(u)
+                else:
+                    u.reverse()
+                    kk = self.edges.index(u)
+                self.edgeFaces[kk].append(k)
 
     # computes the signed distance function in a small neighborhood of a shape 
     def LocalSignedDistance(self, data, value):
@@ -248,12 +256,12 @@ class Surface:
         # self.faces = np.int_(F[0:gf, :])
         # self.computeCentersAreas()
 
-    def smooth(self, n=30):
+    def smooth(self, n=30, smooth=0.1):
         g = self.toPolyData()
         smoother= vtkWindowedSincPolyDataFilter()
         smoother.SetInput(g)
         smoother.SetNumberOfIterations(n)
-        #smoother.SetPassBand(smooth)        #this increases the error a lot!
+        smoother.SetPassBand(smooth)   
         smoother.NonManifoldSmoothingOn()
         smoother.NormalizeCoordinatesOn()
         smoother.GenerateErrorScalarsOn() 
@@ -394,10 +402,13 @@ class Surface:
             edg[c[1],c[2]] += 1
             edg[c[2],c[0]] += 1
 
+
+        print edg.sum(axis=0), edg.sum(axis=1)
         for kv in range(nv):
             I2 = np.nonzero(edg0[kv,:])
             for kkv in I2[0].tolist():
                 edgF[edg0[kkv,kv]-1,edg0[kv,kkv]-1] = kv+1
+        print (edgF > 0).sum(axis=0)
 
         isOriented = np.int_(np.zeros(f.shape[0]))
         isActive = np.int_(np.zeros(f.shape[0]))
@@ -625,7 +636,7 @@ class Surface:
                 break
             j = j+1
             Cold = C.copy()
-            T = T*0.95
+            T = T*0.99
 
             #print k, d, C.shape
         dst = ((C.reshape([k,1,d]) - y.reshape([1,N,d]))**2).sum(axis=2)
