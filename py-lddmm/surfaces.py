@@ -35,8 +35,6 @@ class Surface:
         else:
             self.vertices = np.copy(surf.vertices)
             self.faces = np.copy(surf.faces)
-            self.surfel = np.copy(surf.surfel)
-            self.centers = np.copy(surf.centers)
             self.computeCentersAreas()
 
     # face centers and area weighted normal
