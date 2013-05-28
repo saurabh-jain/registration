@@ -1,7 +1,7 @@
 import numpy as np
 from scipy.spatial import distance as dfun
 
-import kernelMatrix_fort
+#import kernelMatrix_fort
 
 ## Computes matrix associated with Gaussian kernel
 # par[0] = width

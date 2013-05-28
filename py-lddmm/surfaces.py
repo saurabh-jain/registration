@@ -316,7 +316,7 @@ class Surface:
         red = 1 - min(np.float(target)/g.GetNumberOfPoints(), 1)
         print 'Reduction: ', red
         dc.SetTargetReduction(red)
-        dc.AttributeErrorMetricOn()
+        #dc.AttributeErrorMetricOn()
         #dc.PreserveTopologyOn()
         #dc.SetDegree(10)
         #dc.SetSplitting(0)
@@ -331,7 +331,7 @@ class Surface:
         cp.ConvertPolysToLinesOn()
         cp.SetAbsoluteTolerance(1e-5)
         cp.Update()
-        g = cp.GetOutput()
+        #g = cp.GetOutput()
         self.fromPolyData(g,scales)
         z= self.surfVolume()
         if (z > 0):

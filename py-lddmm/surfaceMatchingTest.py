@@ -13,20 +13,20 @@ def compute():
 
     I1 = .06 - ((x-.50)**2 + 0.5*y**2 + z**2)  
     fv1 = Surface() ;
-    fv1.Isosurface(I1, value = 0, target=500, scales=[1, 1, 1])
+    fv1.Isosurface(I1, value = 0, target=500, scales=[1, 1, 1], smooth=0.1)
 
     u = (z + y)/s2
     v = (z - y)/s2
     I1 = .05 - np.minimum((x-.7)**2 + 0.5*y**2 + z**2, (x-.30)**2 + 0.5*y**2 + z**2)  
     #I1 = .095 - ((x-.7)**2 + v**2 + 0.5*u**2) 
     fv2 = Surface() ;
-    fv2.Isosurface(I1, value = 0, target=500, scales=[1, 1, 1])
+    fv2.Isosurface(I1, value = 0, target=500, scales=[1, 1, 1], smooth=0.1)
 
     ## Object kernel
     K1 = Kernel(name='gauss', sigma = 10.0)
 
-    sm = SurfaceMatchingParam(timeStep=0.1, KparDiff=K1, sigmaDist=20, sigmaError=10., errorType='current')
-    f = SurfaceMatching(Template=fv1, Target=fv2, outputDir='/Users/younes/Development/Results/Surface',param=sm, testGradient=True,
+    sm = SurfaceMatchingParam(timeStep=0.1, KparDiff=K1, sigmaDist=20, sigmaError=1., errorType='measure')
+    f = SurfaceMatching(Template=fv1, Target=fv1, outputDir='/Users/younes/Development/Results/Surface',param=sm, testGradient=True,
                          maxIter=1000, affine= 'none', rotWeight=1., transWeight = 1., scaleWeight=10., affineWeight=100.)
 
     f.optimizeMatching()
