@@ -196,7 +196,7 @@ def  kernelMatrix(Kpar, x, y=None, diff = False, diff2=False, constant_plane = F
     # creates a kernel matrix based on kernel parameters Kpar
     # if varargin = z
 
-    if (Kpar.prev_x is x) & (Kpar.prev_y is y):
+    if (Kpar.prev_x is x) and (Kpar.prev_y is y):
         #print 'Kernel: not computing'
         precomp = np.copy(Kpar.precomp)
     else:
@@ -271,7 +271,7 @@ class KernelSpec:
 class Kernel(KernelSpec):
     def precompute(self, x,  y=None, diff=False, diff2=False):
         if not (self.kernelMatrix == None):
-            if (self.prev_x is x) & (self.prev_y is y):
+            if (self.prev_x is x) and (self.prev_y is y):
                 precomp = self.precomp
             else:
                 precomp = None

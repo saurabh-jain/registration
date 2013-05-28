@@ -34,9 +34,10 @@ class Surface:
                 self.computeCentersAreas()
         else:
             self.vertices = np.copy(surf.vertices)
-            self.surfel = np.copy(surf.surfel)
             self.faces = np.copy(surf.faces)
+            self.surfel = np.copy(surf.surfel)
             self.centers = np.copy(surf.centers)
+            self.computeCentersAreas()
 
     # face centers and area weighted normal
     def computeCentersAreas(self):
@@ -258,6 +259,7 @@ class Surface:
 
     def smooth(self, n=30, smooth=0.1):
         g = self.toPolyData()
+        print g
         smoother= vtkWindowedSincPolyDataFilter()
         smoother.SetInput(g)
         smoother.SetNumberOfIterations(n)
@@ -272,7 +274,7 @@ class Surface:
 
             
     # Computes isosurfaces using vtk               
-    def Isosurface(self, data, value=0.5, target=1000.0, scales = [1., 1., 1.], smooth = -1, fill_holes = 1.):
+    def Isosurface(self, data, value=0.5, target=1000.0, scales = [1., 1., 1.], smooth = 0.1, fill_holes = 1.):
         #data = self.LocalSignedDistance(data0, value)
         if isinstance(data, vtkImageData):
             img = data
@@ -319,13 +321,12 @@ class Surface:
             smoother.Update()
             g = smoother.GetOutput()
 
-            #dc = vtkDecimatePro()
-        dc = vtkQuadricDecimation()
+        #dc = vtkDecimatePro()
         red = 1 - min(np.float(target)/g.GetNumberOfPoints(), 1)
-        print 'Reduction: ', red
+        #print 'Reduction: ', red
+        dc = vtkQuadricDecimation()
         dc.SetTargetReduction(red)
         #dc.AttributeErrorMetricOn()
-        #dc.PreserveTopologyOn()
         #dc.SetDegree(10)
         #dc.SetSplitting(0)
         dc.SetInput(g)
@@ -860,20 +861,25 @@ def saveEvolution(fileName, fv0, xt):
 # Current norm of fv1
 def currentNorm0(fv1, KparDist):
     c2 = fv1.centers
-    cr2 = np.mat(fv1.surfel)
+    cr2 = fv1.surfel
     g11 = kfun.kernelMatrix(KparDist, c2)
-    return np.multiply((cr2*cr2.T), g11).sum()
+    obj = np.multiply(np.dot(cr2,cr2.T), g11).sum()
+    #print 'cn0', obj
+    return obj
         
 
 # Computes |fvDef|^2 - 2 fvDef * fv1 with current dot produuct 
 def currentNormDef(fvDef, fv1, KparDist):
     c1 = fvDef.centers
-    cr1 = np.mat(fvDef.surfel)
+    cr1 = fvDef.surfel
     c2 = fv1.centers
-    cr2 = np.mat(fv1.surfel)
+    cr2 = fv1.surfel
     g11 = kfun.kernelMatrix(KparDist, c1)
     g12 = kfun.kernelMatrix(KparDist, c1, c2)
-    obj = (np.multiply(cr1*cr1.T, g11).sum() - 2*np.multiply(cr1*(cr2.T), g12).sum())
+    #print cr1-cr2
+    obj = (np.multiply(np.dot(cr1,cr1.T), g11).sum() -
+           2*np.multiply(np.dot(cr1, cr2.T), g12).sum())
+        #print 'cn', obj
     return obj
 
 # Returns |fvDef - fv1|^2 for current norm

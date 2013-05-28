@@ -83,7 +83,7 @@ class SurfaceMatching:
         else:
             self.fv1 = surfaces.Surface(surf=Target)
 
-
+            #print np.fabs(self.fv1.surfel-self.fv0.surfel).max()
 
         self.npt = self.fv0.vertices.shape[0]
         self.dim = self.fv0.vertices.shape[1]
@@ -193,7 +193,9 @@ class SurfaceMatching:
         if self.obj == None:
             self.obj0 = self.param.fun_obj0(self.fv1, self.param.KparDist) / (self.param.sigmaError**2)
             (self.obj, self.xt) = self.objectiveFunDef(self.at, self.Afft, withTrajectory=True)
+            foo = surfaces.Surface(surf=self.fvDef)
             self.fvDef.updateVertices(np.squeeze(self.xt[-1, :, :]))
+            foo.computeCentersAreas()
             self.obj += self.obj0 + self.dataTerm(self.fvDef)
             #print self.obj0,  self.dataTerm(self.fvDef)
 
@@ -319,11 +321,13 @@ class SurfaceMatching:
             self.fvDef.saveVTK(self.outputDir +'/'+ self.saveFile+str(kk)+'.vtk', scalars = Jt[kk, :], scal_name='Jacobian')
 
     def optimizeMatching(self):
+        #print 'dataterm', self.dataTerm(self.fvDef)
+        #print 'obj fun', self.objectiveFun(), self.obj0
         grd = self.getGradient(self.gradCoeff)
         [grd2] = self.dotProduct(grd, [grd])
 
         self.gradEps = max(0.001, np.sqrt(grd2) / 10000)
         print 'Gradient lower bound:', self.gradEps
-        cg.cg(self, verb = self.verb, maxIter = self.maxIter, TestGradient=self.testGradient)
+        cg.cg(self, verb = self.verb, maxIter = self.maxIter,TestGradient=self.testGradient, epsInit=0.1)
         #return self.at, self.xt
 
