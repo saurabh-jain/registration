@@ -323,3 +323,52 @@ def approximateSurfaceCurrent(c, S, fv, sig):
     g2 = computeProductsAsymCurrents(c, S, cc, sig)
     b = LA.solve(g1, np.dot(g2, nu))
     return b
+
+def diffeonCurrentNormDef(b, c, S, fv, sig):
+    g1 = computeProductsCurrents(c,S,sig)
+    g2 = computeProductsAsymCurrents(c, S, fv.centers, sig)
+    obj = np.multiply(b, np.dot(g1, b) - 2*np.dot(g2, fv.surfel)).sum()
+    return obj
+
+def diffeonCurrentNorm0(fv, sig)
+    K = kfun.Kernel(name='gauss', sigma=sig)
+    obj = currentNorm0(fv, K)
+    return obj
+
+def diffeonCurrentNormGradient(b, c, S, fv, sig):
+    M = b.shape[0]
+    dim = b.shape[1]
+    cc = fv.centers
+    nu = fv.surfel
+    K = cc.shape[0]
+
+    sigEye = sig2*np.eye(dim)
+    SS = sigEye.reshape([1,dim,dim]) + S 
+    (R, detR) = multiMatInverse1(SS, isSym=True) 
+    SS = sigEye.reshape([1,1,dim,dim]) + S.reshape([M, 1, dim, dim]) + S.reshape([1, M, dim, dim])
+    (R2, detR2) = multiMatInverse2(SS, isSym=True)
+
+    diffc = c.reshape([M, 1, dim]) - cc.reshape([1, K, dim])
+    betacn = (R.reshape(M, 1, dim, dim) * diffc.reshape([M, K, 1, dim])).sum(axis=3)
+    dst = (betacn * diffc).sum(axis=2)
+    g2 = np.exp(-dst/2)/np.sqrt((sig2**dim)*detR)
+
+    diffc = c.reshape([M, 1, dim]) - c.reshape([1, M, dim])
+    betacc = (R2 * diffc.reshape([M, M, 1, dim])).sum(axis=3)
+    dst = (betacc * diffc).sum(axis=2)
+    g1 = np.exp(-dst/2) / np.sqrt((sig2**dim)*detR2)
+
+    pb = 2*(np.dot(g1, b) - np.dot(g2, nu))
+    bb = (b.reshape(M, 1, dim) * b.reshape(1,M,dim)).sum(axis=2)
+    bnu = (b.reshape(M, 1, dim) * nu.reshape(1,K,dim)).sum(axis=2)
+    g1bb = g1*bb
+    g2bnu = g2*bnu
+
+    pc = (-2 *( (g1bb).reshape(M, M, 1) * betacc).sum(axis=1) +
+          2*( (g2bnu).reshape(M, K, 1) * betacn).sum(axis=1))
+
+    pS = ((g1bb.reshape(M,M,1,1) *(betacc.reshape(M,M,dim,1)*betacc.reshape(M,M,1,dim) - R2)).sum(axis=1)
+          - (g2bnu.reshape(M,K,1,1) *(betacn.reshape(M,K,dim,1)*betacn.reshape(M,K,1,dim)
+                                      - R.reshape(M,1,dim, dim))).sum(axis=1))
+
+    return pb,pc,pS
