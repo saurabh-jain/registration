@@ -39,9 +39,9 @@ def generateDiffeons(fv, c, idx):
 	#C[k, :] = (fv.vertices[I, :]*a[I]).sum(axis=0)/ak ; 
         y = (fv.vertices[I, :] - c[k, :])
         S[k, :, :] = (y.reshape([nI, 3, 1]) * aI.reshape([nI, 1, 1]) * y.reshape([nI, 1, 3])).sum(axis=0)/ak
-        [D,V] = LA.eig(S[k, :, :])
-        D = np.sort(D, axis=None)
-        S[k, :, :] = S[k, :, :] * np.sqrt(ak/(1e-10+2*np.pi * (D[1]*D[2])))
+        #[D,V] = LA.eig(S[k, :, :])
+        #D = np.sort(D, axis=None)
+        #S[k, :, :] = S[k, :, :] * np.sqrt(ak/(1e-10+2*np.pi * (D[1]*D[2])))
         #print np.pi * (D[1]*D[2]), ak
     return c, S, idx
 
@@ -160,20 +160,21 @@ def multiMatInverse1(S, isSym=False):
         
 def multiMatInverse2(S, isSym=False):
     N = S.shape[0]
+    M = S.shape[1]
     dim = S.shape[2] ;
     if (dim==1):
         R = np.divide(1, S)
         detR = S
     elif (dim == 2):
-	R = np.zeros([N, N, dim, dim])
+	R = np.zeros([N, M, dim, dim])
         detR = np.multiply(S[:, :,0, 0], S[:, :, 1, 1]) - np.multiply(S[:, :,0, 1], S[:, :, 1, 0])
         R[:, :, 0, 0] = S[:, :, 1, 1].copy()
         R[:, :, 1, 1] = S[:, :, 0, 0].copy()
         R[:, :, 0, 1] = -S[:, :, 0, 1]
         R[:, :, 1, 0] = -S[:, :, 1, 0]
-        R = R / detR.reshape([N, N, 1, 1])
+        R = R / detR.reshape([N, M, 1, 1])
     elif (dim==3):
-	R = np.zeros([N, N, dim, dim])
+	R = np.zeros([N, M, dim, dim])
         detR = (S[:, :, 0, 0] * S[:, :, 1, 1] * S[:, :, 2, 2] 
                 -S[:, :, 0, 0] * S[:, :, 1, 2] * S[:, :, 2, 1]
                 -S[:, :, 0, 1] * S[:, :, 1, 0] * S[:, :, 2, 2]
@@ -195,7 +196,7 @@ def multiMatInverse2(S, isSym=False):
             R[:, :, 1, 0] = -S[:, :, 1, 0] * S[:, :, 2, 2] + S[:, :, 1, 2] * S[:, :, 2, 0]
             R[:, :, 2, 0] = S[:, :, 1, 0] * S[:, :, 2, 1] - S[:, :, 2, 0] * S[:, :, 1, 1]
             R[:, :, 2, 1] = -S[:, :, 0, 0] * S[:, :, 2, 1] + S[:, :, 2, 0] * S[:, :, 0, 1]
-        R = R / detR.reshape([N, N, 1, 1])
+        R = R / detR.reshape([N, M, 1, 1])
     return R, detR
         
 
@@ -216,6 +217,64 @@ def computeProducts(c, S, sig):
     betacc = (R2 * diffc.reshape([M, M, 1, dim])).sum(axis=3)
     dst = (betacc * diffc).sum(axis=2)
     gcc = np.sqrt((detR.reshape([M,1])*detR.reshape([1,M]))/((sig2**dim)*detR2))*np.exp(-dst/2)
+    
+    return gcc
+
+
+def computeProductsCurrents(c, S, sig):
+    M = c.shape[0]
+    dim = c.shape[1]
+    sig2 = sig*sig ;
+
+    sigEye = sig2*np.eye(dim)
+    SS = sigEye.reshape([1,dim,dim]) + S 
+    SS = sigEye.reshape([1,1,dim,dim]) + S.reshape([M, 1, dim, dim]) + S.reshape([1, M, dim, dim])
+    (R2, detR2) = multiMatInverse2(SS, isSym=True)
+    
+    diffc = c.reshape([M, 1, dim]) - c.reshape([1, M, dim])
+    betacc = (R2 * diffc.reshape([M, M, 1, dim])).sum(axis=3)
+    dst = (betacc * diffc).sum(axis=2)
+    gcc = np.exp(-dst/2) / np.sqrt((sig2**dim)*detR2)
+    
+    return gcc
+
+
+def computeProductsAsym(c0, S0, c1, S1, sig):
+    M0 = c0.shape[0]
+    M1 = c1.shape[0]
+    dim = c0.shape[1]
+    sig2 = sig*sig ;
+
+    sigEye = sig2*np.eye(dim)
+    SS = sigEye.reshape([1,dim,dim]) + S0 
+    detR0 = multiMatDet1(SS, isSym=True) 
+    SS = sigEye.reshape([1,dim,dim]) + S1 
+    detR1 = multiMatDet1(SS, isSym=True) 
+    SS = sigEye.reshape([1,1,dim,dim]) + S0.reshape([M0, 1, dim, dim]) + S1.reshape([1, M1, dim, dim])
+    (R2, detR2) = multiMatInverse2(SS, isSym=True)
+    
+    diffc = c0.reshape([M0, 1, dim]) - c1.reshape([1, M1, dim])
+    betacc = (R2 * diffc.reshape([M0, M1, 1, dim])).sum(axis=3)
+    dst = (betacc * diffc).sum(axis=2)
+    gcc = np.sqrt((detR0.reshape([M0,1])*detR1.reshape([1,M1]))/((sig2**dim)*detR2))*np.exp(-dst/2)
+    
+    return gcc
+
+
+def computeProductsAsymCurrents(c, S, cc, sig):
+    M = c.shape[0]
+    K = cc.shape[0]
+    dim = c.shape[1]
+    sig2 = sig*sig ;
+
+    sigEye = sig2*np.eye(dim)
+    SS = sigEye.reshape([1,dim,dim]) + S 
+    (R, detR) = multiMatInverse1(SS, isSym=True) 
+    
+    diffc = c.reshape([M, 1, dim]) - cc.reshape([1, K, dim])
+    betacc = (R.reshape(M, 1, dim, dim) * diffc.reshape([M, K, 1, dim])).sum(axis=3)
+    dst = (betacc * diffc).sum(axis=2)
+    gcc = np.exp(-dst/2)/np.sqrt((sig2**dim)*detR)
     
     return gcc
 
@@ -257,3 +316,10 @@ def gaussianDiffeonsGradientMatrices(x, c, S, a, px, pc, pS, sig, timeStep):
     grS = -2 * (fc.reshape([M,M,1]) * fS).sum(axis=0)
     return grx, grc, grS, gcc
 
+def approximateSurfaceCurrent(c, S, fv, sig):
+    cc = fv.centers
+    nu = fv.surfel
+    g1 = computeProductsCurrents(c,S,sig)
+    g2 = computeProductsAsymCurrents(c, S, cc, sig)
+    b = LA.solve(g1, np.dot(g2, nu))
+    return b

@@ -52,7 +52,7 @@ def main():
     #         tmplLmk = tmplLmk + T0
     #         cLmk = float(tmpl.vertices.shape[0]) / tmplLmk.shape[0] 
     
-    ff = open('suspicious.txt', 'w')
+    #ff = open('suspicious.txt', 'w')
     for (kk, name) in enumerate(left):
         print 'Processing ', name
         u = path.split(name)
@@ -76,9 +76,9 @@ def main():
                     R = np.dot(R, R0)
                     #R = R0
                     #T = T0
-                    if ((R-np.diag([1,1,1]))**2).sum() > 1:
-                        print R, T
-                        ff.write(nm+'\n')
+                    # if ((R-np.diag([1,1,1]))**2).sum() > 1:
+                    #     print R, T
+                    #     ff.write(nm+'\n')
                     yyl = np.dot(y, R.T) + T
                     pointSets.savelmk(yyl, args.dirOut+'/'+nm+'_reg.lmk')
                     #print R,T
@@ -113,9 +113,9 @@ def main():
                     R = np.dot(R, R0)
                     #R = R0
                     #T = T0
-                    if ((R-np.diag([-1,1,1]))**2).sum() > 1:
-                        print R, T
-                        ff.write(nm+'\n')
+                    # if ((R-np.diag([-1,1,1]))**2).sum() > 1:
+                    #     print R, T
+                    #     ff.write(nm+'\n')
                         #print R, T
                     yyl = np.dot(y, R.T) + T
                     pointSets.savelmk(yyl, args.dirOut+'/'+nm+'_reg.lmk')

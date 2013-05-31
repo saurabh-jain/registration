@@ -195,6 +195,7 @@ def rigidRegistration(surfaces = None, temperature = 1.0, rotWeight = 1.0, rotat
                 Rold = np.copy(R)
     else:
         # landmarks only
+        R = np.eye(dimn)
         mx = X0.sum(axis=0)/Nlmk
         my = Y1.sum(axis=0)/Nlmk
         Y = Y1 - my
@@ -202,6 +203,7 @@ def rigidRegistration(surfaces = None, temperature = 1.0, rotWeight = 1.0, rotat
     
         if not translationOnly: 
             U = np.dot(Y.T, X) #+ rotWeight * np.eye(dimn)
+            print U
             if rotationOnly:
                 R = rotpart(U) ;
             else:

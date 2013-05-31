@@ -91,9 +91,11 @@ def gaussianDiffeonsEvolutionEuler(x0, c0, S0, at, sigma, affine = None, withJac
         
     if not (withPointSet==None):
         simpleOutput = False
-        K = withPointSet.shape[0]
+        K = withPointSet[0].shape[0]
         yt = np.zeros([T,K,dim])
-        yt[0, :, :] = withPointSet
+        Ut = np.zeros([T,K,dim,dim])
+        yt[0, :, :] = withPointSet[0]
+        Ut[0, :, :] = withPointSet[1]
 
     sigEye = sig2*np.eye(dim)
     for t in range(T-1):
@@ -135,14 +137,23 @@ def gaussianDiffeonsEvolutionEuler(x0, c0, S0, at, sigma, affine = None, withJac
 
         if not (withPointSet == None):
             y = np.squeeze(yt[t, :, :])
+            U = np.squeeze(Ut[t, :, :, :])
             K = y.shape[0]
-            diff = y.reshape([K, 1, dim]) - c.reshape([1, M, dim])
-            dst = (diff * (R.reshape([1, M, dim, dim])*diff.reshape[K, M, 1, dim]).sum(axis=3)).sum(axis=2)
+            diffy = y.reshape([K, 1, dim]) - c.reshape([1, M, dim])
+            betay = (R.reshape([1, M, dim, dim])*diffy.reshape([K, M, 1, dim])).sum(axis=3)
+            dst = (diffy * betay).sum(axis=2)
             fy = np.exp(-dst/2)
             zy = np.dot(fy, a)
             yt[t+1, :, :] = y + timeStep * zy
             if not (affine == None):
                 yt[t+1, :, :] += timeStep * (np.dot(y, A[t].T) + b[t])
+            Dvy = -((fy.reshape([K,M,1])*betay).reshape([K, M, 1, dim])*a.reshape([1, M, dim, 1])).sum(axis=1)
+            if not (affine == None):
+                Dvy = Dvy + A[t].reshape([1,dim,dim])
+            UDvT = (U.reshape([K,dim,1,dim])*Dvy.reshape([K,1,dim, dim])).sum(axis=3)
+            zU = UDvT.transpose([0,2,1]) + UDvT
+            zUcorr = (UDvT.reshape([K, 1, dim, dim])*Dvy.reshape([K, dim, dim, 1])).sum(axis=2) 
+            Ut[t+1, :, :, :] = U + timeStep * zU + (timeStep**2) * zUcorr
 
         if withJacobian:
             Div = np.multiply(fx, (betax * a.reshape(1,M, dim)).sum(axis=2)).sum(axis=1)
@@ -156,6 +167,7 @@ def gaussianDiffeonsEvolutionEuler(x0, c0, S0, at, sigma, affine = None, withJac
         output = [xt, ct, St]
         if not (withPointSet==None):
             output.append(yt)
+            output.append(Ut)
         # if not (withNormals==None):
         #     output.append(nt)
         if withJacobian:

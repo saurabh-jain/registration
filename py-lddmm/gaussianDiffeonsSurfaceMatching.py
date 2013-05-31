@@ -321,20 +321,29 @@ class SurfaceMatching(surfaceMatching.SurfaceMatching):
             net = EspilonNet[2] 
             (c0, S0, idx) = gd.generateDiffeons(self.fv0, EpsilonNet[0], EpsilonNet[1])
 
+        (xt, ctPrev, StPrev, ct, St) = evol.gaussianDiffeonsEvolutionEuler(self.x0, self.c0, self.S0, self.at, self.param.sigmaKernel, withPointSet=(c0, S0))
         at = np.zeros([self.Tsize, c0.shape[0], self.x0.shape[1]])
-        fvDef = surfaces.Surface(surf=self.fvDef)
+        #fvDef = surfaces.Surface(surf=self.fvDef)
         for t in range(self.Tsize):
-            fvDef.updateVertices(np.squeeze(self.xt[t, :, :]))
-            (AV, AF) = fvDef.computeVertexArea()
-            weights = np.zeros([c0.shape[0], self.c0.shape[0]])
-            diffArea = np.zeros(self.c0.shape[0])
-            diffArea2 = np.zeros(c0.shape[0])
-            for k in range(self.npt):
-                diffArea[self.idx[k]] += AV[k] 
-                diffArea2[idx[k]] += AV[k]
-                weights[idx[k], self.idx[k]] += AV[k]
-            weights /= diffArea.reshape([1, self.c0.shape[0]])
-            at[t] = np.dot(weights, self.at[t, :, :])
+            g1 = gd.computeProducts(np.squeeze(ct[t,:,:]),np.squeeze(St[t,:,:]), self.param.sigmaKernel) 
+            g2 = gd.computeProductsAsym(np.squeeze(ct[t,:,:]),np.squeeze(St[t,:,:]), np.squeeze(ctPrev[t,:,:]),np.squeeze(StPrev[t,:,:]), self.param.sigmaKernel)
+            g2a = np.dot(g2, np.squeeze(self.at[t, :, :]))
+            at[t, :, :] = LA.solve(g1, g2a)
+            g0 = gd.computeProducts(np.squeeze(ctPrev[t,:,:]),np.squeeze(StPrev[t,:,:]), self.param.sigmaKernel)
+            n0 = np.multiply(self.at[t, :, :], np.dot(g0, self.at[t, :, :])).sum()
+            n1 = np.multiply(at[t, :, :], np.dot(g1, at[t, :, :])).sum()
+            print 'norms: ', n0, n1
+            # fvDef.updateVertices(np.squeeze(self.xt[t, :, :]))
+            # (AV, AF) = fvDef.computeVertexArea()
+            # weights = np.zeros([c0.shape[0], self.c0.shape[0]])
+            # diffArea = np.zeros(self.c0.shape[0])
+            # diffArea2 = np.zeros(c0.shape[0])
+            # for k in range(self.npt):
+            #     diffArea[self.idx[k]] += AV[k] 
+            #     diffArea2[idx[k]] += AV[k]
+            #     weights[idx[k], self.idx[k]] += AV[k]
+            # weights /= diffArea.reshape([1, self.c0.shape[0]])
+            # at[t] = np.dot(weights, self.at[t, :, :])
         self.c0 = c0
         self.idx = idx
         self.S0 = S0
@@ -349,6 +358,11 @@ class SurfaceMatching(surfaceMatching.SurfaceMatching):
 
 
     def optimizeMatching(self):
+        obj0 = self.param.fun_obj0(self.fv1, self.param.KparDist) / (self.param.sigmaError**2)
+        (obj, xt, ct, St) = self.objectiveFunDef(self.at, self.Afft, withTrajectory=True)
+        self.fvDef.updateVertices(np.squeeze(self.xt[-1, :, :]))
+        print 'objDef = ', obj, 'dataterm = ',  obj0 + self.dataTerm(self.fvDef)
+
         grd = self.getGradient(self.gradCoeff)
         [grd2] = self.dotProduct(grd, [grd])
 
