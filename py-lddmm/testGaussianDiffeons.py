@@ -42,10 +42,10 @@ def compute(createSurfaces=True):
         #return fv1, fv2
 
     ## Object kernel
-    r0 = 10./fv1.vertices.shape[0]
+    r0 = 1.5/fv1.vertices.shape[0]
     sm = SurfaceMatchingParam(timeStep=0.1, sigmaKernel=10, sigmaDist=5, sigmaError=1.,
-                              #errorType='diffeonCurrent')
-                              errorType='current')
+                              errorType='diffeonCurrent')
+        #errorType='current')
     f = SurfaceMatching(Template=fv1, Target=fv2, outputDir='/Users/younes/Development/Results/Diffeons2/Scale1',param=sm, testGradient=True, DiffeonEpsForNet = r0,
                         #DiffeonSegmentationRatio=r0,
                         maxIter=1000, affine='none', rotWeight=1., transWeight = 1., scaleWeight=10., affineWeight=100., zeroVar=False)

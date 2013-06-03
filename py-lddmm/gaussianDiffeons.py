@@ -31,7 +31,7 @@ def generateDiffeons(fv, c, idx):
     print 'Computed', nc+1, 'diffeons'
     S = np.zeros([nc+1, 3, 3])
     #C = np.zeros([nc, 3])
-    for k in range(nc):
+    for k in range(nc+1):
         I = np.flatnonzero(idx==k)
 	#print I
         nI = len(I)

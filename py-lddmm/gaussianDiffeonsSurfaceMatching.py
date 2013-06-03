@@ -127,7 +127,7 @@ class SurfaceMatching(surfaceMatching.SurfaceMatching):
         if zeroVar:
 	    self.S0 = np.zeros(self.S0.shape)
 
-        #print self.c0
+            #print self.S0
 	self.ndf = self.c0.shape[0]
         self.Tsize = int(round(1.0/self.param.timeStep))
         self.at = np.zeros([self.Tsize, self.c0.shape[0], self.x0.shape[1]])
@@ -139,7 +139,7 @@ class SurfaceMatching(surfaceMatching.SurfaceMatching):
         self.St = np.tile(self.S0, [self.Tsize+1, 1, 1, 1])
 	if self.param.errorType =='diffeonCurrent':
 	    self.b0 = gd.approximateSurfaceCurrent(self.c0, self.S0, self.fv0, self.param.KparDist.sigma)
-	    self.bt = np.tile(self.c0, [self.Tsize+1, 1, 1])
+	    self.bt = np.tile(self.b0, [self.Tsize+1, 1, 1])
 	    self.dcurr = True
 	else:
 	    self.dcurr=False
@@ -369,6 +369,8 @@ class SurfaceMatching(surfaceMatching.SurfaceMatching):
             (obj1, self.ct, self.St, self.bt, self.xt, Jt) = self.objectiveFunDef(self.at, self.Afft, withTrajectory=True, withJacobian=True)
         else:
             (obj1, self.ct, self.St, self.xt, Jt) = self.objectiveFunDef(self.at, self.Afft, withTrajectory=True, withJacobian=True)
+
+            #print self.bt
 
         for kk in range(self.Tsize+1):
             self.fvDef.updateVertices(np.squeeze(self.xt[kk, :, :]))
