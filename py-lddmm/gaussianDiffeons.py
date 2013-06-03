@@ -2,6 +2,7 @@ import numpy as np
 import numpy.linalg as LA
 import scipy.linalg as spLA
 import kernelFunctions as kfun
+import surfaces
 from pointSets import epsilonNet
 
 
@@ -227,14 +228,13 @@ def computeProductsCurrents(c, S, sig):
     sig2 = sig*sig ;
 
     sigEye = sig2*np.eye(dim)
-    SS = sigEye.reshape([1,dim,dim]) + S 
     SS = sigEye.reshape([1,1,dim,dim]) + S.reshape([M, 1, dim, dim]) + S.reshape([1, M, dim, dim])
     (R2, detR2) = multiMatInverse2(SS, isSym=True)
     
     diffc = c.reshape([M, 1, dim]) - c.reshape([1, M, dim])
     betacc = (R2 * diffc.reshape([M, M, 1, dim])).sum(axis=3)
     dst = (betacc * diffc).sum(axis=2)
-    gcc = np.exp(-dst/2) / np.sqrt((sig2**dim)*detR2)
+    gcc = (sig**dim)*np.exp(-dst/2) / (np.sqrt(detR2))
     
     return gcc
 
@@ -274,12 +274,12 @@ def computeProductsAsymCurrents(c, S, cc, sig):
     diffc = c.reshape([M, 1, dim]) - cc.reshape([1, K, dim])
     betacc = (R.reshape(M, 1, dim, dim) * diffc.reshape([M, K, 1, dim])).sum(axis=3)
     dst = (betacc * diffc).sum(axis=2)
-    gcc = np.exp(-dst/2)/np.sqrt((sig2**dim)*detR)
+    gcc = (sig**dim)*np.exp(-dst/2)/(np.sqrt(detR).reshape(M,1))
     
     return gcc
 
 
-def gaussianDiffeonsGradientMatrices(x, c, S, a, px, pc, pS, sig, timeStep):
+def gaussianDiffeonsGradientMatricesPset(c, S, x, a, pc, pS, px, sig, timeStep):
     N = x.shape[0]
     M = c.shape[0]
     dim = x.shape[1]
@@ -314,7 +314,39 @@ def gaussianDiffeonsGradientMatrices(x, c, S, a, px, pc, pS, sig, timeStep):
     grx = np.dot(fx.T, px)
     grc = np.dot(fc.T, pc)
     grS = -2 * (fc.reshape([M,M,1]) * fS).sum(axis=0)
-    return grx, grc, grS, gcc
+    return grc, grS, grx, gcc
+
+def gaussianDiffeonsGradientMatricesNormals(c, S, b, a, pc, pS, pb, sig, timeStep):
+    M = c.shape[0]
+    dim = c.shape[1]
+    sig2 = sig*sig ;
+
+    sigEye = sig2*np.eye(dim)
+    SS = sigEye.reshape([1,dim,dim]) + S 
+    (R, detR) = multiMatInverse1(SS, isSym=True) 
+    SS = sigEye.reshape([1,1,dim,dim]) + S.reshape([M, 1, dim, dim]) + S.reshape([1, M, dim, dim])
+    (R2, detR2) = multiMatInverse2(SS, isSym=True)
+
+    diffc = c.reshape([M, 1, dim]) - c.reshape([1, M, dim])
+    betac = (R.reshape([1, M, dim, dim])*diffc.reshape([M, M, 1, dim])).sum(axis=3)
+    dst = (diffc * betac).sum(axis=2)
+    fc = np.exp(-dst/2)
+    betacc = (R2 * diffc.reshape([M, M, 1, dim])).sum(axis=3)
+    dst = (betacc * diffc).sum(axis=2)
+    gcc = np.sqrt((detR.reshape([M,1])*detR.reshape([1,M]))/((sig2**dim)*detR2))*np.exp(-dst/2)
+    
+    Dv = -((fc.reshape([M,M,1])*betac).reshape([M, M, 1, dim])*a.reshape([1, M, dim, 1])).sum(axis=1)
+    IDv = np.eye(dim).reshape([1,dim,dim]) + timeStep * Dv ;
+    pSS = (pS.reshape([M,dim,dim,1]) * (IDv.reshape([M,dim,dim, 1]) * S.reshape([M, 1, dim ,dim])).sum(axis=2).reshape([M,1,dim,dim])).sum(axis=2)
+    
+    fS = (pSS.reshape([M, 1, dim, dim])*betac.reshape([M,M,1,dim])).sum(axis=3)
+    #fS = (pSS.reshape([M, 1, dim, dim])*betac.reshape([M,M,dim, 1])).sum(axis=2)
+    #fS = (pS.reshape([M, 1, dim,dim])* fS.reshape([M,M,1,dim])).sum(axis=3)
+    fb = fc*(pb.reshape([M,1, dim])*betac.reshape([M, M, dim])).sum(axis=2) 
+    grb = np.dot(fb.T, b)
+    grc = np.dot(fc.T, pc)
+    grS = -2 * (fc.reshape([M,M,1]) * fS).sum(axis=0)
+    return grc, grS, grb, gcc
 
 def approximateSurfaceCurrent(c, S, fv, sig):
     cc = fv.centers
@@ -324,23 +356,45 @@ def approximateSurfaceCurrent(c, S, fv, sig):
     b = LA.solve(g1, np.dot(g2, nu))
     return b
 
-def diffeonCurrentNormDef(b, c, S, fv, sig):
+def diffeonCurrentNormDef(c, S, b, fv, sig):
+    # print 'c', c
+    # print 'S', S
+    # print 'b', b
     g1 = computeProductsCurrents(c,S,sig)
     g2 = computeProductsAsymCurrents(c, S, fv.centers, sig)
     obj = np.multiply(b, np.dot(g1, b) - 2*np.dot(g2, fv.surfel)).sum()
     return obj
 
-def diffeonCurrentNorm0(fv, sig)
-    K = kfun.Kernel(name='gauss', sigma=sig)
-    obj = currentNorm0(fv, K)
+def diffeonCurrentNorm0(fv, K):
+    #print 'sigma=', sig
+    #K = kfun.Kernel(name='gauss', sigma=sig)
+    obj = surfaces.currentNorm0(fv, K)
     return obj
 
-def diffeonCurrentNormGradient(b, c, S, fv, sig):
+
+def testDiffeonCurrentNormGradient(c, S, b, fv, sig):
+    obj0 = diffeonCurrentNormDef(c,S,b,fv, sig)
+    (gc, gS, gb) = diffeonCurrentNormGradient(c,S,b,fv,sig)
+    eps = 1e-7
+    dc = np.random.randn(c.shape[0], c.shape[1])
+    obj = diffeonCurrentNormDef(c+eps*dc,S,b,fv, sig)
+    print 'c Variation:', (obj-obj0)/eps, (gc*dc).sum()
+    dS = np.random.randn(S.shape[0], S.shape[1], S.shape[2])
+    dS += dS.transpose((0,2,1))
+    obj = diffeonCurrentNormDef(c,S+eps*dS,b,fv, sig)
+    print 'S Variation:', (obj-obj0)/eps, (gS*dS).sum()
+    db = np.random.randn(b.shape[0], b.shape[1])
+    obj = diffeonCurrentNormDef(c,S,b+eps*db,fv, sig)
+    print 'b Variation:', (obj-obj0)/eps, (gb*db).sum()
+    
+
+def diffeonCurrentNormGradient(c, S, b, fv, sig):
     M = b.shape[0]
     dim = b.shape[1]
     cc = fv.centers
     nu = fv.surfel
     K = cc.shape[0]
+    sig2 = sig**2
 
     sigEye = sig2*np.eye(dim)
     SS = sigEye.reshape([1,dim,dim]) + S 
@@ -351,12 +405,12 @@ def diffeonCurrentNormGradient(b, c, S, fv, sig):
     diffc = c.reshape([M, 1, dim]) - cc.reshape([1, K, dim])
     betacn = (R.reshape(M, 1, dim, dim) * diffc.reshape([M, K, 1, dim])).sum(axis=3)
     dst = (betacn * diffc).sum(axis=2)
-    g2 = np.exp(-dst/2)/np.sqrt((sig2**dim)*detR)
+    g2 = (sig**dim)*np.exp(-dst/2)/np.sqrt(detR).reshape(M,1)
 
     diffc = c.reshape([M, 1, dim]) - c.reshape([1, M, dim])
     betacc = (R2 * diffc.reshape([M, M, 1, dim])).sum(axis=3)
     dst = (betacc * diffc).sum(axis=2)
-    g1 = np.exp(-dst/2) / np.sqrt((sig2**dim)*detR2)
+    g1 = (sig**dim)*np.exp(-dst/2) / np.sqrt(detR2)
 
     pb = 2*(np.dot(g1, b) - np.dot(g2, nu))
     bb = (b.reshape(M, 1, dim) * b.reshape(1,M,dim)).sum(axis=2)
@@ -371,4 +425,4 @@ def diffeonCurrentNormGradient(b, c, S, fv, sig):
           - (g2bnu.reshape(M,K,1,1) *(betacn.reshape(M,K,dim,1)*betacn.reshape(M,K,1,dim)
                                       - R.reshape(M,1,dim, dim))).sum(axis=1))
 
-    return pb,pc,pS
+    return pc,pS,pb
