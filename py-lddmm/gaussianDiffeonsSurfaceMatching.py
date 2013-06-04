@@ -84,7 +84,8 @@ class SurfaceMatching(surfaceMatching.SurfaceMatching):
             self.fv1 = surfaces.Surface(surf=Target)
 
         self.saveRate = 10
-        self.iter = 0 
+        self.iter = 0
+        self.gradEps = -1
         self.npt = self.fv0.vertices.shape[0]
         self.dim = self.fv0.vertices.shape[1]
         self.setOutputDir(outputDir)
@@ -482,10 +483,12 @@ class SurfaceMatching(surfaceMatching.SurfaceMatching):
             self.fvDef.updateVertices(np.squeeze(self.xt[-1, :, :]))
             print 'objDef = ', obj, 'dataterm = ',  obj0 + self.dataTerm(self.fvDef)
 
-        grd = self.getGradient(self.gradCoeff)
-        [grd2] = self.dotProduct(grd, [grd])
+        if self.gradEps < 0:
+            grd = self.getGradient(self.gradCoeff)
+            [grd2] = self.dotProduct(grd, [grd])
 
-        self.gradEps = max(0.001, np.sqrt(grd2) / 10000)
+            self.gradEps = max(0.001, np.sqrt(grd2) / 10000)
+
         print 'Gradient lower bound: ', self.gradEps
         cg.cg(self, verb = self.verb, maxIter = self.maxIter, TestGradient=self.testGradient)
         #return self.at, self.xt
