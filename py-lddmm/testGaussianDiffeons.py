@@ -33,8 +33,13 @@ def compute(createSurfaces=True):
         #sub2 = '1449400_1_L'
         sub2 = 'LU027_R_sumNCBC20100628'
         fv1 = surfaces.Surface(filename = path+'5_population_template_qc/newTemplate.byu')
+        v1 = fv1.surfVolume()
         #    f0.append(surfaces.Surface(filename = path+'amygdala/biocardAmyg 2/'+sub1+'_amyg_L.byu'))
         fv2 = surfaces.Surface(filename = path+'2_qc_flipped_registered/'+sub2+'_registered.byu')
+        v2 = fv2.surfVolume()
+        if (v2*v1 < 0):
+            fv2.faces = fv2.faces[:, [0,2,1]]
+
         #f1.append(surfaces.Surface(filename = path+'amygdala/biocardAmyg 2/'+sub2+'_amyg_L.byu'))
         #fv1 = Surface(filename='/Users/younes/Development/Results/Diffeons/fv1.vtk')
         #fv2  = Surface(filename='/Users/younes/Development/Results/Diffeons/fv2.vtk')
@@ -43,18 +48,18 @@ def compute(createSurfaces=True):
 
     ## Object kernel
     r0 = 10./fv1.vertices.shape[0]
-    sm = SurfaceMatchingParam(timeStep=0.1, sigmaKernel=10., sigmaDist=5., sigmaError=10.,
-                              #errorType='diffeonCurrent')
-                              errorType='current')
-    f = SurfaceMatching(Template=fv1, Target=fv2, outputDir='/Users/younes/Development/Results/Diffeons2/Scale1',param=sm, testGradient=True, DiffeonEpsForNet = r0,
+    sm = SurfaceMatchingParam(timeStep=0.1, sigmaKernel=10., sigmaDist=5., sigmaError=1.,
+                              errorType='diffeonCurrent')
+                              #errorType='current')
+    f = SurfaceMatching(Template=fv1, Target=fv2, outputDir='/Users/younes/Development/Results/Diffeons2/Scale1',param=sm, testGradient=False, DiffeonEpsForNet = r0,
                         #DiffeonSegmentationRatio=r0,
-                        maxIter=100, affine='none', rotWeight=1., transWeight = 1., scaleWeight=10., affineWeight=100., zeroVar=False)
+                        maxIter=1000, affine='none', rotWeight=1., transWeight = 1., scaleWeight=10., affineWeight=100., zeroVar=False)
     # f = SurfaceMatching(Template=fv1, Target=fv2, outputDir='/Users/younes/Development/Results',param=sm, testGradient=True, Diffeons=(fv1.vertices.copy(),np.zeros([fv1.vertices.shape[0],3,3])),
     #                      maxIter=1000, affine='none', rotWeight=1., transWeight = 1., scaleWeight=10., affineWeight=100.)
 
     f.optimizeMatching()
     f.maxIter = 200
-    f.param.sigmaError=5.0
+    f.param.sigmaError=1.0
     f.setOutputDir('/Users/younes/Development/Results/Diffeons2/Scale2')
     f.restart(DiffeonEpsForNet = 2*r0)
     #f.restart(DiffeonSegmentationRatio = 0.025)
