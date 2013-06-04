@@ -776,7 +776,7 @@ class Surface:
                     j=0
 
     # Saves in .vtk format
-    def saveVTK(self, fileName, scalars = None, normals = None, tensors=None, scal_name='scalars'):
+    def saveVTK(self, fileName, scalars = None, normals = None, tensors=None, scal_name='scalars', vectors=None, vect_name='vectors'):
         F = self.faces ;
         V = self.vertices ;
 
@@ -796,6 +796,11 @@ class Surface:
                 for ll in range(V.shape[0]):
                     #print scalars[ll]
                     fvtkout.write('\n {0: .5f}'.format(scalars[ll]))
+            if not (vectors==None):
+                fvtkout.write('\nVECTORS '+ vect_name +' float')
+                for ll in range(V.shape[0]):
+                    fvtkout.write('\n {0: .5f} {1: .5f} {2: .5f}'.format(vectors[ll, 0], vectors[ll, 1], vectors[ll, 2]))
+
             if not (normals == None):
                 fvtkout.write('\nNORMALS normals float')
                 for ll in range(V.shape[0]):

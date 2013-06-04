@@ -83,6 +83,8 @@ class SurfaceMatching(surfaceMatching.SurfaceMatching):
         else:
             self.fv1 = surfaces.Surface(surf=Target)
 
+        self.saveRate = 10
+        self.iter = 0 
         self.npt = self.fv0.vertices.shape[0]
         self.dim = self.fv0.vertices.shape[1]
         self.setOutputDir(outputDir)
@@ -267,6 +269,7 @@ class SurfaceMatching(surfaceMatching.SurfaceMatching):
 
     def endPointGradient(self):
         if self.dcurr:
+            #print self.bt.shape
             (pc, pS, pb) = self.param.fun_objGrad(self.ct[-1, :, :], self.St[-1, :, :, :], self.bt[-1, :, :],
                                         self.fv1, self.param.KparDist.sigma)
             #gd.testDiffeonCurrentNormGradient(self.ct[-1, :, :], self.St[-1, :, :, :], self.bt[-1, :, :],
@@ -362,23 +365,52 @@ class SurfaceMatching(surfaceMatching.SurfaceMatching):
         self.at = np.copy(self.atTry)
         self.Afft = np.copy(self.AfftTry)
         #print self.at
+    def saveB(self, fileName, c, b):
+        with open(fileName, 'w') as fvtkout:
+            fvtkout.write('# vtk DataFile Version 3.0\nSurface Data\nASCII\nDATASET UNSTRUCTURED_GRID\n') 
+            fvtkout.write('\nPOINTS {0: d} float'.format(c.shape[0]))
+            for ll in range(c.shape[0]):
+                fvtkout.write('\n{0: f} {1: f} {2: f}'.format(c[ll,0], c[ll,1], c[ll,2]))
+            fvtkout.write(('\nPOINT_DATA {0: d}').format(c.shape[0]))
+
+            fvtkout.write('\nVECTORS bt float')
+            for ll in range(c.shape[0]):
+                fvtkout.write('\n {0: .5f} {1: .5f} {2: .5f}'.format(b[ll, 0], b[ll, 1], b[ll, 2]))
+            fvtkout.write('\n')
+
 
     def endOfIteration(self):
         #print self.obj0
-        if self.dcurr:
-            (obj1, self.ct, self.St, self.bt, self.xt, Jt) = self.objectiveFunDef(self.at, self.Afft, withTrajectory=True, withJacobian=True)
-        else:
-            (obj1, self.ct, self.St, self.xt, Jt) = self.objectiveFunDef(self.at, self.Afft, withTrajectory=True, withJacobian=True)
+        self.iter += 1
+        if (self.iter % self.saveRate == 0) :
+            if self.dcurr:
+                (obj1, self.ct, self.St, self.bt, self.xt, Jt) = self.objectiveFunDef(self.at, self.Afft, withTrajectory=True, withJacobian=True)
+                for kk in range(self.Tsize+1):
+                    self.fvDef.updateVertices(np.squeeze(self.xt[kk, :, :]))
+                    if self.idx == None:
+                        self.fvDef.saveVTK(self.outputDir +'/'+ self.saveFile+str(kk)+'.vtk', scalars = Jt[kk, :], scal_name='Jacobian')
+                    else:
+                        self.fvDef.saveVTK(self.outputDir +'/'+ self.saveFile+str(kk)+'.vtk', scalars = self.idx, scal_name='Labels')
+                                           #vectors = self.bt[kk, :, :], vect_name='bt')
+                    gd.saveDiffeons(self.outputDir +'/'+ self.saveFile+'Diffeons'+str(kk)+'.vtk', self.ct[kk,:,:], self.St[kk,:,:,:])
+                    self.saveB(self.outputDir +'/'+ self.saveFile+'Bt'+str(kk)+'.vtk', self.ct[kk,:,:], self.bt[kk,:,:])
+            else:
+                (obj1, self.ct, self.St, self.xt, Jt) = self.objectiveFunDef(self.at, self.Afft, withTrajectory=True, withJacobian=True)
+                for kk in range(self.Tsize+1):
+                    self.fvDef.updateVertices(np.squeeze(self.xt[kk, :, :]))
+                    if self.idx == None:
+                        self.fvDef.saveVTK(self.outputDir +'/'+ self.saveFile+str(kk)+'.vtk', scalars = Jt[kk, :], scal_name='Jacobian')
+                    else:
+                        self.fvDef.saveVTK(self.outputDir +'/'+ self.saveFile+str(kk)+'.vtk', scalars = self.idx, scal_name='Labels')
+                    gd.saveDiffeons(self.outputDir +'/'+ self.saveFile+'Diffeons'+str(kk)+'.vtk', self.ct[kk,:,:], self.St[kk,:,:,:])
 
             #print self.bt
 
-        for kk in range(self.Tsize+1):
-            self.fvDef.updateVertices(np.squeeze(self.xt[kk, :, :]))
-            if self.idx == None:
-                self.fvDef.saveVTK(self.outputDir +'/'+ self.saveFile+str(kk)+'.vtk', scalars = Jt[kk, :], scal_name='Jacobian')
+        else:
+            if self.dcurr:
+                (obj1, self.ct, self.St, self.bt) = self.objectiveFunDef(self.at, self.Afft, withTrajectory=True)
             else:
-                self.fvDef.saveVTK(self.outputDir +'/'+ self.saveFile+str(kk)+'.vtk', scalars = self.idx, scal_name='Labels')
-            gd.saveDiffeons(self.outputDir +'/'+ self.saveFile+'Diffeons'+str(kk)+'.vtk', self.ct[kk,:,:], self.St[kk,:,:,:])
+                (obj1, self.ct, self.St, self.xt) = self.objectiveFunDef(self.at, self.Afft, withTrajectory=True)
 
     def restart(self, EpsilonNet=None, DiffeonEpsForNet=None, DiffeonSegmentationRatio=None):
         if EpsilonNet==None:
@@ -423,12 +455,14 @@ class SurfaceMatching(surfaceMatching.SurfaceMatching):
         self.c0 = c0
         self.idx = idx
         self.S0 = S0
-        if self.dcurr:
-	    self.b0 = approximateSurfaceCurrent(self.c0, self.S0, self.fv0, self.param.KparDist.sigma)
         self.at = at
         self.ndf = self.c0.shape[0]
         self.ct = np.tile(self.c0, [self.Tsize+1, 1, 1])
         self.St = np.tile(self.S0, [self.Tsize+1, 1, 1, 1])
+        if self.dcurr:
+	    self.b0 = gd.approximateSurfaceCurrent(self.c0, self.S0, self.fv0, self.param.KparDist.sigma)
+            #print self.b0.shape
+            self.bt = np.tile(self.b0, [self.Tsize+1, 1, 1])
         self.obj = None
         self.objTry = None
         self.gradCoeff = self.ndf
@@ -436,10 +470,16 @@ class SurfaceMatching(surfaceMatching.SurfaceMatching):
 
 
     def optimizeMatching(self):
-        #obj0 = self.param.fun_obj0(self.fv1, self.param.KparDist) / (self.param.sigmaError**2)
-        #(obj, xt, ct, St) = self.objectiveFunDef(self.at, self.Afft, withTrajectory=True)
-        #self.fvDef.updateVertices(np.squeeze(self.xt[-1, :, :]))
-        #print 'objDef = ', obj, 'dataterm = ',  obj0 + self.dataTerm(self.fvDef)
+        obj0 = self.param.fun_obj0(self.fv1, self.param.KparDist) # / (self.param.sigmaError**2)
+        if self.dcurr:
+            (obj, self.ct, self.St, self.bt) = self.objectiveFunDef(self.at, self.Afft, withTrajectory=True)
+            data = (self.ct[-1,:,:], self.St[-1,:,:,:], self.bt[-1,:,:])
+            print 'objDef = ', obj, 'dataterm = ',  obj0 + self.dataTerm(data)* (self.param.sigmaError**2)
+            print obj0 + surfaces.currentNormDef(self.fv0, self.fv1, self.param.KparDist)
+        else:
+            (obj, self.ct, self.St, self.xt) = self.objectiveFunDef(self.at, self.Afft, withTrajectory=True)
+            self.fvDef.updateVertices(np.squeeze(self.xt[-1, :, :]))
+            print 'objDef = ', obj, 'dataterm = ',  obj0 + self.dataTerm(self.fvDef)
 
         grd = self.getGradient(self.gradCoeff)
         [grd2] = self.dotProduct(grd, [grd])

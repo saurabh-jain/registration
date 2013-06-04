@@ -137,11 +137,13 @@ def gaussianDiffeonsEvolutionEuler(c0, S0, at, sigma, affine = None, withJacobia
             ct[t+1, :, :] += timeStep * (np.dot(c, A[t].T) + b[t])
 
         St[t+1, :, :, :] = S + timeStep * zS + (timeStep**2) * zScorr
+        #St[t+1, :, :, :] = S
 
         if not(withNormals==None):
             bb = np.squeeze(bt[t, :, :])
-            zb = ((fc * (bb.reshape([M, 1, dim]) * a.reshape([1,M,dim])).sum(axis=2)).reshape([M,M,1]) * betac).sum(axis=1)
+            zb = ((fc * np.dot(bb, a.T)).reshape([M,M,1]) * betac).sum(axis=1)
             bt[t+1,:,:] = bb + timeStep*zb
+            #bt[t+1,:,:] = bb
             #zb = (Dv*bb.reshape(M,dim,1)).sum(axis=1)
             #bt[t+1,:,:] = bb - timeStep*zb
 
@@ -298,6 +300,7 @@ def gaussianDiffeonsCovectorNormals(c0, S0, b0,  at, pc1, pS1, pb1, sigma, regwe
     T = at.shape[0]
     timeStep = 1.0/T
     (ct, St, bt) = gaussianDiffeonsEvolutionEuler(c0, S0, at, sigma, affine=affine, withNormals=b0)
+    #print bt
     pbt = np.zeros([T, M, dim])
     pct = np.zeros([T, M, dim])
     pSt = np.zeros([T, M, dim, dim])
@@ -337,7 +340,7 @@ def gaussianDiffeonsCovectorNormals(c0, S0, b0,  at, pc1, pS1, pb1, sigma, regwe
         pca = np.dot(pc, a.T)
         #ba = (b.reshape([M,1,dim])*a.reshape([1,M,dim])).sum(axis=2)
         ba = np.dot(b, a.T) 
-        pbbetac = (b.reshape([M,1,dim])*betac).sum(axis=2)
+        pbbetac = (pb.reshape([M,1,dim])*betac).sum(axis=2)
 
         betaSym = betac.reshape([M, M, dim, 1]) * betac.reshape([M, M, 1, dim])
         betacc = (R2 * diffc.reshape([M, M, 1, dim])).sum(axis=3)
@@ -348,6 +351,7 @@ def gaussianDiffeonsCovectorNormals(c0, S0, b0,  at, pc1, pS1, pb1, sigma, regwe
         #print np.fabs(betacc + betacc.transpose([1,0,2])).sum()
         fpb = fc * pbbetac * ba
 	Rpb = (R.reshape(1, M, dim, dim) *pb.reshape(M,1, 1, dim)).sum(axis=3)
+        #print '?', (pbbetac**2).sum(), (Rpb**2).sum()
 
 	zpb = - np.dot(fc*pbbetac, a)
 
@@ -355,8 +359,8 @@ def gaussianDiffeonsCovectorNormals(c0, S0, b0,  at, pc1, pS1, pb1, sigma, regwe
         zpc = u.sum(axis=1) - u.sum(axis=0)
         u = (fc*ba).reshape(M, M, 1)*Rpb
         zpc -= u.sum(axis=1) - u.sum(axis=0)
-        u2 = (pca * fc).reshape([M, M, 1]) * betac
-        zpc += u2.sum(axis=1) - u2.sum(axis=0)
+        u = (pca * fc).reshape([M, M, 1]) * betac
+        zpc += u.sum(axis=1) - u.sum(axis=0)
 
         BmA = betaSym - R.reshape([1, M, dim, dim])
         u = fc.reshape([M, M, 1]) * (BmA *spsa.reshape([M, M, 1, dim])).sum(axis=3)
@@ -432,7 +436,7 @@ def gaussianDiffeonsGradientPset(c0, S0, x0, at, pc1, pS1, px1, sigma, regweight
 def gaussianDiffeonsGradientNormals(c0, S0, b0, at, pc1, pS1, pb1, sigma, regweight, getCovector = False, affine = None):
     (pct, pSt, pbt, ct, St, bt) = gaussianDiffeonsCovectorNormals(c0, S0, b0, at, pc1, pS1, pb1, sigma, regweight, affine=affine)
 
-    print (pct**2).sum()**0.5, (pSt**2).sum()**0.5, (pbt**2).sum()**0.5
+    #print (pct**2).sum()**0.5, (pSt**2).sum()**0.5, (pbt**2).sum()**0.5
 
     dat = np.zeros(at.shape)
     M = c0.shape[0]
@@ -449,6 +453,7 @@ def gaussianDiffeonsGradientNormals(c0, S0, b0, at, pc1, pS1, pb1, sigma, regwei
         pc = np.squeeze(pct[t, :, :])
         pS = np.squeeze(pSt[t, :, :])
         [grc, grS, grb, gcc] = gd.gaussianDiffeonsGradientMatricesNormals(c, S, b, a, pc, pS, pb, sigma, 1.0/at.shape[0])
+        #print t, (grS**2).sum(), (grb**2).sum()
         
         da = 2*np.dot(gcc,a) - grb - grc - grS
         if not (affine == None):

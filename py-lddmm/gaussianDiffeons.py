@@ -66,6 +66,12 @@ def saveDiffeons(fileName, c, S):
         fvtkout.write('\nSCALARS third_eig float 1\nLOOKUP_TABLE default')
         for ll in range(d.shape[0]):
             fvtkout.write('\n {0: .5f}'.format(d[ll,0]))
+
+        fvtkout.write('\nVECTORS third_dir float')
+        v[:, :, 0] *= np.sqrt(d[:,2]*d[:,1]).reshape([d.shape[0], 1])
+        for ll in range(d.shape[0]):
+            fvtkout.write('\n {0: .5f} {1: .5f} {2: .5f}'.format(v[ll, 0, 0], v[ll, 1, 0], v[ll, 2, 0]))
+
         fvtkout.write('\nVECTORS first_dir float')
         #print v.shape, d.shape
         v[:, :, 2] = v[:,:,2] * np.sqrt(d[:,2]).reshape([d.shape[0], 1])
@@ -75,12 +81,8 @@ def saveDiffeons(fileName, c, S):
         fvtkout.write('\nVECTORS second_dir float')
         v[:, :, 1] *= np.sqrt(d[:,1]).reshape([d.shape[0], 1])
         for ll in range(d.shape[0]):
-            fvtkout.write('\n {0: .5f} {1: .5f} {2: .5f}'.format(v[ll, 0, 2], v[ll, 1, 2], v[ll, 2, 2]))
+            fvtkout.write('\n {0: .5f} {1: .5f} {2: .5f}'.format(v[ll, 0, 1], v[ll, 1, 1], v[ll, 2, 1]))
 
-        fvtkout.write('\nVECTORS third_dir float')
-        v[:, :, 0] *= np.sqrt(d[:,2]*d[:,1]).reshape([d.shape[0], 1])
-        for ll in range(d.shape[0]):
-            fvtkout.write('\n {0: .5f} {1: .5f} {2: .5f}'.format(v[ll, 0, 2], v[ll, 1, 2], v[ll, 2, 2]))
 
         # fvtkout.write('\nTENSORS tensors float')
         # for ll in range(S.shape[0]):
@@ -354,6 +356,11 @@ def approximateSurfaceCurrent(c, S, fv, sig):
     g1 = computeProductsCurrents(c,S,sig)
     g2 = computeProductsAsymCurrents(c, S, cc, sig)
     b = LA.solve(g1, np.dot(g2, nu))
+    n0 = surfaces.currentNorm0(fv, kfun.Kernel(name='gauss', sigma=sig))
+    n1 = diffeonCurrentNormDef(c,S,b,fv,sig)
+    print 'Norm before approx:', n0
+    print 'Diff after approx:', n0 + n1
+    print 'Norm of Projection:', (b*np.dot(g1, b)).sum(), -n1
     return b
 
 def diffeonCurrentNormDef(c, S, b, fv, sig):
