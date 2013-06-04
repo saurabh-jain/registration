@@ -411,6 +411,7 @@ class SurfaceMatching(surfaceMatching.SurfaceMatching):
                 (obj1, self.ct, self.St, self.bt) = self.objectiveFunDef(self.at, self.Afft, withTrajectory=True)
             else:
                 (obj1, self.ct, self.St, self.xt) = self.objectiveFunDef(self.at, self.Afft, withTrajectory=True)
+                self.fvDef.updateVertices(np.squeeze(self.xt[-1, :, :]))
 
     def restart(self, EpsilonNet=None, DiffeonEpsForNet=None, DiffeonSegmentationRatio=None):
         if EpsilonNet==None:
