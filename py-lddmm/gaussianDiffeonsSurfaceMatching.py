@@ -63,7 +63,8 @@ class Direction:
 #        affine: 'affine', 'similitude', 'euclidean', 'translation' or 'none'
 #        maxIter: max iterations in conjugate gradient
 class SurfaceMatching(surfaceMatching.SurfaceMatching):
-    def __init__(self, Template=None, Target=None, Diffeons=None, EpsilonNet=None, DiffeonEpsForNet=None, DiffeonSegmentationRatio=None, zeroVar=False, fileTempl=None,
+    def __init__(self, Template=None, Target=None, Diffeons=None, EpsilonNet=None, DecimationTarget=None,
+                 DiffeonEpsForNet=None, DiffeonSegmentationRatio=None, zeroVar=False, fileTempl=None,
                  fileTarg=None, param=None, maxIter=1000, regWeight = 1.0, affineWeight = 1.0, verb=True,
                  rotWeight = None, scaleWeight = None, transWeight = None, testGradient=False, saveFile = 'evolution', affine = 'none', outputDir = '.'):
         if Template==None:
@@ -113,16 +114,19 @@ class SurfaceMatching(surfaceMatching.SurfaceMatching):
         self.x0 = self.fv0.vertices
         if Diffeons==None:
             if EpsilonNet==None:
-                if DiffeonEpsForNet==None:
-                    if DiffeonSegmentationRatio==None:
-                        self.c0 = np.copy(self.x0) ;
-                        self.S0 = np.zeros([self.x0.shape[0], self.x0.shape[1], self.x0.shape[1]])
-                        self.idx = None
+                if DecimationTarget==None:
+                    if DiffeonEpsForNet==None:
+                        if DiffeonSegmentationRatio==None:
+                            self.c0 = np.copy(self.x0) ;
+                            self.S0 = np.zeros([self.x0.shape[0], self.x0.shape[1], self.x0.shape[1]])
+                            self.idx = None
+                        else:
+                            (self.c0, self.S0, self.idx) = gd.generateDiffeonsFromSegmentation(self.fv0, DiffeonSegmentationRatio)
+                            #self.S0 *= self.param.sigmaKernel**2;
                     else:
-                        (self.c0, self.S0, self.idx) = gd.generateDiffeonsFromSegmentation(self.fv0, DiffeonSegmentationRatio)
-                        #self.S0 *= self.param.sigmaKernel**2;
+                        (self.c0, self.S0, self.idx) = gd.generateDiffeonsFromNet(self.fv0, DiffeonEpsForNet)
                 else:
-                    (self.c0, self.S0, self.idx) = gd.generateDiffeonsFromNet(self.fv0, DiffeonEpsForNet)
+                    (self.c0, self.S0, self.idx) = gd.generateDiffeonsFromDecimation(self.fv0, DecimationTarget)
             else:
                 (self.c0, self.S0, self.idx) = gd.generateDiffeons(self.fv0, EpsilonNet[0], EpsilonNet[1])
         else:
@@ -414,19 +418,22 @@ class SurfaceMatching(surfaceMatching.SurfaceMatching):
                 (obj1, self.ct, self.St, self.xt) = self.objectiveFunDef(self.at, self.Afft, withTrajectory=True)
                 self.fvDef.updateVertices(np.squeeze(self.xt[-1, :, :]))
 
-    def restart(self, EpsilonNet=None, DiffeonEpsForNet=None, DiffeonSegmentationRatio=None):
+    def restart(self, EpsilonNet=None, DiffeonEpsForNet=None, DiffeonSegmentationRatio=None, DecimationTarget=None):
         if EpsilonNet==None:
-            if DiffeonEpsForNet==None:
-                if DiffeonSegmentationRatio==None:
-                    c0 = np.copy(self.x0) ;
-                    S0 = np.zeros([self.x0.shape[0], self.x0.shape[1], self.x0.shape[1]])
-                    #net = range(c0.shape[0])
-                    idx = range(c0.shape[0])
+            if DecimationTarget==None:
+                if DiffeonEpsForNet==None:
+                    if DiffeonSegmentationRatio==None:
+                        c0 = np.copy(self.x0) ;
+                        S0 = np.zeros([self.x0.shape[0], self.x0.shape[1], self.x0.shape[1]])
+                        #net = range(c0.shape[0])
+                        idx = range(c0.shape[0])
+                    else:
+                        (c0, S0, idx) = gd.generateDiffeonsFromSegmentation(self.fv0, DiffeonSegmentationRatio)
+                        #self.S0 *= self.param.sigmaKernel**2;
                 else:
-                    (c0, S0, idx) = gd.generateDiffeonsFromSegmentation(self.fv0, DiffeonSegmentationRatio)
-                    #self.S0 *= self.param.sigmaKernel**2;
+                    (c0, S0, idx) = gd.generateDiffeonsFromNet(self.fv0, DiffeonEpsForNet)
             else:
-                (c0, S0, idx) = gd.generateDiffeonsFromNet(self.fv0, DiffeonEpsForNet)
+                (c0, S0, idx) = gd.generateDiffeonsFromDecimation(self.fv0, DecimationTarget)
         else:
             net = EspilonNet[2] 
             (c0, S0, idx) = gd.generateDiffeons(self.fv0, EpsilonNet[0], EpsilonNet[1])

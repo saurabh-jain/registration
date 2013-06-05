@@ -2,6 +2,7 @@ import numpy as np
 import numpy.linalg as LA
 import scipy.linalg as spLA
 import kernelFunctions as kfun
+from vtk import *
 import surfaces
 from pointSets import epsilonNet
 
@@ -23,6 +24,48 @@ def generateDiffeonsFromNet(fv, rate):
     c = fv.vertices[net, :]
     #print c
     return generateDiffeons(fv, c, idx)
+
+def generateDiffeonsFromDecimation(fv, target):
+    n = fv.vertices.shape[0]
+    nn = fv.faces.shape[0]
+    fv2 = surfaces.Surface(surf=fv)
+    #dc = vtkQuadricDecimation()
+    #red = 1 - min(np.float(target)/polydata.GetNumberOfPoints(), 1)
+    #dc.SetTargetReduction(red)
+    a = (fv.surfel**2).sum(axis=1).sum()/nn
+    dx = (float(nn)/target) * np.sqrt(a)
+    #dc.SetDivisionSpacing(dx, dx, dx)
+    n0 = nn
+    while fv2.faces.shape[0] > target:
+        polydata = fv2.toPolyData()
+        dc = vtkQuadricClustering()
+        dc.SetInput(polydata)
+        dc.Update()
+        g = dc.GetOutput()
+        fv2.fromPolyData(g)
+        if fv2.faces.shape[0] == n0:
+            break
+        else:
+            n0 = fv2.faces.shape[0]
+            print fv2.faces.shape[0]
+    #fv2.Simplify(target)
+    m = fv2.faces.shape[0]
+    c = np.zeros([m, 3])
+    for k, f in enumerate(fv2.faces):
+        u = (fv2.vertices[f, :]).sum(axis=0)/3
+        dst = ((u - fv.vertices)**2).sum(axis=1)
+        I = np.argmin(dst)
+        c[k, :] = fv.vertices[I]
+
+    dist2 = ((fv.vertices.reshape([n, 1, 3]) -
+              c.reshape([1,m,3]))**2).sum(axis=2)
+    idx = - np.ones(n, dtype=np.int)
+    for p in range(n):
+        closest = np.unravel_index(np.argmin(dist2[p, :].ravel()), [m, 1])
+        idx[p] = closest[0]
+    return generateDiffeons(fv, c, idx)
+        
+
 
 def generateDiffeons(fv, c, idx):
     a, foo = fv.computeVertexArea()
