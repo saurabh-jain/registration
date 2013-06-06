@@ -14,6 +14,7 @@ def main():
     parser.add_argument('--dirOut', metavar = 'dirOut', type = str, dest = 'dirOut', default = '', help='Output directory')
     parser.add_argument('--targetSize', metavar = 'targetSize', type = int, dest = 'targetSize', default = 1000, help='targeted number of vertices')
     parser.add_argument('--force-axial-unflipped', action = 'store_true', dest='axun', default=False,help='force reading .img files using axial unflipped order')
+    parser.add_argument('--with-bug', action = 'store_true', dest='withbug', default=False,help='for back compatibility')
     parser.add_argument('--smooth', action = 'store_true', dest='smooth', default=False,help='adds smoothing step to triangulation')
     parser.add_argument('--zeroPad', action = 'store_true', dest='zeroPad', default=False,help='inserts a layer of zeros around the image before triangulation')
     args = parser.parse_args()
@@ -29,7 +30,7 @@ def main():
         print 'Processing ', name
         u = path.split(name)
         [nm,ext] = path.splitext(u[1])
-        v = diffeo.gridScalars(fileName=name, force_axun = args.axun)
+        v = diffeo.gridScalars(fileName=name, force_axun = args.axun, withbug=args.withbug)
         if args.zeroPad:
             v.zeroPad(1)
         #print v.resol
