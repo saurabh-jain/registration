@@ -30,7 +30,7 @@ def main():
         print 'Processing ', name
         u = path.split(name)
         [nm,ext] = path.splitext(u[1])
-        v = diffeo.gridScalars(fileName=name, force_axun = args.axun, withbug=args.withbug)
+        v = diffeo.gridScalars(fileName=name, force_axun = args.axun, withBug=args.withbug)
         if args.zeroPad:
             v.zeroPad(1)
         #print v.resol
