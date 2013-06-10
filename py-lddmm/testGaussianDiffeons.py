@@ -28,21 +28,22 @@ def compute(createSurfaces=True):
         fv1.saveVTK('/Users/younes/Development/Results/Diffeons/fv1.vtk')
         fv2.saveVTK('/Users/younes/Development/Results/Diffeons/fv2.vtk')
     else:
-        path = '/Users/younes/Development/project/ncbc/data/template/PDS-II/AllScan1_PDSII/shape_analysis/hippocampus/'
-        #sub1 = '0186193_1_6'
-        #sub2 = '1449400_1_L'
-        sub2 = 'LU027_R_sumNCBC20100628'
-        fv1 = surfaces.Surface(filename = path+'5_population_template_qc/newTemplate.byu')
-        v1 = fv1.surfVolume()
-        #f0.append(surfaces.Surface(filename = path+'amygdala/biocardAmyg 2/'+sub1+'_amyg_L.byu'))
-        fv2 = surfaces.Surface(filename = path+'2_qc_flipped_registered/'+sub2+'_registered.byu')
-        v2 = fv2.surfVolume()
-        if (v2*v1 < 0):
-            fv2.faces = fv2.faces[:, [0,2,1]]
-
-        #f1.append(surfaces.Surface(filename = path+'amygdala/biocardAmyg 2/'+sub2+'_amyg_L.byu'))
-        #fv1 = Surface(filename='/Users/younes/Development/Results/Diffeons/fv1.vtk')
-        #fv2  = Surface(filename='/Users/younes/Development/Results/Diffeons/fv2.vtk')
+        if False:
+            path = '/Users/younes/Development/project/ncbc/data/template/PDS-II/AllScan1_PDSII/shape_analysis/hippocampus/'
+            #sub1 = '0186193_1_6'
+            #sub2 = '1449400_1_L'
+            sub2 = 'LU027_R_sumNCBC20100628'
+            fv1 = surfaces.Surface(filename = path+'5_population_template_qc/newTemplate.byu')
+            v1 = fv1.surfVolume()
+            #f0.append(surfaces.Surface(filename = path+'amygdala/biocardAmyg 2/'+sub1+'_amyg_L.byu'))
+            fv2 = surfaces.Surface(filename = path+'2_qc_flipped_registered/'+sub2+'_registered.byu')
+            v2 = fv2.surfVolume()
+            if (v2*v1 < 0):
+                fv2.faces = fv2.faces[:, [0,2,1]]
+        else:
+            #f1.append(surfaces.Surface(filename = path+'amygdala/biocardAmyg 2/'+sub2+'_amyg_L.byu'))
+            fv1 = Surface(filename='/Users/younes/Development/Results/Diffeons/fv1.vtk')
+            fv2  = Surface(filename='/Users/younes/Development/Results/Diffeons/fv2.vtk')
 
         #return fv1, fv2
 
