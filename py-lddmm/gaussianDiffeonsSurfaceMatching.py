@@ -342,6 +342,17 @@ class SurfaceMatching(surfaceMatching.SurfaceMatching):
         dirfoo.aff = np.random.randn(self.Tsize, self.affineDim)
         return dirfoo
 
+    def getBGFSDir(Var, oldVar, grd, grdOld)
+        s = (Var[0] - oldVar[0]).unravel()
+        y = (grd.diff - grdOld.diff).unravel()
+        if skipBGFS==0:
+            rho = max(0, (s*y).sum())
+        else:
+            rho = 0 
+        Imsy = np.eye((s.shape[0], s.shape[0])) - rho*np.dot(s, y.T)
+        H0 = np.dot(Imsy, np.dot(H0, Imsy)) + rho * np.dot(s, s.T)
+        dir0.diff = (np.dot(H0, grd.diff.unravel())
+
     def dotProduct(self, g1, g2):
         res = np.zeros(len(g2))
         dim2 = self.dim**2
@@ -395,7 +406,8 @@ class SurfaceMatching(surfaceMatching.SurfaceMatching):
                     if self.idx == None:
                         self.fvDef.saveVTK(self.outputDir +'/'+ self.saveFile+str(kk)+'.vtk', scalars = Jt[kk, :], scal_name='Jacobian')
                     else:
-                        self.fvDef.saveVTK(self.outputDir +'/'+ self.saveFile+str(kk)+'.vtk', scalars = self.idx, scal_name='Labels')
+                        self.fvDef.saveVTK(self.outputDir +'/'+ self.saveFile+str(kk)+'.vtk', scalars = Jt[kk, :], scal_name='Jacobian')
+                        #                self.fvDef.saveVTK(self.outputDir +'/'+ self.saveFile+str(kk)+'.vtk', scalars = self.idx, scal_name='Labels')
                                            #vectors = self.bt[kk, :, :], vect_name='bt')
                     gd.saveDiffeons(self.outputDir +'/'+ self.saveFile+'Diffeons'+str(kk)+'.vtk', self.ct[kk,:,:], self.St[kk,:,:,:])
                     self.saveB(self.outputDir +'/'+ self.saveFile+'Bt'+str(kk)+'.vtk', self.ct[kk,:,:], self.bt[kk,:,:])
