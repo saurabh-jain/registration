@@ -49,29 +49,30 @@ def compute(createSurfaces=True):
 
     ## Object kernel
     r0 = 10./fv1.vertices.shape[0]
-    T0 = 30
-    sm = SurfaceMatchingParam(timeStep=0.1, sigmaKernel=20., sigmaDist=5., sigmaError=1.,
+    T0 = 150
+    sm = SurfaceMatchingParam(timeStep=0.1, sigmaKernel=10., sigmaDist=5., sigmaError=1.,
                               errorType='diffeonCurrent')
         #errorType='current')
-    f = SurfaceMatching(Template=fv1, Target=fv2, outputDir='/Users/younes/Development/Results/Diffeons2/Scale1',param=sm, testGradient=False,
+    f = SurfaceMatching(Template=fv1, Target=fv2, outputDir='/Users/younes/Development/Results/Diffeons2/Scale3',param=sm, testGradient=False,
                         DecimationTarget=T0,
                         #DiffeonEpsForNet = r0,
                         #DiffeonSegmentationRatio=r0,
-                        maxIter=100, affine='none', rotWeight=1., transWeight = 1., scaleWeight=10., affineWeight=100., zeroVar=False)
+                        maxIter=1000, affine='none', rotWeight=1., transWeight = 1., scaleWeight=10., affineWeight=100., zeroVar=False)
     # f = SurfaceMatching(Template=fv1, Target=fv2, outputDir='/Users/younes/Development/Results',param=sm, testGradient=True, Diffeons=(fv1.vertices.copy(),np.zeros([fv1.vertices.shape[0],3,3])),
     #                      maxIter=1000, affine='none', rotWeight=1., transWeight = 1., scaleWeight=10., affineWeight=100.)
 
     f.optimizeMatching()
-    f.maxIter = 200
+    return f
+    #f.maxIter = 200
     f.param.sigmaError=1.0
     f.setOutputDir('/Users/younes/Development/Results/Diffeons2/Scale2')
     f.restart(DecimationTarget = 2*T0)
     # f.restart(DiffeonEpsForNet = 2*r0)
     #f.restart(DiffeonSegmentationRatio = 0.025)
-    f.maxIter = 300
+    #f.maxIter = 300
     f.param.sigmaError=1.
     f.setOutputDir('/Users/younes/Development/Results/Diffeons2/Scale3')
-    f.restart(DecimationTarget = 4*T0)
+    f.restart(DecimationTarget = 3*T0)
     #f.restart(DiffeonEpsForNet = 4*r0)
     #f.restart(DiffeonSegmentationRatio = 0.05)
 
