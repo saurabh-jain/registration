@@ -142,6 +142,9 @@ def gaussianDiffeonsEvolutionEuler(c0, S0, at, sigma, affine = None, withJacobia
         if not(withNormals==None):
             bb = np.squeeze(bt[t, :, :])
             zb = ((fc * np.dot(bb, a.T)).reshape([M,M,1]) * betac).sum(axis=1)
+            #foo = (fc * (betac * a.reshape([1,M,dim])).sum(axis=2))
+            #print foo.shape
+            zb -= (fc * (betac * a.reshape([1,M,dim])).sum(axis=2)).sum(axis=1).reshape([M,1]) *bb
             bt[t+1,:,:] = bb + timeStep*zb
             #bt[t+1,:,:] = bb
             #zb = (Dv*bb.reshape(M,dim,1)).sum(axis=1)
@@ -149,16 +152,16 @@ def gaussianDiffeonsEvolutionEuler(c0, S0, at, sigma, affine = None, withJacobia
 
         if not(withPointSet==None):
             x = np.squeeze(xt[t, :, :])
-            diff = x.reshape([N, 1, dim]) - c.reshape([1, M, dim])
-            betax = (R.reshape([1, M, dim, dim])*diff.reshape([N, M, 1, dim])).sum(axis=3)
-            dst = (betax * diff).sum(axis=2)
+            diffx = x.reshape([N, 1, dim]) - c.reshape([1, M, dim])
+            betax = (R.reshape([1, M, dim, dim])*diffx.reshape([N, M, 1, dim])).sum(axis=3)
+            dst = (betax * diffx).sum(axis=2)
             fx = np.exp(-dst/2)
             zx = np.dot(fx, a)
             xt[t+1, :, :] = x + timeStep * zx
             if not (affine == None):
                 xt[t+1, :, :] += timeStep * (np.dot(x, A[t].T) + b[t])
             if withJacobian:
-                Div = np.multiply(fx, (betax * a.reshape(1,M, dim)).sum(axis=2)).sum(axis=1)
+                Div = -(fx * (betax * a.reshape(1,M, dim)).sum(axis=2)).sum(axis=1)
                 Jt[t+1, :] = Jt[t, :] + timeStep * Div
                 if not (affine == None):
                     Jt[t+1, :] += timeStep * (np.trace(A[t]))
@@ -341,6 +344,8 @@ def gaussianDiffeonsCovectorNormals(c0, S0, b0,  at, pc1, pS1, pb1, sigma, regwe
         #ba = (b.reshape([M,1,dim])*a.reshape([1,M,dim])).sum(axis=2)
         ba = np.dot(b, a.T) 
         pbbetac = (pb.reshape([M,1,dim])*betac).sum(axis=2)
+        pbb = (pb*b).sum(axis=1)
+        betaca = (betac*a.reshape([1, M, dim])).sum(axis=2)
 
         betaSym = betac.reshape([M, M, dim, 1]) * betac.reshape([M, M, 1, dim])
         betacc = (R2 * diffc.reshape([M, M, 1, dim])).sum(axis=3)
@@ -351,14 +356,19 @@ def gaussianDiffeonsCovectorNormals(c0, S0, b0,  at, pc1, pS1, pb1, sigma, regwe
         #print np.fabs(betacc + betacc.transpose([1,0,2])).sum()
         fpb = fc * pbbetac * ba
 	Rpb = (R.reshape(1, M, dim, dim) *pb.reshape(M,1, 1, dim)).sum(axis=3)
+        Ra = (R*a.reshape([M,1,dim])).sum(axis=2)
         #print '?', (pbbetac**2).sum(), (Rpb**2).sum()
 
-	zpb = - np.dot(fc*pbbetac, a)
+	zpb = - np.dot(fc*pbbetac, a) + (fc*betaca).sum(axis=1).reshape([M,1]) * pb
 
         u = fpb.reshape([M,M,1]) * betac 
         zpc = u.sum(axis=1) - u.sum(axis=0)
         u = (fc*ba).reshape(M, M, 1)*Rpb
         zpc -= u.sum(axis=1) - u.sum(axis=0)
+        u = (fc * pbb.reshape([M,1]) *betaca).reshape([M,M,1]) * betac
+        zpc -= u.sum(axis=1) - u.sum(axis=0)
+        u = fc.reshape([M,M,1]) * pbb.reshape([M,1,1]) * Ra.reshape([1,M,dim])
+        zpc += u.sum(axis=1) - u.sum(axis=0)
         u = (pca * fc).reshape([M, M, 1]) * betac
         zpc += u.sum(axis=1) - u.sum(axis=0)
 
@@ -371,6 +381,10 @@ def gaussianDiffeonsCovectorNormals(c0, S0, b0,  at, pc1, pS1, pb1, sigma, regwe
         RpbbT = Rpb.reshape([M,M,dim,1])*betac.reshape([M,M,1,dim])
         bRpbT = Rpb.reshape([M,M,1,dim])*betac.reshape([M,M,dim, 1])
         zpS += 0.5*((fc*ba).reshape([M,M,1,1])*(RpbbT + bRpbT)).sum(axis=0)
+        zpS += 0.5*((fc*betaca*pbb.reshape([M,1])).reshape([M,M,1,1]) * betaSym).sum(axis=0)
+        betaRaT = Ra.reshape([1,M,dim,1]) * betac.reshape([M,M,1,dim])
+        RabetaT = Ra.reshape([1,M,1,dim]) * betac.reshape([M,M,dim,1])
+        zpS -= 0.5*( (fc*pbb.reshape([M,1])).reshape([M,M,1,1]) * (betaRaT+RabetaT)).sum(axis=0)
         #zpS += 0.5*((fc*ba).reshape([M,M,1,1])*(RpbbT + np.transpose(RpbbT, (0,1,3,2)))).sum(axis=0)
         zpS -= 0.5 * (np.multiply(fc,pca).reshape([M,M,1,1]) * betaSym).sum(axis=0)
         pSDv = (pS.reshape([M,dim, dim, 1]) * Dv.reshape([M, 1, dim, dim])).sum(axis=2)

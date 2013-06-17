@@ -254,6 +254,11 @@ class Surface:
         # self.vertices = V
         # self.faces = np.int_(F[0:gf, :])
         # self.computeCentersAreas()
+        z= self.surfVolume()
+        if (z > 0):
+            self.faces = self.faces[:, [0,2,1]]
+            print 'flipping volume', z, self.surfVolume()
+
 
     def smooth(self, n=30, smooth=0.1):
         g = self.toPolyData()

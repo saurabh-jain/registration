@@ -64,6 +64,7 @@ class Direction:
 #        maxIter: max iterations in conjugate gradient
 class SurfaceMatching(surfaceMatching.SurfaceMatching):
     def __init__(self, Template=None, Target=None, Diffeons=None, EpsilonNet=None, DecimationTarget=None,
+                 subsampleTargetSize = -1, 
                  DiffeonEpsForNet=None, DiffeonSegmentationRatio=None, zeroVar=False, fileTempl=None,
                  fileTarg=None, param=None, maxIter=1000, regWeight = 1.0, affineWeight = 1.0, verb=True,
                  rotWeight = None, scaleWeight = None, transWeight = None, testGradient=False, saveFile = 'evolution', affine = 'none', outputDir = '.'):
@@ -84,6 +85,10 @@ class SurfaceMatching(surfaceMatching.SurfaceMatching):
         else:
             self.fv1 = surfaces.Surface(surf=Target)
 
+        self.fv0Fine = surfaces.Surface(surf=self.fv0)
+        if (subsampleTargetSize > 0):
+            self.fv0.Simplify(subsampleTargetSize)
+            print 'simplified template', self.fv0.vertices.shape[0]
         self.saveRate = 10
         self.iter = 0
         self.gradEps = -1
@@ -403,6 +408,9 @@ class SurfaceMatching(surfaceMatching.SurfaceMatching):
                 (obj1, self.ct, self.St, self.bt, self.xt, Jt) = self.objectiveFunDef(self.at, self.Afft, withTrajectory=True, withJacobian=True)
                 for kk in range(self.Tsize+1):
                     self.fvDef.updateVertices(np.squeeze(self.xt[kk, :, :]))
+                    foo = (gd.diffeonCurrentNormDef(self.ct[kk], self.St[kk], self.bt[kk], self.fvDef, self.param.KparDist.sigma)
+                           + gd.diffeonCurrentNorm0(self.fvDef, self.param.KparDist))/ (self.param.sigmaError**2)
+                    print foo
                     if self.idx == None:
                         self.fvDef.saveVTK(self.outputDir +'/'+ self.saveFile+str(kk)+'.vtk', scalars = Jt[kk, :], scal_name='Jacobian')
                     else:
@@ -412,13 +420,22 @@ class SurfaceMatching(surfaceMatching.SurfaceMatching):
                     gd.saveDiffeons(self.outputDir +'/'+ self.saveFile+'Diffeons'+str(kk)+'.vtk', self.ct[kk,:,:], self.St[kk,:,:,:])
                     self.saveB(self.outputDir +'/'+ self.saveFile+'Bt'+str(kk)+'.vtk', self.ct[kk,:,:], self.bt[kk,:,:])
             else:
-                (obj1, self.ct, self.St, self.xt, Jt) = self.objectiveFunDef(self.at, self.Afft, withTrajectory=True, withJacobian=True)
+                (obj1, self.ct, self.St, self.xt) = self.objectiveFunDef(self.at, self.Afft, withTrajectory=True)
+                self.fvDef.updateVertices(np.squeeze(self.xt[-1, :, :]))
+                dim2 = self.dim**2
+                A = [np.zeros([self.Tsize, self.dim, self.dim]), np.zeros([self.Tsize, self.dim])]
+                if self.affineDim > 0:
+                    for t in range(self.Tsize):
+                        AB = np.dot(self.affineBasis, Afft[t])
+                        A[0][t] = AB[0:dim2].reshape([self.dim, self.dim])
+                        A[1][t] = AB[dim2:dim2+self.dim]
+		(ct, St, xt, Jt)  = evol.gaussianDiffeonsEvolutionEuler(self.c0, self.S0, self.at, self.param.sigmaKernel, affine=A,
+                                                                        withPointSet = self.fv0Fine.vertices, withJacobian=True)
+                fvDef = surfaces.Surface(surf=self.fv0Fine)
                 for kk in range(self.Tsize+1):
-                    self.fvDef.updateVertices(np.squeeze(self.xt[kk, :, :]))
-                    if self.idx == None:
-                        self.fvDef.saveVTK(self.outputDir +'/'+ self.saveFile+str(kk)+'.vtk', scalars = Jt[kk, :], scal_name='Jacobian')
-                    else:
-                        self.fvDef.saveVTK(self.outputDir +'/'+ self.saveFile+str(kk)+'.vtk', scalars = self.idx, scal_name='Labels')
+                    fvDef.updateVertices(np.squeeze(xt[kk, :, :]))
+                    fvDef.saveVTK(self.outputDir +'/'+ self.saveFile+str(kk)+'.vtk', scalars = Jt[kk, :], scal_name='Jacobian')
+                        #self.fvDef.saveVTK(self.outputDir +'/'+ self.saveFile+str(kk)+'.vtk', scalars = self.idx, scal_name='Labels')
                     gd.saveDiffeons(self.outputDir +'/'+ self.saveFile+'Diffeons'+str(kk)+'.vtk', self.ct[kk,:,:], self.St[kk,:,:,:])
 
             #print self.bt

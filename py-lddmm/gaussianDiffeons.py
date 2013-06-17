@@ -5,6 +5,7 @@ import kernelFunctions as kfun
 from vtk import *
 import surfaces
 from pointSets import epsilonNet
+import conjugateGradient as cg
 
 
 def generateDiffeonsFromSegmentation(fv, rate):
@@ -82,11 +83,19 @@ def generateDiffeons(fv, c, idx):
         ak = aI.sum()
 	#C[k, :] = (fv.vertices[I, :]*a[I]).sum(axis=0)/ak ; 
         y = (fv.vertices[I, :] - c[k, :])
-        S[k, :, :] = (y.reshape([nI, 3, 1]) * aI.reshape([nI, 1, 1]) * y.reshape([nI, 1, 3])).sum(axis=0)/ak
-        #[D,V] = LA.eig(S[k, :, :])
-        #D = np.sort(D, axis=None)
+        SS = (y.reshape([nI, 3, 1]) * aI.reshape([nI, 1, 1]) * y.reshape([nI, 1, 3])).sum(axis=0)/ak
+        [D,v] = LA.eig(SS)
+        #print np.dot(v.T, np.dot(SS, v))
+        I = np.argsort(D, axis=None)
+        #print D[I]
+        S[k,:,:] = D[I[1]] * (v[:,I[1]].reshape([3,1]) * v[:,I[1]].reshape([1,3])) + D[I[2]] * (v[:,I[2]].reshape([3,1])* v[:,I[2]].reshape([1,3]))
+        S[k, :, :] = SS 
+        #S[k,:,:] = D[I[1]] * (v[I[1], :], v[I[1], :].T) + D[I[2]] * np.dot(v[I[2], :], v[I[2], :].T)
+        #[DD,v] = LA.eig(S[k, :, :])
+        #print D, DD
         #S[k, :, :] = S[k, :, :] * np.sqrt(ak/(1e-10+2*np.pi * (D[1]*D[2])))
         #print np.pi * (D[1]*D[2]), ak
+        #multiMatEig(S)
     return c, S, idx
 
         
@@ -160,6 +169,7 @@ def multiMatEig(S, isSym=False):
     for k in range(N):
         D, V = LA.eig(S[k,:,:])
         idx = D.argsort()
+        #print D[idx]
         d[k,:] = D[idx]
         v[k,:, :] = V[:,idx]
     return d,v
@@ -245,7 +255,18 @@ def multiMatInverse2(S, isSym=False):
         R = R / detR.reshape([N, M, 1, 1])
     return R, detR
         
-
+def positiveProj(S):
+    N = S.shape[0]
+    dim = S.shape[1] ;
+    if dim==1:
+        S2 = np.maximum(S, 0)
+    else:
+        d, v = multiMatEig(S)
+        d = np.maximum(d, 1e-10)
+        S2 = np.zeros(S.shape)
+        for k in range(dim):
+            S2 += d[:,k].reshape([N,1,1]) * v[:,:,k].reshape([N, dim, 1]) * v[:,:,k].reshape([N, 1, dim])
+    return S2
 
 
 def computeProducts(c, S, sig):
@@ -389,6 +410,7 @@ def gaussianDiffeonsGradientMatricesNormals(c, S, b, a, pc, pS, pb, sig, timeSte
     #fS = (pS.reshape([M, 1, dim,dim])* fS.reshape([M,M,1,dim])).sum(axis=3)
     fb = fc*(pb.reshape([M,1, dim])*betac.reshape([M, M, dim])).sum(axis=2) 
     grb = np.dot(fb.T, b)
+    grb -= ((fc * (pb*b).sum(axis=1).reshape([M,1])).reshape([M,M,1]) * betac).sum(axis=0)
     grc = np.dot(fc.T, pc)
     grS = -2 * (fc.reshape([M,M,1]) * fS).sum(axis=0)
     return grc, grS, grb, gcc
@@ -476,3 +498,169 @@ def diffeonCurrentNormGradient(c, S, b, fv, sig):
                                       - R.reshape(M,1,dim, dim))).sum(axis=1))
 
     return pc,pS,pb
+
+	
+ 
+
+class Direction:
+    def __init__(self):
+        self.c = []
+        self.S = []
+        self.b = []
+
+
+class gdOptimizer:
+    def __init__(self, surf=None, Diffeons=None,
+                 DiffeonEpsForNet=None, sigmaDist = 2.5,
+                 maxIter=1000, testGradient=False):
+        if surf==None:
+            print 'Please provide a surface'
+            return
+        else:
+            self.fv0 = surfaces.Surface(surf=surf)
+
+        self.saveRate = 10
+        self.iter = 0
+        self.gradEps = -1
+        self.npt = self.fv0.vertices.shape[0]
+        self.dim = self.fv0.vertices.shape[1]
+        self.maxIter = maxIter
+        self.testGradient = testGradient
+        self.sigmaDist = sigmaDist
+        self.KparDist = kfun.Kernel(name = 'gauss', sigma =
+				    self.sigmaDist)
+
+        self.x0 = self.fv0.vertices
+        if Diffeons==None:
+            if DiffeonEpsForNet==None:
+                self.c0 = np.copy(self.x0) ;
+                self.S0 = np.zeros([self.x0.shape[0], self.x0.shape[1], self.x0.shape[1]])
+                self.idx = None
+            else:
+                (self.c0, self.S0, self.idx) = generateDiffeonsFromNet(self.fv0, DiffeonEpsForNet)
+            self.b0 = approximateSurfaceCurrent(self.c0, self.S0, self.fv0, self.sigmaDist)
+        else:
+            (self.c0, self.S0, self.b0) = Diffeons
+
+	self.ndf = self.c0.shape[0]
+        self.dim = self.c0.shape[1]
+        self.obj = None
+        self.objTry = None
+        self.gradCoeff = self.ndf
+        self.sw = 1e-5
+
+
+
+    def dataTerm(self, c, S, b):
+        obj = diffeonCurrentNormDef(c,S,b, self.fv0, self.sigmaDist)
+        return obj
+    
+    def objectiveFun(self):
+        if self.obj == None:
+            self.obj0 = diffeonCurrentNorm0(self.fv0, self.KparDist)
+        self.obj = self.obj0 + self.dataTerm(self.c0, self.S0, self.b0)
+
+        return self.obj
+
+    def getVariable(self):
+        return [self.c0, self.S0, self.b0]
+
+    def updateTry(self, dir, eps, objRef=None):
+        cTry = self.c0 - eps * dir.c
+        STry = positiveProj(self.S0 - eps * dir.S)
+        bTry = self.b0 - eps * dir.b
+        objTry = self.obj0 + self.dataTerm(cTry, STry, bTry)
+
+        if np.isnan(objTry):
+            print 'Warning: nan in updateTry'
+            return 1e500
+
+        if (objRef == None) | (objTry < objRef):
+            self.cTry = cTry
+            self.STry = STry
+            self.bTry = bTry
+
+            #print 'objTry=',objTry, dir.diff.sum()
+        return objTry
+
+
+
+    def getGradient(self, coeff=1.0):
+        (pc, pS, pb) = diffeonCurrentNormGradient(self.c0, self.S0, self.b0,
+                                        self.fv0, self.sigmaDist)
+        dim = self.dim
+        sigEye = self.sw*np.eye(dim)
+        SS = sigEye.reshape([1,dim,dim]) + self.S0
+        pS = (SS.reshape([self.ndf,dim, dim, 1]) * pS.reshape([self.ndf,1, dim, dim])).sum(axis=2)
+        pS = (pS.reshape([self.ndf,dim, dim, 1]) * SS.reshape([self.ndf,1, dim, dim])).sum(axis=2)
+        #pS = (pS + pS.transpose((0,2,1)))/2
+
+        grd = Direction()
+        grd.c = pc/coeff
+        grd.S = pS/coeff
+        grd.b = pb/coeff
+
+        return grd
+
+
+
+    def addProd(self, dir1, dir2, beta):
+        dir = Direction()
+        dir.c = dir1.c + beta * dir2.c
+        dir.S = positiveProj(dir1.S + beta * dir2.S)
+        dir.b = dir1.b + beta * dir2.b
+        return dir
+
+    def copyDir(self, dir0):
+        dir = Direction()
+        dir.c = np.copy(dir0.c)
+        dir.S = np.copy(dir0.S)
+        dir.b = np.copy(dir0.b)
+        return dir
+
+
+    def randomDir(self):
+        dirfoo = Direction()
+        dirfoo.c = np.random.randn(self.ndf, self.dim)
+        dirfoo.S = np.random.randn(self.ndf, self.dim, self.dim)
+        dirfoo.S = (dirfoo.S + dirfoo.S.transpose((0,2,1)))/2
+        dirfoo.b = np.random.randn(self.ndf, self.dim)
+        return dirfoo
+
+    def dotProduct(self, g1, g2):
+        res = np.zeros(len(g2))
+        dim = self.dim
+        sigEye = self.sw*np.eye(dim)
+        SS = sigEye.reshape([1,dim,dim]) + self.S0
+        R, d = multiMatInverse1(SS, isSym=True)
+        g1R = (R.reshape([self.ndf,dim, dim, 1]) * g1.S.reshape([self.ndf,1, dim, dim])).sum(axis=2)
+        g1R = (g1R.reshape([self.ndf,dim, dim, 1]) * R.reshape([self.ndf,1, dim, dim])).sum(axis=2)
+        for (ll,gr) in enumerate(g2):
+            res[ll] = (g1.c*gr.c).sum() + (g1R*gr.S).sum() + (g1.b*gr.b).sum()
+        return res
+
+    def acceptVarTry(self):
+        self.obj = self.objTry
+        self.c0 = np.copy(self.cTry)
+        self.S0 = np.copy(self.STry)
+        self.b0 = np.copy(self.bTry)
+
+
+    def endOfIteration(self):
+        #print self.obj0
+        self.iter += 1
+        if self.iter % 10 == 0:
+            self.b0 = approximateSurfaceCurrent(self.c0, self.S0, self.fv0, self.sigmaDist)
+
+
+
+    def optimize(self):
+        if self.gradEps < 0:
+            grd = self.getGradient(self.gradCoeff)
+            [grd2] = self.dotProduct(grd, [grd])
+            self.gradEps = max(0.001, np.sqrt(grd2) / 10000)
+
+        print 'Gradient lower bound: ', self.gradEps
+        cg.cg(self, verb = True, maxIter = self.maxIter, TestGradient=self.testGradient)
+        #return self.at, self.xt
+
