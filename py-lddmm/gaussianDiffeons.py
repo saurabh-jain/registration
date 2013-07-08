@@ -382,7 +382,8 @@ def gaussianDiffeonsGradientMatricesPset(c, S, x, a, pc, pS, px, sig, timeStep):
     grS = -2 * (fc.reshape([M,M,1]) * fS).sum(axis=0)
     return grc, grS, grx, gcc
 
-def gaussianDiffeonsGradientMatricesNormals(c, S, b, a, pc, pS, pb, sig, timeStep):
+def gaussianDiffeonsGradientMatricesNormals(c, S, b, x, xS, a, pc, pS, pb, px, pxS, sig, timeStep):
+    N = b.shape[0]
     M = c.shape[0]
     dim = c.shape[1]
     sig2 = sig*sig ;
@@ -393,6 +394,11 @@ def gaussianDiffeonsGradientMatricesNormals(c, S, b, a, pc, pS, pb, sig, timeSte
     SS = sigEye.reshape([1,1,dim,dim]) + S.reshape([M, 1, dim, dim]) + S.reshape([1, M, dim, dim])
     (R2, detR2) = multiMatInverse2(SS, isSym=True)
 
+    diffx = x.reshape([N, 1, dim]) - c.reshape([1, M, dim])
+    betax = (R.reshape([1, M, dim, dim])*diffx.reshape([N, M, 1, dim])).sum(axis=3)
+    dst = (diffx * betax).sum(axis=2)
+    fx = np.exp(-dst/2)
+
     diffc = c.reshape([M, 1, dim]) - c.reshape([1, M, dim])
     betac = (R.reshape([1, M, dim, dim])*diffc.reshape([M, M, 1, dim])).sum(axis=3)
     dst = (diffc * betac).sum(axis=2)
@@ -401,19 +407,26 @@ def gaussianDiffeonsGradientMatricesNormals(c, S, b, a, pc, pS, pb, sig, timeSte
     dst = (betacc * diffc).sum(axis=2)
     gcc = np.sqrt((detR.reshape([M,1])*detR.reshape([1,M]))/((sig2**dim)*detR2))*np.exp(-dst/2)
     
+    xDv = -((fx.reshape([N,M,1])*betax).reshape([N, M, 1, dim])*a.reshape([1, M, dim, 1])).sum(axis=1)
+    xIDv = np.eye(dim).reshape([1,dim,dim]) + timeStep * xDv ;
+    pxSxS = (pxS.reshape([N,dim,dim,1]) * (xIDv.reshape([N,dim,dim, 1]) * xS.reshape([N, 1, dim ,dim])).sum(axis=2).reshape([N,1,dim,dim])).sum(axis=2)
+
     Dv = -((fc.reshape([M,M,1])*betac).reshape([M, M, 1, dim])*a.reshape([1, M, dim, 1])).sum(axis=1)
     IDv = np.eye(dim).reshape([1,dim,dim]) + timeStep * Dv ;
     pSS = (pS.reshape([M,dim,dim,1]) * (IDv.reshape([M,dim,dim, 1]) * S.reshape([M, 1, dim ,dim])).sum(axis=2).reshape([M,1,dim,dim])).sum(axis=2)
     
+    fxS = (pxSxS.reshape([N, 1, dim, dim])*betax.reshape([N,M,1,dim])).sum(axis=3)
     fS = (pSS.reshape([M, 1, dim, dim])*betac.reshape([M,M,1,dim])).sum(axis=3)
     #fS = (pSS.reshape([M, 1, dim, dim])*betac.reshape([M,M,dim, 1])).sum(axis=2)
     #fS = (pS.reshape([M, 1, dim,dim])* fS.reshape([M,M,1,dim])).sum(axis=3)
-    fb = fc*(pb.reshape([M,1, dim])*betac.reshape([M, M, dim])).sum(axis=2) 
+    fb = fx*(pb.reshape([N,1, dim])*betax.reshape([N, M, dim])).sum(axis=2) 
     grb = np.dot(fb.T, b)
-    grb -= ((fc * (pb*b).sum(axis=1).reshape([M,1])).reshape([M,M,1]) * betac).sum(axis=0)
+    grb -= ((fx * (pb*b).sum(axis=1).reshape([N,1])).reshape([N,M,1]) * betax).sum(axis=0)
     grc = np.dot(fc.T, pc)
+    grx = np.dot(fx.T, px)
     grS = -2 * (fc.reshape([M,M,1]) * fS).sum(axis=0)
-    return grc, grS, grb, gcc
+    grxS = -2 * (fx.reshape([N,M,1]) * fxS).sum(axis=0)
+    return grc, grS, grb, grx, grxS, gcc
 
 def approximateSurfaceCurrent(c, S, fv, sig):
     cc = fv.centers

@@ -54,14 +54,14 @@ def compute(createSurfaces=True):
     fv11 = Surface(surf=fv1)
     fv11.vertices *= 2
 
-    gdOpt = gd.gdOptimizer(surf=fv1, sigmaDist = 5., DiffeonEpsForNet = r0, testGradient=False, maxIter=200)
+    gdOpt = gd.gdOptimizer(surf=fv1, sigmaDist = 5., DiffeonEpsForNet = r0, testGradient=False, maxIter=100)
     gdOpt.optimize()
     # gdOpt2 = gd.gdOptimizer(surf=fv11, sigmaDist = 5., DiffeonEpsForNet = r0, testGradient=False, maxIter=100)
     # gdOpt2.optimize()
     # return gdOpt, gdOpt2
     sm = SurfaceMatchingParam(timeStep=0.1, sigmaKernel=5., sigmaDist=5., sigmaError=1.,
                               #errorType='diffeonCurrent')
-                              errorType='current')
+        errorType='current')
     # f0 = SurfaceMatching(Template=fv1, Target=fv1, outputDir='/Users/younes/Development/Results/Diffeons/Scale3',param=sm, testGradient=False,
     #                     #DecimationTarget=T0,
     #                     DiffeonEpsForNet = r0,

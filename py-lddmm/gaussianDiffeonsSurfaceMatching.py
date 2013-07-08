@@ -86,16 +86,12 @@ class SurfaceMatching(surfaceMatching.SurfaceMatching):
             self.fv1 = surfaces.Surface(surf=Target)
 
         self.fv0Fine = surfaces.Surface(surf=self.fv0)
-        if (subsampleTargetSize > 0):
-            self.fv0.Simplify(subsampleTargetSize)
-            print 'simplified template', self.fv0.vertices.shape[0]
         self.saveRate = 10
         self.iter = 0
         self.gradEps = -1
         self.npt = self.fv0.vertices.shape[0]
         self.dim = self.fv0.vertices.shape[1]
         self.setOutputDir(outputDir)
-        self.fvDef = surfaces.Surface(surf=self.fv0)
         self.maxIter = maxIter
         self.verb = verb
         self.testGradient = testGradient
@@ -140,6 +136,28 @@ class SurfaceMatching(surfaceMatching.SurfaceMatching):
 	    self.S0 = np.zeros(self.S0.shape)
 
             #print self.S0
+        if (subsampleTargetSize > 0):
+            self.fv0.Simplify(subsampleTargetSize)
+            if self.param.errorType == 'diffeonCurrent':
+                n = self.fv0Fine.vertices.shape[0]
+                m = self.fv0.vertices.shape[0]
+                dist2 = ((self.fv0Fine.vertices.reshape([n, 1, 3]) -
+                          self.fv0.vertices.reshape([1,m,3]))**2).sum(axis=2)
+                idx = - np.ones(n, dtype=np.int)
+                for p in range(n):
+                    closest = np.unravel_index(np.argmin(dist2[p, :].ravel()), [m, 1])
+                    idx[p] = closest[0]
+                (x0, xS0, idx) = gd.generateDiffeons(self.fv0Fine, self.fv0.vertices, idx)
+                b0 = gd.approximateSurfaceCurrent(x0, xS0, self.fv0Fine, self.param.KparDist.sigma)
+                gdOpt = gd.gdOptimizer(surf=self.fv0Fine, sigmaDist = self.param.KparDist.sigma, Diffeons = (x0, xS0, b0) , testGradient=False, maxIter=100)
+                gdOpt.optimize()
+                self.x0 = gdOpt.c0
+                self.xS0 = gdOpt.S0
+                self.b0 = gdOpt.b0
+            else:
+                self.x0 = self.fv0.vertices
+            print 'simplified template', self.fv0.vertices.shape[0]
+        self.fvDef = surfaces.Surface(surf=self.fv0)
 	self.ndf = self.c0.shape[0]
         self.Tsize = int(round(1.0/self.param.timeStep))
         self.at = np.zeros([self.Tsize, self.c0.shape[0], self.x0.shape[1]])
@@ -149,8 +167,9 @@ class SurfaceMatching(surfaceMatching.SurfaceMatching):
         self.xt = np.tile(self.x0, [self.Tsize+1, 1, 1])
         self.ct = np.tile(self.c0, [self.Tsize+1, 1, 1])
         self.St = np.tile(self.S0, [self.Tsize+1, 1, 1, 1])
+        print 'error type:', self.param.errorType
 	if self.param.errorType =='diffeonCurrent':
-	    self.b0 = gd.approximateSurfaceCurrent(self.c0, self.S0, self.fv0, self.param.KparDist.sigma)
+	    self.xSt = np.tile(self.xS0, [self.Tsize+1, 1, 1, 1])
 	    self.bt = np.tile(self.b0, [self.Tsize+1, 1, 1])
 	    self.dcurr = True
 	else:
@@ -170,10 +189,11 @@ class SurfaceMatching(surfaceMatching.SurfaceMatching):
             S0 = self.S0
 	    if self.dcurr:
 		b0 = self.b0
+                xS0 = self.xS0
         else:
             x0 = self.x0
 	    if self.dcurr:
-		(c0, S0, b0) = initial
+		(c0, S0, b0, xS0) = initial
 	    else:
 		(c0, S0) = initial
         param = self.param
@@ -187,12 +207,12 @@ class SurfaceMatching(surfaceMatching.SurfaceMatching):
                 A[1][t] = AB[dim2:dim2+self.dim]
 	if withJacobian:
 	    if self.dcurr:
-		(ct, St, bt, xt, Jt)  = evol.gaussianDiffeonsEvolutionEuler(c0, S0, at, param.sigmaKernel, affine=A, withPointSet = x0, withJacobian=True, withNormals=b0)
+		(ct, St, bt, xt, xSt, Jt)  = evol.gaussianDiffeonsEvolutionEuler(c0, S0, at, param.sigmaKernel, affine=A, withJacobian=True, withNormals=b0, withDiffeonSet=(x0, xS0))
             else:
 		(ct, St, xt, Jt)  = evol.gaussianDiffeonsEvolutionEuler(c0, S0, at, param.sigmaKernel, affine=A, withPointSet = x0, withJacobian=True)
         else:
 	    if self.dcurr:
-		(ct, St, bt)  = evol.gaussianDiffeonsEvolutionEuler(c0, S0, at, param.sigmaKernel, affine=A, withNormals=b0)
+		(ct, St, bt, xt, xSt)  = evol.gaussianDiffeonsEvolutionEuler(c0, S0, at, param.sigmaKernel, affine=A, withNormals=b0, withDiffeonSet=(x0, xS0))
             else:
 		(ct, St, xt)  = evol.gaussianDiffeonsEvolutionEuler(c0, S0, at, param.sigmaKernel, affine=A, withPointSet = x0)
 
@@ -212,12 +232,12 @@ class SurfaceMatching(surfaceMatching.SurfaceMatching):
             #print xt.sum(), at.sum(), obj
         if withJacobian:
             if self.dcurr:
-                return obj, ct, St, bt, xt, Jt
+                return obj, ct, St, bt, xt, xSt, Jt
             else:
                 return obj, ct, St, xt, Jt
         elif withTrajectory:
             if self.dcurr:
-                return obj, ct, St, bt
+                return obj, ct, St, bt, xt, xSt
             else:
                 return obj, ct, St, xt
         else:
@@ -234,8 +254,8 @@ class SurfaceMatching(surfaceMatching.SurfaceMatching):
         if self.obj == None:
             self.obj0 = self.param.fun_obj0(self.fv1, self.param.KparDist) / (self.param.sigmaError**2)
             if self.dcurr:
-                (self.obj, self.ct, self.St, self.bt) = self.objectiveFunDef(self.at, self.Afft, withTrajectory=True)
-                data = (self.ct[-1,:,:], self.St[-1,:,:,:], self.bt[-1,:,:])
+                (self.obj, self.ct, self.St, self.bt, self.xt, self.xSt) = self.objectiveFunDef(self.at, self.Afft, withTrajectory=True)
+                data = (self.xt[-1,:,:], self.xSt[-1,:,:,:], self.bt[-1,:,:])
                 self.obj += self.obj0 + self.dataTerm(data)
             else:
                 (self.obj, self.ct, self.St, self.xt) = self.objectiveFunDef(self.at, self.Afft, withTrajectory=True)
@@ -254,8 +274,8 @@ class SurfaceMatching(surfaceMatching.SurfaceMatching):
         else:
             AfftTry = self.Afft
         if self.dcurr:
-            objTry, ct, St, bt = self.objectiveFunDef(atTry, AfftTry, withTrajectory=True)
-            data = (ct[-1,:,:], St[-1,:,:,:], bt[-1,:,:])
+            objTry, ct, St, bt, xt, xSt = self.objectiveFunDef(atTry, AfftTry, withTrajectory=True)
+            data = (xt[-1,:,:], xSt[-1,:,:,:], bt[-1,:,:])
             objTry += self.obj0 + self.dataTerm(data)
         else:
             objTry, ct, St, xt = self.objectiveFunDef(atTry, AfftTry, withTrajectory=True)
@@ -280,14 +300,16 @@ class SurfaceMatching(surfaceMatching.SurfaceMatching):
     def endPointGradient(self):
         if self.dcurr:
             #print self.bt.shape
-            (pc, pS, pb) = self.param.fun_objGrad(self.ct[-1, :, :], self.St[-1, :, :, :], self.bt[-1, :, :],
-                                        self.fv1, self.param.KparDist.sigma)
+            (px, pxS, pb) = self.param.fun_objGrad(self.xt[-1, :, :], self.xSt[-1, :, :, :], self.bt[-1, :, :], 
+                                                   self.fv1, self.param.KparDist.sigma)
+            pc = np.zeros(self.c0.shape)
+            pS = np.zeros(self.S0.shape)
             #gd.testDiffeonCurrentNormGradient(self.ct[-1, :, :], self.St[-1, :, :, :], self.bt[-1, :, :],
             #                               self.fv1, self.param.KparDist.sigma)
-            pc = pc / self.param.sigmaError**2
-            pS = pS / self.param.sigmaError**2
+            px = px / self.param.sigmaError**2
+            pxS = pxS / self.param.sigmaError**2
             pb = pb / self.param.sigmaError**2
-            return (pc, pS, pb)
+            return (pc, pS, pb, px, pxS)
         else:
             px = self.param.fun_objGrad(self.fvDef, self.fv1, self.param.KparDist)/ self.param.sigmaError**2
             pc = np.zeros(self.c0.shape)
@@ -305,9 +327,9 @@ class SurfaceMatching(surfaceMatching.SurfaceMatching):
                 A[1][t] = AB[dim2:dim2+self.dim]
 
         if self.dcurr:
-            (pc1, pS1, pb1) = self.endPointGradient()
-            foo = evol.gaussianDiffeonsGradientNormals(self.c0, self.S0, self.b0,
-                                                       self.at, -pc1, -pS1, -pb1, self.param.sigmaKernel, self.regweight, affine=A)
+            (pc1, pS1, pb1, px1, pxS1) = self.endPointGradient()
+            foo = evol.gaussianDiffeonsGradientNormals(self.c0, self.S0, self.b0, self.x0, self.xS0,
+                                                       self.at, -pc1, -pS1, -pb1, -px1, -pxS1, self.param.sigmaKernel, self.regweight, affine=A)
         else:
             (pc1, pS1, px1) = self.endPointGradient()
             foo = evol.gaussianDiffeonsGradientPset(self.c0, self.S0, self.x0,
@@ -405,20 +427,27 @@ class SurfaceMatching(surfaceMatching.SurfaceMatching):
         self.iter += 1
         if (self.iter % self.saveRate == 0) :
             if self.dcurr:
-                (obj1, self.ct, self.St, self.bt, self.xt, Jt) = self.objectiveFunDef(self.at, self.Afft, withTrajectory=True, withJacobian=True)
+                print 'saving...'
+                (obj1, self.ct, self.St, self.bt, self.xt, self.xSt, Jt) = self.objectiveFunDef(self.at, self.Afft, withTrajectory=True, withJacobian=True)
+                dim2 = self.dim**2
+                A = [np.zeros([self.Tsize, self.dim, self.dim]), np.zeros([self.Tsize, self.dim])]
+                if self.affineDim > 0:
+                    for t in range(self.Tsize):
+                        AB = np.dot(self.affineBasis, Afft[t])
+                        A[0][t] = AB[0:dim2].reshape([self.dim, self.dim])
+                        A[1][t] = AB[dim2:dim2+self.dim]
+		(ct, St, xt, Jt)  = evol.gaussianDiffeonsEvolutionEuler(self.c0, self.S0, self.at, self.param.sigmaKernel, affine=A,
+                                                                        withPointSet = self.fv0Fine.vertices, withJacobian=True)
+                fvDef = surfaces.Surface(surf=self.fv0Fine)
                 for kk in range(self.Tsize+1):
                     self.fvDef.updateVertices(np.squeeze(self.xt[kk, :, :]))
-                    foo = (gd.diffeonCurrentNormDef(self.ct[kk], self.St[kk], self.bt[kk], self.fvDef, self.param.KparDist.sigma)
+                    fvDef.updateVertices(np.squeeze(xt[kk, :, :]))
+                    foo = (gd.diffeonCurrentNormDef(self.xt[kk], self.xSt[kk], self.bt[kk], self.fvDef, self.param.KparDist.sigma)
                            + gd.diffeonCurrentNorm0(self.fvDef, self.param.KparDist))/ (self.param.sigmaError**2)
                     print foo
-                    if self.idx == None:
-                        self.fvDef.saveVTK(self.outputDir +'/'+ self.saveFile+str(kk)+'.vtk', scalars = Jt[kk, :], scal_name='Jacobian')
-                    else:
-                        self.fvDef.saveVTK(self.outputDir +'/'+ self.saveFile+str(kk)+'.vtk', scalars = Jt[kk, :], scal_name='Jacobian')
-                        #                self.fvDef.saveVTK(self.outputDir +'/'+ self.saveFile+str(kk)+'.vtk', scalars = self.idx, scal_name='Labels')
-                                           #vectors = self.bt[kk, :, :], vect_name='bt')
+                    fvDef.saveVTK(self.outputDir +'/'+ self.saveFile+str(kk)+'.vtk', scalars = Jt[kk, :], scal_name='Jacobian')
                     gd.saveDiffeons(self.outputDir +'/'+ self.saveFile+'Diffeons'+str(kk)+'.vtk', self.ct[kk,:,:], self.St[kk,:,:,:])
-                    self.saveB(self.outputDir +'/'+ self.saveFile+'Bt'+str(kk)+'.vtk', self.ct[kk,:,:], self.bt[kk,:,:])
+                    self.saveB(self.outputDir +'/'+ self.saveFile+'Bt'+str(kk)+'.vtk', self.xt[kk,:,:], self.bt[kk,:,:])
             else:
                 (obj1, self.ct, self.St, self.xt) = self.objectiveFunDef(self.at, self.Afft, withTrajectory=True)
                 self.fvDef.updateVertices(np.squeeze(self.xt[-1, :, :]))
@@ -442,7 +471,7 @@ class SurfaceMatching(surfaceMatching.SurfaceMatching):
 
         else:
             if self.dcurr:
-                (obj1, self.ct, self.St, self.bt) = self.objectiveFunDef(self.at, self.Afft, withTrajectory=True)
+                (obj1, self.ct, self.St, self.bt, self.xt, self.xSt) = self.objectiveFunDef(self.at, self.Afft, withTrajectory=True)
             else:
                 (obj1, self.ct, self.St, self.xt) = self.objectiveFunDef(self.at, self.Afft, withTrajectory=True)
                 self.fvDef.updateVertices(np.squeeze(self.xt[-1, :, :]))
@@ -510,8 +539,8 @@ class SurfaceMatching(surfaceMatching.SurfaceMatching):
     def optimizeMatching(self):
         obj0 = self.param.fun_obj0(self.fv1, self.param.KparDist) # / (self.param.sigmaError**2)
         if self.dcurr:
-            (obj, self.ct, self.St, self.bt) = self.objectiveFunDef(self.at, self.Afft, withTrajectory=True)
-            data = (self.ct[-1,:,:], self.St[-1,:,:,:], self.bt[-1,:,:])
+            (obj, self.ct, self.St, self.bt, self.xt, self.xSt) = self.objectiveFunDef(self.at, self.Afft, withTrajectory=True)
+            data = (self.xt[-1,:,:], self.xSt[-1,:,:,:], self.bt[-1,:,:])
             print 'objDef = ', obj, 'dataterm = ',  obj0 + self.dataTerm(data)* (self.param.sigmaError**2)
             print obj0 + surfaces.currentNormDef(self.fv0, self.fv1, self.param.KparDist)
         else:
