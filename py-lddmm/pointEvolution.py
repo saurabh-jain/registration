@@ -39,7 +39,7 @@ def landmarkDirectEvolutionEuler(x0, at, KparDiff, affine = None, withJacobian=F
             xt[k+1, :, :] += timeStep * (np.dot(z, A[k].T) + b[k])
         if not (withPointSet == None):
             zy = np.squeeze(yt[k, :, :])
-            yt[k+1, :, :] = zy + timeStep * KparDiff.applyK(zy, a, y=z)
+            yt[k+1, :, :] = zy + timeStep * KparDiff.applyK(z, a, y=zy)
             if not (affine == None):
                 yt[k+1, :, :] += timeStep * (np.dot(zy, A[k].T) + b[k])
 
@@ -67,7 +67,7 @@ def landmarkDirectEvolutionEuler(x0, at, KparDiff, affine = None, withJacobian=F
 
 
 def gaussianDiffeonsEvolutionEuler(c0, S0, at, sigma, affine = None, withJacobian=False, withPointSet=None, withNormals=None,
-                                   withDiffeonSet=None):
+                                   withDiffeonSet=None, withWeightedGrid=None):
 
     dim = c0.shape[1]
     M = c0.shape[0]
@@ -97,6 +97,14 @@ def gaussianDiffeonsEvolutionEuler(c0, S0, at, sigma, affine = None, withJacobia
             b0 = withNormals
             bt = np.zeros([T, N, dim])
             bt[0, :, :] = b0
+    if not(withWeightedGrid == None):
+        simpleOutput = False
+        gr0 = withWeightedGrid[0]
+        grt = np.zeros(np.concatenate([[T], gr0.shape]))
+        grt[0, ...] = gr0
+        lJ0 = withWeightedGrid[1]
+        lJt = np.zeros(np.concatenate([[T], lJ0.shape]))
+        lJt[0, ...] = lJ0
         
     if not(affine == None):
         A = affine[0]
@@ -144,6 +152,24 @@ def gaussianDiffeonsEvolutionEuler(c0, S0, at, sigma, affine = None, withJacobia
 
         St[t+1, :, :, :] = S + timeStep * zS + (timeStep**2) * zScorr
         #St[t+1, :, :, :] = S
+
+
+        if not(withWeightedGrid==None):
+            gr = np.squeeze(grt[t, ...])
+            diffgr = gr[..., newaxis,:] - c
+            betagr = (R *diffgr[..., newaxis,:]).sum(axis=-1) 
+            dst = (betax * diffx).sum(axis=-1)
+            fgr = np.exp(-dst/2)
+            zgr = np.dot(fx, a)
+            grt[t+1, :, :] = gr + timeStep * zgr
+            if not (affine == None):
+                grt[t+1, :, :] += timeStep * (np.dot(gr, A[t].T) + b[t])
+            if withJacobian:
+                Div = -(fgr * (betagr * a).sum(axis=-1)).sum(axis=-1)
+                lJt[t+1, :] = lJt[t, :] + timeStep * Div
+                if not (affine == None):
+                    lJt[t+1, :] += timeStep * (np.trace(A[t]))
+
 
         if not(withPointSet==None):
             x = np.squeeze(xt[t, :, :])
@@ -593,7 +619,7 @@ def landmarkEPDiff(T, x0, a0, KparDiff, affine = None, withJacobian=False, withN
             xt[k+1, :, :] += timeStep * (np.dot(z, A[k].T) + b[k])
         if not (withPointSet == None):
             zy = np.squeeze(yt[k, :, :])
-            yt[k+1, :, :] = zy + timeStep * KparDiff.applyK(zy, a, y=z)
+            yt[k+1, :, :] = zy + timeStep * KparDiff.applyK(z, a, y=zy)
             if not (affine == None):
                 yt[k+1, :, :] += timeStep * (np.dot(zy, A[k].T) + b[k])
 

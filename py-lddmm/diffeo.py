@@ -2,6 +2,8 @@ import os
 import sys
 import struct
 import numpy as np
+import scipy as sp
+import scipy.ndimage as Img
 from vtk import *
 import array
 from PIL import Image
@@ -12,12 +14,14 @@ import vtk.util.numpy_support as v2n
 # Useful functions for multidimensianal arrays
 class gridScalars:
    # initializes either form a previous array (data) or from a file 
-   def __init__(self, data=None, fileName = None, dim = 3, resol = [1., 1., 1.], origin=[0.,0.,0.], force_axun=False, withBug=False):
+   def __init__(self, grid=None, data=None, fileName = None, dim = 3, resol = [1., 1., 1.], origin=[0.,0.,0.], force_axun=False, withBug=False):
       if not (data == None):
          self.data = np.copy(data)
          self.resol = np.copy(resol)
          self.origin = np.copy(origin)
+         self.dim = dim
       elif not (fileName==None):
+         self.dim = dim 
          if (dim == 1):
             self.resol = 1.
             self.origin = 0.
@@ -41,9 +45,13 @@ class gridScalars:
             # u.setFileName(fileName)
             # u.Update()
             # v = u.GetOutput()
-            img = Image.open(fileName)
-            self.data = np.array(img.convert("L").getdata())
-            self.data.resize(img.size)
+            # img = Image.open(fileName)
+            img=Img.imread(fileName)
+            if (len(img.shape) == 3):
+               img = img.sum(axis=2)/(img.shape[2]+1)
+            self.data = img
+            #np.array(img.convert("L").getdata())
+            #self.data.resize(img.size)
          elif (dim == 3):
             (nm, ext) = os.path.splitext(fileName)
             if ext=='.hdr':
@@ -53,6 +61,22 @@ class gridScalars:
          else:
             print "get_image: unsupported input dimensions"
             return
+      elif not grid=None:
+         self.data = np.copy(grid.data)
+         self.resol = np.copy(grid.resol)
+         self.origin = np.copy(grid.origin)
+         self.dim = grid.dim
+
+   def save(self, filename):
+      if self.dim == 2:
+         out = Image.fromarray(self.data.astype(numpy.unit8))
+         out.save(filename)
+      else:
+         [u, v] = os.path.splitext(filename)
+         if v=='.vtk':
+            self.saveVTK(filename)
+         else:
+            self.saveAnalyze(filename)
 
    # Reads from vtk file
    def readVTK(self, filename):
@@ -65,6 +89,7 @@ class gridScalars:
       self.origin = v.GetOrigin() ;
       self.resol = v.GetSpacing()
       self.data = np.ndarray(shape=dim, order='F', buffer = v.GetPointData().GetScalars())
+      self.dim = 3
 
    # Saves in vtk file
    def saveVTK(self, filename, scalarName='scalars_', title='lddmm data'):
@@ -185,6 +210,7 @@ class gridScalars:
             if withBug:
                self.data  = self.data[::-1,::-1,::-1]
             #self.saveAnalyze('Data/foo.hdr')
+      
 
    def zeroPad(self, h):
       d = np.copy(self.data)
@@ -213,54 +239,52 @@ class Diffeomorphism:
 
 # multilinear interpolation
 def multilinInterp(img, diffeo):
-   if img.ndim > 3:
+   ndim = img.ndim
+   if ndim > 3:
       print 'interpolate only in dimension 1 to 3'
       return
-   for k in range(img.ndim, 3):
-      np.expand_dims(img, k)
-      np.expand_dims(diffeo, k)
+         
    tooLarge = diffeo.min() < 0
    for k in range(img.ndim):
-      if (diffeo[k, :,:,:].max(axis=k) > img.shape[k]-1):
+      if (diffeo[k, ...].max(axis=k) > img.shape[k]-1):
          tooLarge = True
-         if tooLarge:
-            dfo = np.copy(diffeo)
-            dfo = max(df0, 0)
-            for k in range(img.ndim):
-               dfo[k, :, :, :] = min(dfo[k, :,:,:], img.shape[k]-1)
-      else:
-         dfo = diffeo
+   if tooLarge:
+      dfo = np.copy(diffeo)
+      dfo = max(df0, 0)
+      for k in range(img.ndim):
+         dfo[k, ...] = min(dfo[k, ...], img.shape[k]-1)
+   else:
+      dfo = diffeo
 
-   res = np.copy(img)
-   if img.shape[0] > 1:
-      i0  = np.floor(dfo[0,:,:,:])
-      i1 = min(i0+1, img.shape[0]-1)
-      r0 = dfo[0,:,:,:] - i0
-      res = np.multiply(img[i0, :, :], 1-r0) + np.multiply(img[i1, :, :], r0)
-   if img.shape[1] > 1:
-      i0  = np.floor(dfo[1,:,:,:])
-      i1 = min(i0+1, img.shape[1]-1)
-      r0 = dfo[1,:,:,:] - i0
-      res = np.multiply(res[:, i0, :], 1-r0) + np.multiply(res[:, i1, :], r0)
-   if img.shape[2] > 1:
-      i0  = np.floor(dfo[2,:,:,:])
-      i1 = min(i0+1, img.shape[2]-1)
-      r0 = dfo[2,:,:,:] - i0
-      res = np.multiply(res[:, :, i0], 1-r0) + np.multiply(res[:, :, i1], r0)
+   I = np.int_(np.floor(dfo))
+   J = np.zeros(I.shape, dtype=np.int)
+   r = np.zeros(I.shape)
+   for k in range(ndim):
+      J[k, ...] = min(I[k, ...]+1, img.shape[k]-1) 
+      r[k, ...] = dfo[k, ...] - I[k, ...]
 
-   img = np.squeeze(img)
-   diffeo = np.squeeze(diffeo)
-   return np.squeeze(res)
+   if ndim ==1:
+      res = (1-r[0, ...]) * img[I[0, ...]] + r[0, ...] * img[J[0, ...]]
+   elif ndim==2:
+      res = ((1-r[1, ...]) * ((1-r[0, ...]) * img[I[0, ...], I[1,...]] + r[0, ...] * img[J[0, ...], I[1,...]])
+             + r[1, ...] * ((1-r[0, ...]) * img[I[0, ...], J[1,...]] + r[0, ...] * img[J[0, ...], J[1,...]]))
+   elif ndim==3:
+      res = ((1-r[2,...]) * ((1-r[1, ...]) * ((1-r[0, ...]) * img[I[0, ...], I[1,...], I[2, ...]] + r[0, ...] * img[J[0, ...], I[1,...], I[2,...]])
+                             + r[1, ...] * ((1-r[0, ...]) * img[I[0, ...], J[1,...], I[2, ...]] + r[0, ...] * img[J[0, ...], J[1,...], I[2,...]]))
+            + r[2,...] * ((1-r[1, ...]) * ((1-r[0, ...]) * img[I[0, ...], I[1,...], J[2, ...]] + r[0, ...] * img[J[0, ...], I[1,...], J[2,...]])
+                           + r[1, ...] * ((1-r[0, ...]) * img[I[0, ...], J[1,...], J[2, ...]] + r[0, ...] * img[J[0, ...], J[1,...], J[2,...]])))
+   else:
+      print 'interpolate only in dimension 1 to 3'
+      return
 
+   return res
+   
 
 # Computes gradient
 def gradient(img, resol=None):
    if img.ndim > 3:
       print 'gradient only in dimension 1 to 3'
       return
-   for k in range(img.ndim, 3):
-      np.expand_dims(img, k)
-      np.expand_dims(diffeo, k)
 
    if img.ndim == 3:
       if resol == None:
