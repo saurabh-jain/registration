@@ -49,7 +49,7 @@ def compute(createSurfaces=True):
         #return fv1, fv2
 
     ## Object kernel
-    r0 = 75./fv1.vertices.shape[0]
+    r0 = 50./fv1.vertices.shape[0]
     T0 = 100
     fv11 = Surface(surf=fv1)
     fv11.vertices *= 2
@@ -60,15 +60,15 @@ def compute(createSurfaces=True):
     # gdOpt2.optimize()
     # return gdOpt, gdOpt2
     sm = SurfaceMatchingParam(timeStep=0.1, sigmaKernel=5., sigmaDist=5., sigmaError=1.,
-                              #errorType='diffeonCurrent')
-        errorType='current')
+                              errorType='diffeonCurrent')
+        #errorType='current')
     # f0 = SurfaceMatching(Template=fv1, Target=fv1, outputDir='/Users/younes/Development/Results/Diffeons/Scale3',param=sm, testGradient=False,
     #                     #DecimationTarget=T0,
     #                     DiffeonEpsForNet = r0,
     #                     #DiffeonSegmentationRatio=r0,
     #                     maxIter=100, affine='none', rotWeight=1., transWeight = 1., scaleWeight=10., affineWeight=100., zeroVar=False)
     # f0.optimizeMatching()
-    f = SurfaceMatching(Template=fv1, Target=fv2, outputDir='/Users/younes/Development/Results/Diffeons/Scale4',param=sm, testGradient=False,
+    f = SurfaceMatching(Template=fv1, Target=fv2, outputDir='/Users/younes/Development/Results/Diffeons/Scale31',param=sm, testGradient=False,
                         Diffeons = (gdOpt.c0, gdOpt.S0, gdOpt.idx),
                         subsampleTargetSize = 500,
                         zeroVar=False,

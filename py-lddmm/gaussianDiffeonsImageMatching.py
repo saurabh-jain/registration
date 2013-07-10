@@ -17,6 +17,27 @@ from affineBasis import *
 #      sigmaError: normalization for error term
 #      errorType: 'measure' or 'current'
 #      typeKernel: 'gauss' or 'laplacian'
+
+
+def ImageMatchingDist(gr, J, im0, im1):
+    imdef = img.interpolation.map_coordinates(im1.data, gr.transpose(range(-1, gr.ndim-1)), order=1)
+    res = (((im0.data - imdef)**2)*exp(J)).sum()
+    return res
+
+def ImageMatchingGradient(gr, J, im0, im1):
+    gradIm1 = diffeo.gradient(im1.data, im1.resol)
+    imdef = img.interpolation.map_coordinates(im1.data, gr.transpose(range(-1, gr.ndim-1)), order=1)
+    gradDef = np.zeros(gradIm1.shape)
+    for k in range(gradIm1.shape[0]):
+        gradDef[k,...] = img.interpolation.map_coordinates(gradIm1[k, ...], gr.transpose(range(-1, gr.ndim-1)), order=1)
+
+    expJ = exp(J)
+    pgr = ((-2*(im0-im1)*expJ)*gradDef).transpose(np.append(range(1, pgr.ndim), 0))
+    pJ =  ((im0 - im1)**2)*exp(J)
+    return pgr, pJ
+
+
+
 class ImageMatchingParam:
     def __init__(self, timeStep = .1, sigmaKernel = 6.5, sigmaDist=2.5, sigmaError=1.0, dimension=2, errorType='measure'):
         self.timeStep = timeStep
@@ -188,7 +209,7 @@ class ImageMatching:
                 AB = np.dot(self.affineBasis, Afft[t])
                 A[0][t] = AB[0:dim2].reshape([self.dim, self.dim])
                 A[1][t] = AB[dim2:dim2+self.dim]
-	(ct, St, xt, Jt)  = evol.gaussianDiffeonsEvolutionEuler(c0, S0, at, param.sigmaKernel, affine=A, withLogJacobian=J0, withPointSet= x0)
+	(ct, St, grt, Jt)  = evol.gaussianDiffeonsEvolutionEuler(c0, S0, at, param.sigmaKernel, affine=A, withPointSet= gr0, withJacobian=J0)
 
         #print xt[-1, :, :]
         #print obj
@@ -205,7 +226,7 @@ class ImageMatching:
                 obj +=  timeStep * np.multiply(self.affineWeight.reshape(Afft[t].shape), Afft[t]**2).sum()
             #print xt.sum(), at.sum(), obj
         if withTrajectory:
-            return obj, ct, St, xt, Jt
+            return obj, ct, St, grt, Jt
         else:
             return obj
 
@@ -229,8 +250,8 @@ class ImageMatching:
             AfftTry = self.Afft - eps * dir.aff
         else:
             AfftTry = self.Afft
-        objTry, ct, St, xt, Jt = self.objectiveFunDef(atTry, AfftTry, withTrajectory=True)
-        data = (xt[-1,:,:], Jt[-1,:])
+        objTry, ct, St, grt, Jt = self.objectiveFunDef(atTry, AfftTry, withTrajectory=True)
+        data = (grt[-1,:,:], Jt[-1,:])
         objTry += self.dataTerm(data)
 
         if np.isnan(objTry):
@@ -248,14 +269,14 @@ class ImageMatching:
 
 
     def endPointGradient(self):
-        (px, pJ) = self.param.fun_objGrad(self.xt[-1, :, :], self.Jt[-1, :], self.im0, self.im1)
+        (pg, pJ) = self.param.fun_objGrad(self.grt[-1, :, :], self.Jt[-1, :], self.im0, self.im1)
         pc = np.zeros(self.c0.shape)
         pS = np.zeros(self.S0.shape)
         #gd.testDiffeonCurrentNormGradient(self.ct[-1, :, :], self.St[-1, :, :, :], self.bt[-1, :, :],
         #                               self.fv1, self.param.KparDist.sigma)
-        px = px / self.param.sigmaError**2
+        pg = pg / self.param.sigmaError**2
         pJ = pJ / self.param.sigmaError**2
-        return (pc, pS, px, pJ)
+        return (pc, pS, pg, pJ)
 
 
     def getGradient(self, coeff=1.0):
@@ -267,7 +288,7 @@ class ImageMatching:
                 A[0][t] = AB[0:dim2].reshape([self.dim, self.dim])
                 A[1][t] = AB[dim2:dim2+self.dim]
 
-        (pc1, pS1, px1, pJ1) = self.endPointGradient()
+        (pc1, pS1, pg1, pJ1) = self.endPointGradient()
         foo = evol.gaussianDiffeonsGradientPset(self.c0, self.S0, self.x0, self.at, -pc1, -pS1, -px1, self.param.sigmaKernel, self.regweight,
                                                 affine=A, withLogJacobian = (J0, -pJ1)
 
