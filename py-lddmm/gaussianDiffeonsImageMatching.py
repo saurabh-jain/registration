@@ -2,7 +2,7 @@ import os
 import numpy as np
 import numpy.linalg as LA
 import scipy as sp
-import scipy.ndimage as img
+import scipy.ndimage as Img
 import diffeo
 import kernelFunctions as kfun
 import gaussianDiffeons as gd
@@ -20,26 +20,26 @@ from affineBasis import *
 
 
 def ImageMatchingDist(gr, J, im0, im1):
-    imdef = img.interpolation.map_coordinates(im1.data, gr.transpose(range(-1, gr.ndim-1)), order=1)
-    res = (((im0.data - imdef)**2)*exp(J)).sum()
+    imdef = Img.interpolation.map_coordinates(im1.data, gr.transpose(range(-1, gr.ndim-1)), order=1)
+    res = (((im0.data - imdef)**2)*np.exp(J)).sum()
     return res
 
 def ImageMatchingGradient(gr, J, im0, im1):
     gradIm1 = diffeo.gradient(im1.data, im1.resol)
-    imdef = img.interpolation.map_coordinates(im1.data, gr.transpose(range(-1, gr.ndim-1)), order=1)
+    imdef = Img.interpolation.map_coordinates(im1.data, gr.transpose(range(-1, gr.ndim-1)), order=1)
     gradDef = np.zeros(gradIm1.shape)
     for k in range(gradIm1.shape[0]):
-        gradDef[k,...] = img.interpolation.map_coordinates(gradIm1[k, ...], gr.transpose(range(-1, gr.ndim-1)), order=1)
+        gradDef[k,...] = Img.interpolation.map_coordinates(gradIm1[k, ...], gr.transpose(range(-1, gr.ndim-1)), order=1)
 
-    expJ = exp(J)
-    pgr = ((-2*(im0-im1)*expJ)*gradDef).transpose(np.append(range(1, pgr.ndim), 0))
-    pJ =  ((im0 - im1)**2)*exp(J)
+    expJ = np.exp(J)
+    pgr = ((-2*(im0.data-imdef)*expJ)*gradDef).transpose(np.append(range(1, gr.ndim), 0))
+    pJ =  ((im0.data - imdef)**2)*expJ
     return pgr, pJ
 
 
 
 class ImageMatchingParam:
-    def __init__(self, timeStep = .1, sigmaKernel = 6.5, sigmaDist=2.5, sigmaError=1.0, dimension=2, errorType='measure'):
+    def __init__(self, timeStep = .1, sigmaKernel = 6.5, sigmaError=1.0, dimension=2, errorType='L2', KparDiff = None, typeKernel='gauss'):
         self.timeStep = timeStep
         self.sigmaKernel = sigmaKernel
         self.sigmaError = sigmaError
@@ -47,9 +47,8 @@ class ImageMatchingParam:
         self.errorType = errorType
         self.dimension = dimension
         if errorType == 'L2':
-            self.fun_obj0 = gd.imageL2Norm0
-            self.fun_obj = gd.imageL2NormDef
-            self.fun_objGrad = gd.imageL2NormGradient
+            self.fun_obj = ImageMatchingDist
+            self.fun_objGrad = ImageMatchingGradient
         else:
             print 'Unknown error Type: ', self.errorType
         if KparDiff == None:
@@ -81,8 +80,8 @@ class Direction:
 #        affine: 'affine', 'similitude', 'euclidean', 'translation' or 'none'
 #        maxIter: max iterations in conjugate gradient
 class ImageMatching:
-    def __init__(self, Template=None, Target=None, Diffeons=None, EpsilonNet=None, DecimationTarget=None,
-                 subsampleTargetSize = -1, 
+    def __init__(self, Template=None, Target=None, Diffeons=None, EpsilonNet=None, DecimationTarget=1,
+                 subsampleTemplate = 1, 
                  DiffeonEpsForNet=None, DiffeonSegmentationRatio=None, zeroVar=False, fileTempl=None,
                  fileTarg=None, param=None, maxIter=1000, regWeight = 1.0, affineWeight = 1.0, verb=True,
                  rotWeight = None, scaleWeight = None, transWeight = None, testGradient=False, saveFile = 'evolution', affine = 'none', outputDir = '.'):
@@ -93,7 +92,8 @@ class ImageMatching:
             else:
                 self.im0 = diffeo.gridScalars(filename=fileTempl)
         else:
-            self.im0 = diffeo.gridScalars(data=Template)
+            self.im0 = diffeo.gridScalars(grid=Template)
+        print self.im0.data.shape, Template.data.shape
         if Target==None:
             if fileTarg==None:
                 print 'Please provide a target image'
@@ -101,13 +101,13 @@ class ImageMatching:
             else:
                 self.im1 = diffeo.gridScalars(filename=fileTarg)
         else:
-            self.im1 = diffeo.gridScalars(data=Target)
+            self.im1 = diffeo.gridScalars(grid=Target)
 
-        self.im0Fine = diffeo.gridScalars(data=self.im0)
+        self.im0Fine = diffeo.gridScalars(grid=self.im0)
         self.saveRate = 10
         self.iter = 0
         self.gradEps = -1
-        self.dim = self.im0.ndim
+        self.dim = self.im0.data.ndim
         self.setOutputDir(outputDir)
         self.maxIter = maxIter
         self.verb = verb
@@ -135,18 +135,19 @@ class ImageMatching:
             if DecimationTarget==None:
                 DecimationTarget = 1
             if self.dim == 1:
-                self.c0 = 0:self.im0.shape[0]:DecimationTarget
+                self.c0 = range(0, self.im0.data.shape[0], DecimationTarget)
             elif self.dim == 2:
-                u = np.mgrid[0:self.im0.shape[0]:DecimationTarget, 0:self.im0.shape[1]:DecimationTarget]
+                u = np.mgrid[0:self.im0.data.shape[0]:DecimationTarget, 0:self.im0.data.shape[1]:DecimationTarget]
                 self.c0 = np.zeros([u[0].size, self.dim])
-                self.c0[:,0] = u[0]
-                self.c0[:,1] = u[1]
+                self.c0[:,0] = u[0].flatten()
+                self.c0[:,1] = u[1].flatten()
             elif self.dim == 3:
-                u = np.mgrid[0:self.im0.shape[0]:DecimationTarget, 0:self.im0.shape[1]:DecimationTarget, 0:self.im0.shape[2]:DecimationTarget]
+                u = np.mgrid[0:self.im0.data.shape[0]:DecimationTarget, 0:self.im0.data.shape[1]:DecimationTarget, 0:self.im0.data.shape[2]:DecimationTarget]
                 self.c0 = np.zeros([u[0].size, self.dim])
-                self.c0[:,0] = u[0]
-                self.c0[:,1] = u[1]
-                self.c0[:,2] = u[2]
+                self.c0[:,0] = u[0].flatten()
+                self.c0[:,1] = u[1].flatten()
+                self.c0[:,2] = u[2].flatten()
+            print self.im0.resol
             self.c0 = self.im0.origin + self.c0 * self.im0.resol
             self.S0 = np.tile(DecimationTarget*np.diag(self.im0.resol), [self.c0.shape[0], 1, 1])
         else:
@@ -159,26 +160,27 @@ class ImageMatching:
         if subsampleTemplate == None:
             subsampleTemplate = 1
         self.im0.resol *= subsampleTemplate
-        self.im0 = Img.filters.median_filter(self.im0, size=subsampleTemplate)
+        self.im0.data = Img.filters.median_filter(self.im0.data, size=subsampleTemplate)
         if self.dim == 1:
-            self.im0 = self.im0[0:self.im0.shape[0]:subsampleTemplate]
-            self.gr0 = 0:self.im0.shape[0]
+            self.im0.data = self.im0.data[0:self.im0.data.shape[0]:subsampleTemplate]
+            self.gr0 = range(self.im0.data.shape[0])
         elif self.dim == 2:
-            self.im0 = self.im0[0:self.im0.shape[0]:subsampleTemplate, 0:self.im0.shape[1]:subsampleTemplate]
-            self.gr0 = np.mgrid[0:self.im0.shape[0], 0:self.im0.shape[1]].transpose((2,0,1))
+            self.im0.data = self.im0.data[0:self.im0.data.shape[0]:subsampleTemplate, 0:self.im0.data.shape[1]:subsampleTemplate]
+            self.gr0 = np.mgrid[0:self.im0.data.shape[0], 0:self.im0.data.shape[1]].transpose((1, 2,0))
         elif self.dim == 3:
-            self.im0 = self.im0[0:self.im0.shape[0]:subsampleTemplate, 0:self.im0.shape[1]:subsampleTemplate, 0:self.im0.shape[2]:subsampleTemplate]
-            self.gr0 = np.mgrid[0:self.im0.shape[0], 0:self.im0.shape[1], 0:self.im0.shape[2]].transpose((3,0,1,2))
+            self.im0.data = self.im0.data[0:self.im0.data.shape[0]:subsampleTemplate, 0:self.im0.data.shape[1]:subsampleTemplate, 0:self.im0.data.shape[2]:subsampleTemplate]
+            self.gr0 = np.mgrid[0:self.im0.data.shape[0], 0:self.im0.data.shape[1], 0:self.im0.data.shape[2]].transpose((1,2, 3, 0))
         self.gr0 = self.im0.origin + self.gr0 * self.im0.resol 
-        self.lJ0 = np.log(self.im0.resol.prod()) 
+        self.J0 = np.log(self.im0.resol.prod()) * np.ones(self.im0.data.shape) 
 	self.ndf = self.c0.shape[0]
         self.Tsize = int(round(1.0/self.param.timeStep))
         self.at = np.zeros([self.Tsize, self.c0.shape[0], self.dim])
         self.atTry = np.zeros([self.Tsize, self.c0.shape[0], self.dim])
         self.Afft = np.zeros([self.Tsize, self.affineDim])
         self.AfftTry = np.zeros([self.Tsize, self.affineDim])
-        self.imt = np.tile(self.im0, np.concatenate(([self.Tsize+1], np.eye(self.dim))))
-        self.grt = np.tile(self.gr0, np.concatenate(([self.Tsize+1], np.eye(self.dim+1))))
+        self.imt = np.tile(self.im0, np.insert(np.ones(self.dim), 0, self.Tsize+1))
+        self.Jt = np.tile(self.J0, np.insert(np.ones(self.dim), 0, self.Tsize+1))
+        self.grt = np.tile(self.gr0, np.insert(np.ones(self.dim+1), 0, self.Tsize+1))
         self.ct = np.tile(self.c0, [self.Tsize+1, 1, 1])
         self.St = np.tile(self.S0, [self.Tsize+1, 1, 1, 1])
         print 'error type:', self.param.errorType
@@ -189,15 +191,24 @@ class ImageMatching:
         self.im0.save(self.outputDir+'/Template.png')
         self.im1.save(self.outputDir+'/Target.png')
 
+    def setOutputDir(self, outputDir):
+        self.outputDir = outputDir
+        if not os.access(outputDir, os.W_OK):
+            if os.access(outputDir, os.F_OK):
+                print 'Cannot save in ' + outputDir
+                return
+            else:
+                os.makedirs(outputDir)
+
 
     def  objectiveFunDef(self, at, Afft, withTrajectory = False, initial = None):
         if initial == None:
             c0 = self.c0
             S0 = self.S0
-            x0 = self.x0
+            gr0 = self.gr0
             J0 = self.J0
         else:
-            x0 = self.x0
+            gr0 = self.gr0
             J0 = self.J0
             (c0, S0) = initial
         param = self.param
@@ -232,6 +243,7 @@ class ImageMatching:
 
     def dataTerm(self, _data):
         obj = self.param.fun_obj(_data[0], _data[1], self.im0, self.im1) / (self.param.sigmaError**2)
+        return obj
 
     def objectiveFun(self):
         if self.obj == None:
@@ -289,8 +301,8 @@ class ImageMatching:
                 A[1][t] = AB[dim2:dim2+self.dim]
 
         (pc1, pS1, pg1, pJ1) = self.endPointGradient()
-        foo = evol.gaussianDiffeonsGradientPset(self.c0, self.S0, self.x0, self.at, -pc1, -pS1, -px1, self.param.sigmaKernel, self.regweight,
-                                                affine=A, withLogJacobian = (J0, -pJ1)
+        foo = evol.gaussianDiffeonsGradientPset(self.c0, self.S0, self.gr0, self.at, -pc1, -pS1, -pg1, self.param.sigmaKernel, self.regweight,
+                                                affine=A, withJacobian = (self.J0, -pJ1))
 
         grd = Direction()
         grd.diff = foo[0]/(coeff*self.Tsize)
@@ -382,7 +394,7 @@ class ImageMatching:
                                                                     withPointSet = self.fv0Fine.vertices, withJacobian=True)
             imDef = self.im1.copy()
             for kk in range(self.Tsize+1):
-                imDef = Img.interpolation.map_coordinates(self.im1, self.x0)
+                imDef = Img.interpolation.map_coordinates(self.im1, self.gr0)
                 imDef.save(self.outputDir +'/'+ self.saveFile+str(kk)+'.vtk')
                 gd.saveDiffeons(self.outputDir +'/'+ self.saveFile+'Diffeons'+str(kk)+'.vtk', self.ct[kk,:,:], self.St[kk,:,:,:])
         else:

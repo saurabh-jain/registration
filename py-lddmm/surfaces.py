@@ -904,10 +904,14 @@ def currentNormGradient(fvDef, fv1, KparDist):
     dim = c1.shape[1]
 
     g11 = kfun.kernelMatrix(KparDist, c1)
+    KparDist.hold()
     dg11 = kfun.kernelMatrix(KparDist, c1, diff=True)
+    KparDist.release()
     
     g12 = kfun.kernelMatrix(KparDist, c1, c2)
+    KparDist.hold()
     dg12 = kfun.kernelMatrix(KparDist, c1, c2, diff=True)
+    KparDist.release()
 
 
     z1 = g11*cr1 - g12 * cr2

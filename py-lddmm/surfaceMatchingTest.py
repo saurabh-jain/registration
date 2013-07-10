@@ -28,7 +28,7 @@ def compute(createSurfaces=True):
         fv1.saveVTK('/Users/younes/Development/Results/Diffeons/fv1.vtk')
         fv2.saveVTK('/Users/younes/Development/Results/Diffeons/fv2.vtk')
     else:
-        if True:
+        if False:
             path = '/Users/younes/Development/project/ncbc/data/template/PDS-II/AllScan1_PDSII/shape_analysis/hippocampus/'
             #sub1 = '0186193_1_6'
             #sub2 = '1449400_1_L'
@@ -49,7 +49,7 @@ def compute(createSurfaces=True):
     K1 = Kernel(name='gauss', sigma = 20.0)
 
     sm = SurfaceMatchingParam(timeStep=0.1, KparDiff=K1, sigmaDist=5, sigmaError=1., errorType='current')
-    f = SurfaceMatching(Template=fv1, Target=fv2, outputDir='/Users/younes/Development/Results/Surface',param=sm, testGradient=False,
+    f = SurfaceMatching(Template=fv1, Target=fv2, outputDir='/Users/younes/Development/Results/Surface',param=sm, testGradient=True,
                          maxIter=1000, affine= 'none', rotWeight=1., transWeight = 1., scaleWeight=10., affineWeight=100.)
 
     f.optimizeMatching()

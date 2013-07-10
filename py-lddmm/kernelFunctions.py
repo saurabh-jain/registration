@@ -29,7 +29,7 @@ def kernelMatrixGauss(x, y=None, grid=None, par=[1], diff = False, diff2 = False
                 elif diff2:
                     K = K/(sig2*sig2)
         else:
-            K = np.exp(-dfun.cdist(y, x, 'sqeuclidean')/sig2)
+            K = np.exp(-dfun.cdist(x, y, 'sqeuclidean')/sig2)
             precomp = np.copy(K)
             if diff:
                 K = -K/sig2
@@ -162,7 +162,7 @@ def kernelMatrixLaplacian(x, y=None, grid=None, par=[1., 3], diff=False, diff2 =
             K = dfun.squareform(lapPol(u,ord) *expu)
             np.fill_diagonal(K, 1)
         elif diff2==False:
-            K = dfun.squareform(-lapPolDiff(u, ord) * exp-/(2*sig*sig))
+            K = dfun.squareform(-lapPolDiff(u, ord) * expu/(2*sig*sig))
             np.fill_diagonal(K, -1./((2*ord-1)*2*sig*sig))
         else:
             K = dfun.squareform(lapPolDiff2(u, ord) *expu /(4*sig**4))
@@ -192,7 +192,7 @@ def kernelMatrixLaplacianPrecompute(x, y=None, grid=None, par=[1., 3], diff=Fals
         else:
             u = np.sqrt(((grid[..., newaxis, :] - x)**2).sum(axis=-1))/sig
     else:
-        u = dfun.cdist(y, x)/sig
+        u = dfun.cdist(x, y)/sig
     precomp = [u, exp(-u)]
     return precomp
 
@@ -202,7 +202,8 @@ def  kernelMatrix(Kpar, x, y=None, grid=None, diff = False, diff2=False, constan
     # creates a kernel matrix based on kernel parameters Kpar
     # if varargin = z
 
-    if (Kpar.prev_x is x) and (Kpar.prev_y is y):
+    #if (Kpar.prev_x is x) and (Kpar.prev_y is y):
+    if Kpar._hold:
         #print 'Kernel: not computing'
         precomp = np.copy(Kpar.precomp)
     else:
@@ -210,15 +211,15 @@ def  kernelMatrix(Kpar, x, y=None, grid=None, diff = False, diff2=False, constan
 
 
     if Kpar.name == 'gauss':
-        res = kernelMatrixGauss(x=x,y=y, grid=grid, par = [Kpar.sigma], diff=diff, diff2=diff2, constant_plane = constant_plane, precomp=precomp)
+        res = kernelMatrixGauss(x,y=y, grid=grid, par = [Kpar.sigma], diff=diff, diff2=diff2, constant_plane = constant_plane, precomp=precomp)
     elif Kpar.name == 'laplacian':
-        res = kernelMatrixLaplacian(x=x,y=y, grid=grid, par = [Kpar.sigma, Kpar.order], diff=diff, diff2=diff2, constant_plane = constant_plane, precomp=precomp)
+        res = kernelMatrixLaplacian(x,y=y, grid=grid, par = [Kpar.sigma, Kpar.order], diff=diff, diff2=diff2, constant_plane = constant_plane, precomp=precomp)
     else:
         print 'unknown Kernel type'
         return []
 
-    Kpar.prev_x = x
-    Kpar.prev_y = y
+    #Kpar.prev_x = x
+    #Kpar.prev_y = y
     Kpar.precomp = res[-1]
     if constant_plane:
         return res[0:2]
@@ -245,8 +246,8 @@ class KernelSpec:
         self.center = np.array(center)
         self.affine_basis = [] ;
         self.dim = dim
-        self.prev_x = []
-        self.prev_y = []
+        #self.prev_x = []
+        #self.prev_y = []
         self.precomp = []
         self._hold = False
         self.affine = affine
@@ -285,8 +286,8 @@ class Kernel(KernelSpec):
 
             #precomp = None
             r = self.kernelMatrix(x, y=y, grid = grid, par = self.par, precomp=precomp, diff=diff, diff2=diff2)
-            self.prev_x = x
-            self.prev_y = y
+            #self.prev_x = x
+            #self.prev_y = y
             self.precomp = r[1]
             return r[0] * self.weight
 

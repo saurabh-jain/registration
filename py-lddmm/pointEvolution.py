@@ -9,16 +9,16 @@ import numpy.linalg as LA
 # if withNormal = nu0, returns nu(t) evolving as dnu/dt = -Dv^{T} nu
 def landmarkDirectEvolutionEuler(x0, at, KparDiff, affine = None, withJacobian=False, withNormals=None, withPointSet=None):
     N = x0.shape[0]
-    dim = x0.shape[1]
+    dim = x0.shape[-1]
     M = at.shape[0] + 1
     timeStep = 1.0/(M-1)
     xt = np.zeros([M, N, dim])
-    xt[0, :, :] = x0
+    xt[0, ...] = x0
     simpleOutput = True
     if not (withNormals==None):
         simpleOutput = False
         nt = np.zeros([M, N, dim])
-        nt[0, :, :] = withNormals
+        nt[0, ...] = withNormals
     if withJacobian:
         simpleOutput = False
         Jt = np.zeros([M, N])
@@ -29,12 +29,12 @@ def landmarkDirectEvolutionEuler(x0, at, KparDiff, affine = None, withJacobian=F
         simpleOutput = False
         K = withPointSet.shape[0]
         yt = np.zeros([M,K,dim])
-        yt[:, :, :] = withPointSet
+        yt[0,...] = withPointSet
 
     for k in range(M-1):
-        z = np.squeeze(xt[k, :, :])
-        a = np.mat(np.squeeze(at[k, :, :]))
-        xt[k+1, :, :] = z + timeStep * KparDiff.applyK(z, a)
+        z = np.squeeze(xt[k, ...])
+        a = np.mat(np.squeeze(at[k, ...]))
+        xt[k+1, ...] = z + timeStep * KparDiff.applyK(z, a)
         if not (affine == None):
             xt[k+1, :, :] += timeStep * (np.dot(z, A[k].T) + b[k])
         if not (withPointSet == None):
@@ -93,11 +93,14 @@ def gaussianDiffeonsEvolutionEuler(c0, S0, at, sigma, affine = None, withJacobia
         xt[0, ...] = x0
         if type(withJacobian) == bool:
             if withJacobian:
-                Jt = np.zeros(np.concatenate([[T], x0.shape[0:-1])))
-        else:
+                Jt = np.zeros(np.insert(x0.shape[0:-1], 0, T))
+        elif not(withJacobian==None):
+            #print withJacobian
             J0 = withJacobian
-            xt = np.zeros(np.concatenate([[T], J0.shape]))
+            Jt = np.zeros(np.insert(J0.shape, 0, T))
             withJacobian = True
+        else:
+            withJacobian=False
         withPointSet = True
                               
         if not(withNormals == None):
@@ -167,8 +170,8 @@ def gaussianDiffeonsEvolutionEuler(c0, S0, at, sigma, affine = None, withJacobia
 
         if withWeightedGrid:
             gr = np.squeeze(grt[t, ...])
-            diffgr = gr[..., newaxis,:] - c
-            betagr = (R *diffgr[..., newaxis,:]).sum(axis=-1) 
+            diffgr = gr[..., np.newaxis,:] - c
+            betagr = (R *diffgr[..., np.newaxis,:]).sum(axis=-1) 
             dst = (betax * diffx).sum(axis=-1)
             fgr = np.exp(-dst/2)
             zgr = np.dot(fgr, a)
@@ -184,8 +187,8 @@ def gaussianDiffeonsEvolutionEuler(c0, S0, at, sigma, affine = None, withJacobia
 
         if withPointSet:
             x = np.squeeze(xt[t, ...])
-            diffx = x[..., newaxis, :]) - c.reshape([M, dim])
-            betax = (R*diffx.reshape([..., newaxis, :])).sum(axis=-1)
+            diffx = x[..., np.newaxis, :] - c.reshape([M, dim])
+            betax = (R*diffx[..., np.newaxis, :]).sum(axis=-1)
             dst = (betax * diffx).sum(axis=-1)
             fx = np.exp(-dst/2)
             zx = np.dot(fx, a)
@@ -193,14 +196,15 @@ def gaussianDiffeonsEvolutionEuler(c0, S0, at, sigma, affine = None, withJacobia
             if not (affine == None):
                 xt[t+1, :, :] += timeStep * (np.dot(x, A[t].T) + b[t])
             if withJacobian:
+                #print Jt.shape
                 Div = -(fx * (betax * a).sum(axis=-1)).sum(axis=-1)
                 Jt[t+1, :] = Jt[t, :] + timeStep * Div
                 if not (affine == None):
                     Jt[t+1, :] += timeStep * (np.trace(A[t]))
             if withNormals:
                 bb = np.squeeze(bt[t, ...])
-                zb = ((fx * np.dot(bb, a.T))[...,newaxis]) * betax).sum(axis=-2)
-                zb -= (fx * (betax * a).sum(axis=-1)).sum(axis=-1)[...,newaxis] *bb
+                zb = ((fx * np.dot(bb, a.T))[..., np.newaxis] * betax).sum(axis=-2)
+                zb -= (fx * (betax * a).sum(axis=-1)).sum(axis=-1)[..., np.newaxis] *bb
                 bt[t+1,:,:] = bb + timeStep*zb
 
         # if not(withPointSet==None):
@@ -282,18 +286,19 @@ def gaussianDiffeonsEvolutionEuler(c0, S0, at, sigma, affine = None, withJacobia
 
 # backwards covector evolution along trajectory associated to x0, at
 def gaussianDiffeonsCovectorPset(c0, S0, x0,  at, pc1, pS1, px1, sigma, regweight, affine = None, withJacobian=None):
-    N = x0.shape[0]
-    dim = x0.shape[1]
+    dim = c0.shape[1]
     M = c0.shape[0]
     T = at.shape[0]
     timeStep = 1.0/T
+    print c0.shape, x0.shape
     if not(withJacobian==None):
+        #print withJacobian
         J0 = withJacobian[0]
         pJ1 = withJacobian[1]
         withJacobian = True
     else:
         J0 = None
-    (ct, St, xt) = gaussianDiffeonsEvolutionEuler(c0, S0, at, sigma, affine=affine, withPointSet=x0, withJacobian=J0)
+    (ct, St, xt, Jt) = gaussianDiffeonsEvolutionEuler(c0, S0, at, sigma, affine=affine, withPointSet=x0, withJacobian=J0)
     pct = np.zeros([T, M, dim])
     pSt = np.zeros([T, M, dim, dim])
     pxt = np.zeros(np.insert(x0.shape, 0, T))
@@ -301,7 +306,7 @@ def gaussianDiffeonsCovectorPset(c0, S0, x0,  at, pc1, pS1, px1, sigma, regweigh
     pct[T-1, :, :] = pc1
     pSt[T-1, :, :, :] = pS1
     if withJacobian:
-        np.tile(pJ1, np.insert(np.ones(J0.ndim, , T)))
+        pJt = np.tile(pJ1, np.insert(np.ones(J0.ndim), 0, T))
         #pJt = np.zeros(np.insert(J0.shape, 0, T))
         #pJt[T-1, ...] = pJ1
     sig2 = sigma*sigma
@@ -312,6 +317,7 @@ def gaussianDiffeonsCovectorPset(c0, S0, x0,  at, pc1, pS1, px1, sigma, regweigh
     sigEye = sig2*np.eye(dim)
     for t in range(T-1):
         px = np.squeeze(pxt[T-t-1, ...])
+        pJ = np.squeeze(pJt[T-t-1, ...])
         pc = np.squeeze(pct[T-t-1, :, :])
         pS = np.squeeze(pSt[T-t-1, :, :])
         x = np.squeeze(xt[T-t-1, ...])
@@ -324,8 +330,8 @@ def gaussianDiffeonsCovectorPset(c0, S0, x0,  at, pc1, pS1, px1, sigma, regweigh
         (R2, detR2) = gd.multiMatInverse2(sigEye.reshape([1,1,dim,dim]) + SS, isSym=True) 
 
         diff = x[...,np.newaxis,:] - c
-        betax = (R*diff[...,np.newaxis,:])sum(axis=-1)
-        dst = (diff * betax).sum(axis=2)
+        betax = (R*diff[...,np.newaxis,:]).sum(axis=-1)
+        dst = (diff * betax).sum(axis=-1)
         fx = np.exp(-dst/2)
 
         diffc = c.reshape([M, 1, dim]) - c.reshape([1, M, dim])
@@ -342,7 +348,7 @@ def gaussianDiffeonsCovectorPset(c0, S0, x0,  at, pc1, pS1, px1, sigma, regweigh
         pca = np.dot(pc, a.T)
 
         betaxSym = betax[...,np.newaxis] * betax[...,np.newaxis,:]
-        betaxa = (betax[...,np.newaxis, :]*a)*sum(axis=-1)
+        betaxa = (betax*a).sum(axis=-1)
         betaSym = betac.reshape([M, M, dim, 1]) * betac.reshape([M, M, 1, dim])
         betacc = (R2 * diffc.reshape([M, M, 1, dim])).sum(axis=3)
         betaSymcc = betacc.reshape([M, M, dim, 1]) * betacc.reshape([M, M, 1, dim])
@@ -351,9 +357,10 @@ def gaussianDiffeonsCovectorPset(c0, S0, x0,  at, pc1, pS1, px1, sigma, regweigh
         spsa = (SpS.reshape([M,1,dim,dim])*a.reshape([1, M, 1, dim])).sum(axis=3)
         #print np.fabs(betacc + betacc.transpose([1,0,2])).sum()
 
+        #print pxa.shape, fx.shape, betax.shape
         u = (pxa * fx)[...,np.newaxis] * betax
-        zpx = u.sum(axis=-1)
-        zpc = - u.sum(axis=range(x0.ndim-1))
+        zpx = u.sum(axis=-2)
+        zpc = - u.sum(axis=tuple(range(x0.ndim-1)))
         u2 = (pca * fc)[...,np.newaxis] * betac
         zpc += u2.sum(axis=1) - u2.sum(axis=0)
 
@@ -364,7 +371,7 @@ def gaussianDiffeonsCovectorPset(c0, S0, x0,  at, pc1, pS1, px1, sigma, regweigh
         zpc -= 2 * (u.sum(axis=1) - u.sum(axis=0))
         zpc -= 2 * (np.multiply(gcc, aa).reshape([M, M, 1]) * betacc).sum(axis=1)
 
-        zpS = - 0.5 * (np.multiply(fx,pxa).reshape([N,M,1,1]) * (betax.reshape([N,M,dim,1]) * betax.reshape([N,M,1,dim]))).sum(axis=0)
+        zpS = - 0.5 * ((fx*pxa)[..., np.newaxis,np.newaxis] * (betax[...,np.newaxis]) * betax[...,np.newaxis,:]).sum(axis=tuple(range(x0.ndim-1)))
         zpS -= 0.5 * (np.multiply(fc,pca).reshape([M,M,1,1]) * betaSym).sum(axis=0)
         pSDv = (pS.reshape([M,dim, dim, 1]) * Dv.reshape([M, 1, dim, dim])).sum(axis=2)
         zpS += -pSDv - pSDv.transpose((0,2,1)) - timeStep * (Dv.reshape([M,dim, dim, 1]) * pSDv.reshape([M, dim, 1, dim])).sum(axis=1)
@@ -376,9 +383,10 @@ def gaussianDiffeonsCovectorPset(c0, S0, x0,  at, pc1, pS1, px1, sigma, regweigh
         zpS += (np.multiply(gcc, aa).reshape([M,M,1,1]) *(betaSymcc - R2 + R.reshape([M,1,dim,dim]))).sum(axis=1)
 
         if withJacobian:
-            zpc += ((pJ[...,np.newaxis]*fx)[...,newaxis] *(betaxa[...,np.newaxis]*betax -Ra)).sum(axis=range(x0.ndim-1))
-            zpS += 0.5 * ((pJ[...,np.newaxis]*fx)[...,np.newaxis,np.newaxis]*betaxSym).sum(axis=range(x0.ndim-1))
-            u = ((pJ[...,np.newaxis]*fx)[...,np.newaxis,np.newaxis] *(RA[...,newaxis]*betax[...,newaxis,:])).sum(axis=range(x0.ndim-1))
+            #print betaxa.shape, betax.shape, Ra.shape
+            zpc += ((pJ[...,np.newaxis]*fx)[...,np.newaxis] *(betaxa[...,np.newaxis]*betax -Ra)).sum(axis=tuple(range(x0.ndim-1)))
+            zpS += 0.5 * ((pJ[...,np.newaxis]*fx)[...,np.newaxis,np.newaxis]*betaxSym).sum(axis=tuple(range(x0.ndim-1)))
+            u = ((pJ[...,np.newaxis]*fx)[...,np.newaxis,np.newaxis] *(Ra[...,np.newaxis]*betax[...,np.newaxis,:])).sum(axis=tuple(range(x0.ndim-1)))
             zpS -= 0.5 * (u + u.transpose([0,2,1]))
 
         pxt[T-t-2, :, :] = px - timeStep * zpx
@@ -392,7 +400,7 @@ def gaussianDiffeonsCovectorPset(c0, S0, x0,  at, pc1, pS1, px1, sigma, regweigh
             pSt[T-t-2, :, :, :] -= timeStep * ((A[T-t-1].reshape([1,dim,dim,1])*pSt[T-t-1, :, :, :].reshape([M,1,dim,dim])).sum(axis=2) + (pSt[T-t-1, :, :, :].reshape([M,dim,1,dim])*A[T-t-1].reshape([1,1,dim,dim])).sum(axis=3))
     if withJacobian:
         return pct, pSt, pxt, pJt, ct, St, xt, Jt
-    else
+    else:
         return pct, pSt, pxt, ct, St, xt
 
 def gaussianDiffeonsCovectorNormals(c0, S0, b0, x0, xS0,  at, pc1, pS1, pb1, px1, pxS1, sigma, regweight, affine = None):
@@ -554,9 +562,21 @@ def gaussianDiffeonsCovectorNormals(c0, S0, b0, x0, xS0,  at, pc1, pS1, pb1, px1
     return pct, pSt, pbt, pxt, pxSt, ct, St, bt, xt, xSt
     
 # Computes gradient after covariant evolution for deformation cost a^TK(x,x) a
-def gaussianDiffeonsGradientPset(c0, S0, x0, at, pc1, pS1, px1, sigma, regweight, getCovector = False, affine = None):
-    (pct, pSt, pxt, ct, St, xt) = gaussianDiffeonsCovectorPset(c0, S0, x0, at, pc1, pS1, px1, sigma, regweight, affine=affine)
+def gaussianDiffeonsGradientPset(c0, S0, x0, at, pc1, pS1, px1, sigma, regweight, getCovector = False, affine = None, withJacobian=None):
+    if not(withJacobian==None):
+        #print withJacobian
+        J0 = withJacobian[0]
+        pJ1 = withJacobian[1]
+        withJacobian = True
+    else:
+        withJacobian = False
+
+    if withJacobian:
+        (pct, pSt, pxt, pJt, ct, St, xt, Jt) = gaussianDiffeonsCovectorPset(c0, S0, x0, at, pc1, pS1, px1, sigma, regweight, affine=affine, withJacobian=(J0, pJ1))
+    else:
+        (pct, pSt, pxt, ct, St, xt) = gaussianDiffeonsCovectorPset(c0, S0, x0, at, pc1, pS1, px1, sigma, regweight, affine=affine)
     #print (pct**2).sum()**0.5, (pSt**2).sum()**0.5, (pxt**2).sum()**0.5
+    
 
     dat = np.zeros(at.shape)
     M = c0.shape[0]
@@ -566,18 +586,25 @@ def gaussianDiffeonsGradientPset(c0, S0, x0, at, pc1, pS1, px1, sigma, regweight
         db = np.zeros(affine[1].shape)
     for t in range(at.shape[0]):
         a = np.squeeze(at[t, :, :])
-        x = np.squeeze(xt[t, :, :])
+        x = np.squeeze(xt[t, ...])
         c = np.squeeze(ct[t, :, :])
-        S = np.squeeze(St[t, :, :])
-        px = np.squeeze(pxt[t, :, :])
+        S = np.squeeze(St[t, ...])
+        px = np.squeeze(pxt[t, ...])
         pc = np.squeeze(pct[t, :, :])
-        pS = np.squeeze(pSt[t, :, :])
-        [grc, grS, grx, gcc] = gd.gaussianDiffeonsGradientMatricesPset(c, S, x, a, pc, pS, px, sigma, 1.0/at.shape[0])
-        
-        da = 2*np.dot(gcc,a) - grx - grc - grS
+        pS = np.squeeze(pSt[t, ...])
+        if withJacobian:
+            J = np.squeeze(Jt[t, ...])
+            pJ = np.squeeze(pJt[t,...])
+            [grc, grS, grx, grJ, gcc] = gd.gaussianDiffeonsGradientMatricesPset(c, S, x, a, pc, pS, px, sigma, 1.0/at.shape[0], withJacobian=(J,pJ))
+            da = 2*np.dot(gcc,a) - grx - grc - grS - grJ
+        else:    
+            [grc, grS, grx, gcc] = gd.gaussianDiffeonsGradientMatricesPset(c, S, x, a, pc, pS, px, sigma, 1.0/at.shape[0])
+            da = 2*np.dot(gcc,a) - grx - grc - grS
+
         if not (affine == None):
-            dA[t] = np.dot(px.T, x) + np.dot(pc.T, c) - 2*np.multiply(pS.reshape([M, dim, dim, 1]), S.reshape([M, dim, 1, dim])).sum(axis=1).sum(axis=0)
-            db[t] = px.sum(axis=0) + pc.sum(axis=0)
+            #print px.shape, x.shape, pc.shape, c.shape
+            dA[t] = (px * x).sum(axis=tuple(range(x.ndim-1))) + np.dot(pc.T, c) - 2*np.multiply(pS.reshape([M, dim, dim, 1]), S.reshape([M, dim, 1, dim])).sum(axis=1).sum(axis=0)
+            db[t] = px.sum(axis=tuple(range(x.ndim-1))) + pc.sum(axis=0)
 
         (L, W) = LA.eigh(gcc)
         dat[t, :, :] = LA.solve(gcc+(L.max()/1000)*np.eye(M), da)
@@ -585,14 +612,26 @@ def gaussianDiffeonsGradientPset(c0, S0, x0, at, pc1, pS1, px1, sigma, regweight
 
     if affine == None:
         if getCovector == False:
-            return dat, ct, St, xt
+            if withJacobian:
+                return dat, ct, St, xt, Jt
+            else:
+                return dat, ct, St, xt
         else:
-            return dat, ct, St, xt, pct, pSt, pxt
+            if withJacobian:
+                return dat, ct, St, xt, Jt, pct, pSt, pxt, pJt
+            else:
+                return dat, ct, St, xt, pct, pSt, pxt
     else:
         if getCovector == False:
-            return dat, dA, db, ct, St, xt
+            if withJacobian:
+                return dat, dA, db, ct, St, xt, Jt
+            else:
+                return dat, dA, db, ct, St, xt
         else:
-            return dat, dA, db, ct, St, xt, pct, pSt, pxt
+            if withJacobian:
+                return dat, dA, db, ct, St, xt, Jt, pct, pSt, pxt, pJt
+            else:
+                return dat, dA, db, ct, St, xt, pct, pSt, pxt
 
 def gaussianDiffeonsGradientNormals(c0, S0, b0, x0, xS0, at, pc1, pS1, pb1, px1, pxS1, sigma, regweight, getCovector = False, affine = None):
     (pct, pSt, pbt, pxt, pxSt, ct, St, bt, xt, xSt) = gaussianDiffeonsCovectorNormals(c0, S0, b0, x0, xS0, at,

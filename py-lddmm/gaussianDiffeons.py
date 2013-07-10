@@ -275,15 +275,17 @@ def computeProducts(c, S, sig):
     sig2 = sig*sig ;
 
     sigEye = sig2*np.eye(dim)
-    SS = sigEye.reshape([1,dim,dim]) + S 
+    #SS = sigEye.reshape([1,dim,dim]) + S 
+    SS = sigEye + S 
     detR = multiMatDet1(SS, isSym=True) 
-    SS = sigEye.reshape([1,1,dim,dim]) + S.reshape([M, 1, dim, dim]) + S.reshape([1, M, dim, dim])
+    #SS = sigEye.reshape([1,1,dim,dim]) + S.reshape([M, 1, dim, dim]) + S.reshape([1, M, dim, dim])
+    SS = sigEye + S[:, np.newaxis,...] + S
     (R2, detR2) = multiMatInverse2(SS, isSym=True)
     
-    diffc = c.reshape([M, 1, dim]) - c.reshape([1, M, dim])
-    betacc = (R2 * diffc.reshape([M, M, 1, dim])).sum(axis=3)
+    diffc = c[:, np.newaxis,:] - c
+    betacc = (R2 * diffc[...,np.newaxis,:]).sum(axis=3)
     dst = (betacc * diffc).sum(axis=2)
-    gcc = np.sqrt((detR.reshape([M,1])*detR.reshape([1,M]))/((sig2**dim)*detR2))*np.exp(-dst/2)
+    gcc = np.sqrt((detR[:,np.newaxis]*detR)/((sig2**dim)*detR2))*np.exp(-dst/2)
     
     return gcc
 
@@ -294,11 +296,11 @@ def computeProductsCurrents(c, S, sig):
     sig2 = sig*sig ;
 
     sigEye = sig2*np.eye(dim)
-    SS = sigEye.reshape([1,1,dim,dim]) + S.reshape([M, 1, dim, dim]) + S.reshape([1, M, dim, dim])
+    SS = sigEye + S[:, np.newaxis, ...] + S
     (R2, detR2) = multiMatInverse2(SS, isSym=True)
     
-    diffc = c.reshape([M, 1, dim]) - c.reshape([1, M, dim])
-    betacc = (R2 * diffc.reshape([M, M, 1, dim])).sum(axis=3)
+    diffc = c[:, np.newaxis,:] - c
+    betacc = (R2 * diffc[..., np.newaxis, :]).sum(axis=3)
     dst = (betacc * diffc).sum(axis=2)
     gcc = (sig**dim)*np.exp(-dst/2) / (np.sqrt(detR2))
     
@@ -312,17 +314,17 @@ def computeProductsAsym(c0, S0, c1, S1, sig):
     sig2 = sig*sig ;
 
     sigEye = sig2*np.eye(dim)
-    SS = sigEye.reshape([1,dim,dim]) + S0 
+    SS = sigEye + S0 
     detR0 = multiMatDet1(SS, isSym=True) 
-    SS = sigEye.reshape([1,dim,dim]) + S1 
+    SS = sigEye + S1 
     detR1 = multiMatDet1(SS, isSym=True) 
-    SS = sigEye.reshape([1,1,dim,dim]) + S0.reshape([M0, 1, dim, dim]) + S1.reshape([1, M1, dim, dim])
+    SS = sigEye + S0[:, np.newaxis, ...] + S1
     (R2, detR2) = multiMatInverse2(SS, isSym=True)
     
-    diffc = c0.reshape([M0, 1, dim]) - c1.reshape([1, M1, dim])
-    betacc = (R2 * diffc.reshape([M0, M1, 1, dim])).sum(axis=3)
+    diffc = c0[:, np.newaxis, :] - c1
+    betacc = (R2 * diffc[..., np.newaxis, :]).sum(axis=3)
     dst = (betacc * diffc).sum(axis=2)
-    gcc = np.sqrt((detR0.reshape([M0,1])*detR1.reshape([1,M1]))/((sig2**dim)*detR2))*np.exp(-dst/2)
+    gcc = np.sqrt((detR0[:, np.sqrt]*detR1)/((sig2**dim)*detR2))*np.exp(-dst/2)
     
     return gcc
 
@@ -334,53 +336,62 @@ def computeProductsAsymCurrents(c, S, cc, sig):
     sig2 = sig*sig ;
 
     sigEye = sig2*np.eye(dim)
-    SS = sigEye.reshape([1,dim,dim]) + S 
+    SS = sigEye + S 
     (R, detR) = multiMatInverse1(SS, isSym=True) 
     
-    diffc = c.reshape([M, 1, dim]) - cc.reshape([1, K, dim])
-    betacc = (R.reshape(M, 1, dim, dim) * diffc.reshape([M, K, 1, dim])).sum(axis=3)
+    diffc = c[:, np.newaxis, :] - cc
+    betacc = (R[:, np.newaxis, ...] * diffc[..., np.newaxis, :]).sum(axis=3)
     dst = (betacc * diffc).sum(axis=2)
     gcc = (sig**dim)*np.exp(-dst/2)/(np.sqrt(detR).reshape(M,1))
     
     return gcc
 
 
-def gaussianDiffeonsGradientMatricesPset(c, S, x, a, pc, pS, px, sig, timeStep):
-    N = x.shape[0]
+def gaussianDiffeonsGradientMatricesPset(c, S, x, a, pc, pS, px, sig, timeStep, withJacobian=False):
     M = c.shape[0]
-    dim = x.shape[1]
+    dim = c.shape[1]
     sig2 = sig*sig ;
+    if not (type(withJacobian)==bool):
+        J = withJacobian[0]
+        pJ = withJacobian[1]
+        withJacobian = True
+        
 
     sigEye = sig2*np.eye(dim)
-    SS = sigEye.reshape([1,dim,dim]) + S 
+    SS = sigEye + S 
     (R, detR) = multiMatInverse1(SS, isSym=True) 
-    SS = sigEye.reshape([1,1,dim,dim]) + S.reshape([M, 1, dim, dim]) + S.reshape([1, M, dim, dim])
+    SS = sigEye + S[:, np.newaxis, ...] + S
     (R2, detR2) = multiMatInverse2(SS, isSym=True)
 
-    diff = x.reshape([N, 1, dim]) - c.reshape([1, M, dim])
-    betax = (R.reshape([1, M, dim, dim])*diff.reshape([N, M, 1, dim])).sum(axis=3)
-    dst = (diff * betax).sum(axis=2)
+    diffx = x[..., np.newaxis, :] - c.reshape([M, dim])
+    betax = (R*diffx[..., np.newaxis, :]).sum(axis=-1)
+    dst = (betax * diffx).sum(axis=-1)
     fx = np.exp(-dst/2)
 
-    diffc = c.reshape([M, 1, dim]) - c.reshape([1, M, dim])
-    betac = (R.reshape([1, M, dim, dim])*diffc.reshape([M, M, 1, dim])).sum(axis=3)
+    diffc = c[:, np.newaxis, :] - c
+    betac = (R*diffc[..., np.newaxis, :]).sum(axis=3)
     dst = (diffc * betac).sum(axis=2)
     fc = np.exp(-dst/2)
-    betacc = (R2 * diffc.reshape([M, M, 1, dim])).sum(axis=3)
+    betacc = (R2 * diffc[..., np.newaxis, :]).sum(axis=3)
     dst = (betacc * diffc).sum(axis=2)
-    gcc = np.sqrt((detR.reshape([M,1])*detR.reshape([1,M]))/((sig2**dim)*detR2))*np.exp(-dst/2)
+    gcc = np.sqrt((detR[:, np.newaxis]*detR)/((sig2**dim)*detR2))*np.exp(-dst/2)
 
-    Dv = -((fc.reshape([M,M,1])*betac).reshape([M, M, 1, dim])*a.reshape([1, M, dim, 1])).sum(axis=1)
-    IDv = np.eye(dim).reshape([1,dim,dim]) + timeStep * Dv ;
-    pSS = (pS.reshape([M,dim,dim,1]) * (IDv.reshape([M,dim,dim, 1]) * S.reshape([M, 1, dim ,dim])).sum(axis=2).reshape([M,1,dim,dim])).sum(axis=2)
+    Dv = -((fc[..., np.newaxis]*betac)[..., np.newaxis, :]*a[..., np.newaxis]).sum(axis=1)
+    IDv = np.eye(dim) + timeStep * Dv ;
+    pSS = (pS[...,np.newaxis] * (IDv[..., np.newaxis] * S[:, np.newaxis, ...]).sum(axis=2)[:, np.newaxis, ...]).sum(axis=2)
     
-    fS = (pSS.reshape([M, 1, dim, dim])*betac.reshape([M,M,1,dim])).sum(axis=3)
+    fS = (pSS[:, np.newaxis, ...]*betac[...,np.newaxis, :]).sum(axis=3)
     #fS = (pSS.reshape([M, 1, dim, dim])*betac.reshape([M,M,dim, 1])).sum(axis=2)
     #fS = (pS.reshape([M, 1, dim,dim])* fS.reshape([M,M,1,dim])).sum(axis=3)
-    grx = np.dot(fx.T, px)
+    grx = (fx[...,np.newaxis] * px[...,np.newaxis,:]).sum(axis=tuple(range(x.ndim-1)))
+    if withJacobian:
+        grJ = - ((pJ[...,np.newaxis]*fx)[...,np.newaxis] *betax).sum(axis=tuple(range(x.ndim-1)))
     grc = np.dot(fc.T, pc)
-    grS = -2 * (fc.reshape([M,M,1]) * fS).sum(axis=0)
-    return grc, grS, grx, gcc
+    grS = -2 * (fc[:, :, np.newaxis] * fS).sum(axis=0)
+    if withJacobian:
+        return grc, grS, grx, grJ, gcc
+    else:        
+        return grc, grS, grx, gcc
 
 def gaussianDiffeonsGradientMatricesNormals(c, S, b, x, xS, a, pc, pS, pb, px, pxS, sig, timeStep):
     N = b.shape[0]

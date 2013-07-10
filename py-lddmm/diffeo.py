@@ -14,11 +14,17 @@ import vtk.util.numpy_support as v2n
 # Useful functions for multidimensianal arrays
 class gridScalars:
    # initializes either form a previous array (data) or from a file 
-   def __init__(self, grid=None, data=None, fileName = None, dim = 3, resol = [1., 1., 1.], origin=[0.,0.,0.], force_axun=False, withBug=False):
+   def __init__(self, grid=None, data=None, fileName = None, dim = 3, resol = 1., origin= 0., force_axun=False, withBug=False):
       if not (data == None):
          self.data = np.copy(data)
-         self.resol = np.copy(resol)
-         self.origin = np.copy(origin)
+         if type(resol) == float:
+            self.resol = resol *np.ones(data.ndim)
+         else:
+            self.resol = np.copy(resol)
+         if type(origin) == float:
+            self.origin = origin*np.ones(data.ndim)
+         else:
+            self.origin = np.copy(origin)
          self.dim = dim
       elif not (fileName==None):
          self.dim = dim 
@@ -61,7 +67,7 @@ class gridScalars:
          else:
             print "get_image: unsupported input dimensions"
             return
-      elif not grid=None:
+      elif not(grid==None):
          self.data = np.copy(grid.data)
          self.resol = np.copy(grid.resol)
          self.origin = np.copy(grid.origin)
@@ -69,7 +75,7 @@ class gridScalars:
 
    def save(self, filename):
       if self.dim == 2:
-         out = Image.fromarray(self.data.astype(numpy.unit8))
+         out = Image.fromarray(self.data.astype(np.uint8))
          out.save(filename)
       else:
          [u, v] = os.path.splitext(filename)
