@@ -67,7 +67,7 @@ def landmarkDirectEvolutionEuler(x0, at, KparDiff, affine = None, withJacobian=F
 
 
 def gaussianDiffeonsEvolutionEuler(c0, S0, at, sigma, affine = None, withJacobian=False, withPointSet=None, withNormals=None,
-                                   withDiffeonSet=None, withWeightedGrid=None):
+                                   withDiffeonSet=None):
 
     dim = c0.shape[1]
     M = c0.shape[0]
@@ -98,6 +98,7 @@ def gaussianDiffeonsEvolutionEuler(c0, S0, at, sigma, affine = None, withJacobia
             #print withJacobian
             J0 = withJacobian
             Jt = np.zeros(np.insert(J0.shape, 0, T))
+            Jt[0, ...] = J0
             withJacobian = True
         else:
             withJacobian=False
@@ -108,15 +109,6 @@ def gaussianDiffeonsEvolutionEuler(c0, S0, at, sigma, affine = None, withJacobia
             bt = np.zeros(np.concatenate([[T], b0.shape]))
             bt[0, ...] = b0
             
-    if not(withWeightedGrid == None):
-        simpleOutput = False
-        gr0 = withWeightedGrid[0]
-        grt = np.zeros(np.concatenate([[T], gr0.shape]))
-        grt[0, ...] = gr0
-        lJ0 = withWeightedGrid[1]
-        lJt = np.zeros(np.concatenate([[T], lJ0.shape]))
-        lJt[0, ...] = lJ0
-        withWeightedGrid = True
         
     if not(affine == None):
         A = affine[0]
@@ -168,23 +160,6 @@ def gaussianDiffeonsEvolutionEuler(c0, S0, at, sigma, affine = None, withJacobia
         #St[t+1, :, :, :] = S
 
 
-        if withWeightedGrid:
-            gr = np.squeeze(grt[t, ...])
-            diffgr = gr[..., np.newaxis,:] - c
-            betagr = (R *diffgr[..., np.newaxis,:]).sum(axis=-1) 
-            dst = (betax * diffx).sum(axis=-1)
-            fgr = np.exp(-dst/2)
-            zgr = np.dot(fgr, a)
-            grt[t+1, :, :] = gr + timeStep * zgr
-            if not (affine == None):
-                grt[t+1, :, :] += timeStep * (np.dot(gr, A[t].T) + b[t])
-            if withJacobian:
-                Div = -(fgr * (betagr * a).sum(axis=-1)).sum(axis=-1)
-                lJt[t+1, :] = lJt[t, :] + timeStep * Div
-                if not (affine == None):
-                    lJt[t+1, :] += timeStep * (np.trace(A[t]))
-
-
         if withPointSet:
             x = np.squeeze(xt[t, ...])
             diffx = x[..., np.newaxis, :] - c.reshape([M, dim])
@@ -192,15 +167,15 @@ def gaussianDiffeonsEvolutionEuler(c0, S0, at, sigma, affine = None, withJacobia
             dst = (betax * diffx).sum(axis=-1)
             fx = np.exp(-dst/2)
             zx = np.dot(fx, a)
-            xt[t+1, :, :] = x + timeStep * zx
+            xt[t+1, ...] = x + timeStep * zx
             if not (affine == None):
-                xt[t+1, :, :] += timeStep * (np.dot(x, A[t].T) + b[t])
+                xt[t+1, ...] += timeStep * (np.dot(x, A[t].T) + b[t])
             if withJacobian:
                 #print Jt.shape
                 Div = -(fx * (betax * a).sum(axis=-1)).sum(axis=-1)
-                Jt[t+1, :] = Jt[t, :] + timeStep * Div
+                Jt[t+1, ...] = Jt[t, ...] + timeStep * Div
                 if not (affine == None):
-                    Jt[t+1, :] += timeStep * (np.trace(A[t]))
+                    Jt[t+1, ...] += timeStep * (np.trace(A[t]))
             if withNormals:
                 bb = np.squeeze(bt[t, ...])
                 zb = ((fx * np.dot(bb, a.T))[..., np.newaxis] * betax).sum(axis=-2)
@@ -264,9 +239,6 @@ def gaussianDiffeonsEvolutionEuler(c0, S0, at, sigma, affine = None, withJacobia
         return ct, St
     else:
         output = [ct, St]
-        if withWeightedGrid:
-            output.append(grt)
-            output.append(lJt)
         if withNormals:
             output.append(bt)
         if withPointSet:
@@ -290,7 +262,7 @@ def gaussianDiffeonsCovectorPset(c0, S0, x0,  at, pc1, pS1, px1, sigma, regweigh
     M = c0.shape[0]
     T = at.shape[0]
     timeStep = 1.0/T
-    print c0.shape, x0.shape
+    #print c0.shape, x0.shape
     if not(withJacobian==None):
         #print withJacobian
         J0 = withJacobian[0]
@@ -329,9 +301,9 @@ def gaussianDiffeonsCovectorPset(c0, S0, x0,  at, pc1, pS1, px1, sigma, regweigh
         (R, detR) = gd.multiMatInverse1(sigEye.reshape([1,dim,dim]) + S, isSym=True) 
         (R2, detR2) = gd.multiMatInverse2(sigEye.reshape([1,1,dim,dim]) + SS, isSym=True) 
 
-        diff = x[...,np.newaxis,:] - c
-        betax = (R*diff[...,np.newaxis,:]).sum(axis=-1)
-        dst = (diff * betax).sum(axis=-1)
+        diffx = x[...,np.newaxis,:] - c
+        betax = (R*diffx[...,np.newaxis,:]).sum(axis=-1)
+        dst = (diffx * betax).sum(axis=-1)
         fx = np.exp(-dst/2)
 
         diffc = c.reshape([M, 1, dim]) - c.reshape([1, M, dim])
@@ -371,7 +343,7 @@ def gaussianDiffeonsCovectorPset(c0, S0, x0,  at, pc1, pS1, px1, sigma, regweigh
         zpc -= 2 * (u.sum(axis=1) - u.sum(axis=0))
         zpc -= 2 * (np.multiply(gcc, aa).reshape([M, M, 1]) * betacc).sum(axis=1)
 
-        zpS = - 0.5 * ((fx*pxa)[..., np.newaxis,np.newaxis] * (betax[...,np.newaxis]) * betax[...,np.newaxis,:]).sum(axis=tuple(range(x0.ndim-1)))
+        zpS = - 0.5 * ((fx*pxa)[..., np.newaxis,np.newaxis] * betaxSym).sum(axis=tuple(range(x0.ndim-1)))
         zpS -= 0.5 * (np.multiply(fc,pca).reshape([M,M,1,1]) * betaSym).sum(axis=0)
         pSDv = (pS.reshape([M,dim, dim, 1]) * Dv.reshape([M, 1, dim, dim])).sum(axis=2)
         zpS += -pSDv - pSDv.transpose((0,2,1)) - timeStep * (Dv.reshape([M,dim, dim, 1]) * pSDv.reshape([M, dim, 1, dim])).sum(axis=1)
@@ -384,10 +356,12 @@ def gaussianDiffeonsCovectorPset(c0, S0, x0,  at, pc1, pS1, px1, sigma, regweigh
 
         if withJacobian:
             #print betaxa.shape, betax.shape, Ra.shape
-            zpc += ((pJ[...,np.newaxis]*fx)[...,np.newaxis] *(betaxa[...,np.newaxis]*betax -Ra)).sum(axis=tuple(range(x0.ndim-1)))
-            zpS += 0.5 * ((pJ[...,np.newaxis]*fx)[...,np.newaxis,np.newaxis]*betaxSym).sum(axis=tuple(range(x0.ndim-1)))
+            u = (pJ[...,np.newaxis]*fx)[...,np.newaxis] *(betaxa[...,np.newaxis]*betax -Ra)
+            zpx -= u.sum(axis=-2)
+            zpc += u.sum(axis=tuple(range(x0.ndim-1)))
+            zpS += 0.5 * ((pJ[...,np.newaxis]*fx*betaxa)[...,np.newaxis,np.newaxis]*betaxSym).sum(axis=tuple(range(x0.ndim-1)))
             u = ((pJ[...,np.newaxis]*fx)[...,np.newaxis,np.newaxis] *(Ra[...,np.newaxis]*betax[...,np.newaxis,:])).sum(axis=tuple(range(x0.ndim-1)))
-            zpS -= 0.5 * (u + u.transpose([0,2,1]))
+            zpS -= 0.5 * (u + u.transpose((0,2,1)))
 
         pxt[T-t-2, :, :] = px - timeStep * zpx
         pct[T-t-2, :, :] = pc - timeStep * zpc
