@@ -122,6 +122,10 @@ class SurfaceMatching:
         self.fv0Fine = surfaces.Surface(surf=self.fv0)
         if (subsampleTargetSize > 0):
             self.fv0.Simplify(subsampleTargetSize)
+            v0 = self.fv0.surfVolume()
+            v1 = self.fv1.surfVolume()
+            if (v0*v1 < 0):
+                self.fv1.flipFaces()
             print 'simplified template', self.fv0.vertices.shape[0]
         x0 = self.fv0.vertices
         self.fvDef = surfaces.Surface(surf=self.fv0)

@@ -138,6 +138,10 @@ class SurfaceMatching(surfaceMatching.SurfaceMatching):
             #print self.S0
         if (subsampleTargetSize > 0):
             self.fv0.Simplify(subsampleTargetSize)
+            v0 = self.fv0.surfVolume()
+            v1 = self.fv0Fine.surfVolume()
+            if (v0*v1 < 0):
+                self.fv0.flipFaces()
             if self.param.errorType == 'diffeonCurrent':
                 n = self.fv0Fine.vertices.shape[0]
                 m = self.fv0.vertices.shape[0]
@@ -149,7 +153,7 @@ class SurfaceMatching(surfaceMatching.SurfaceMatching):
                     idx[p] = closest[0]
                 (x0, xS0, idx) = gd.generateDiffeons(self.fv0Fine, self.fv0.vertices, idx)
                 b0 = gd.approximateSurfaceCurrent(x0, xS0, self.fv0Fine, self.param.KparDist.sigma)
-                gdOpt = gd.gdOptimizer(surf=self.fv0Fine, sigmaDist = self.param.KparDist.sigma, Diffeons = (x0, xS0, b0) , testGradient=False, maxIter=100)
+                gdOpt = gd.gdOptimizer(surf=self.fv0Fine, sigmaDist = self.param.KparDist.sigma, Diffeons = (x0, xS0, b0) , testGradient=False, maxIter=50)
                 gdOpt.optimize()
                 self.x0 = gdOpt.c0
                 self.xS0 = gdOpt.S0

@@ -30,7 +30,8 @@ def compute(createSurfaces=True):
         fv2.saveVTK('/Users/younes/Development/Results/Diffeons/fv2.vtk')
     else:
         if False:
-            path = '/Users/younes/Development/project/ncbc/data/template/PDS-II/AllScan1_PDSII/shape_analysis/hippocampus/'
+            #path = '/Users/younes/Development/project/ncbc/data/template/PDS-II/AllScan1_PDSII/shape_analysis/hippocampus/'
+            path = '/Volumes/CIS/project/ncbc/data/template/PDS-II/AllScan1_PDSII/shape_analysis/hippocampus/'
             #sub1 = '0186193_1_6'
             #sub2 = '1449400_1_L'
             sub2 = 'LU027_R_sumNCBC20100628'
@@ -40,7 +41,7 @@ def compute(createSurfaces=True):
             fv2 = surfaces.Surface(filename = path+'2_qc_flipped_registered/'+sub2+'_registered.byu')
             v2 = fv2.surfVolume()
             if (v2*v1 < 0):
-                fv2.faces = fv2.faces[:, [0,2,1]]
+                fv2.flipFaces()
         else:
             #f1.append(surfaces.Surface(filename = path+'amygdala/biocardAmyg 2/'+sub2+'_amyg_L.byu'))
             fv1 = Surface(filename='/Users/younes/Development/Results/Diffeons/fv1.vtk')
@@ -49,20 +50,20 @@ def compute(createSurfaces=True):
         #return fv1, fv2
 
     ## Object kernel
-    r0 = 50./fv1.vertices.shape[0]
+    r0 = 25./fv1.vertices.shape[0]
     T0 = 100
     withDiffeons=True
 
     sm = SurfaceMatchingParam(timeStep=0.1, sigmaKernel=5., sigmaDist=5., sigmaError=1.,
-    errorType='diffeonCurrent')
-    #errorType='current')
+                              #errorType='diffeonCurrent')
+    errorType='current')
 
     if withDiffeons:
-        gdOpt = gd.gdOptimizer(surf=fv1, sigmaDist = .5, DiffeonEpsForNet = r0, testGradient=False, maxIter=200)
+        gdOpt = gd.gdOptimizer(surf=fv1, sigmaDist = .5, DiffeonEpsForNet = r0, testGradient=False, maxIter=100)
         gdOpt.optimize()
-        f = SurfaceMatching(Template=fv1, Target=fv2, outputDir='/Users/younes/Development/Results/Diffeons/Scale50_250',param=sm, testGradient=False,
+        f = SurfaceMatching(Template=fv1, Target=fv2, outputDir='/Users/younes/Development/Results/Diffeons/Balls25',param=sm, testGradient=False,
         Diffeons = (gdOpt.c0, gdOpt.S0, gdOpt.idx),
-                            subsampleTargetSize = 250,
+        #subsampleTargetSize = 250,
         #DecimationTarget=100,
                             #DiffeonEpsForNet = r0,
                             #DiffeonSegmentationRatio=r0,

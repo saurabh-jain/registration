@@ -256,8 +256,13 @@ class Surface:
         # self.computeCentersAreas()
         z= self.surfVolume()
         if (z > 0):
-            self.faces = self.faces[:, [0,2,1]]
+            self.flipFaces()
             print 'flipping volume', z, self.surfVolume()
+
+    def flipFaces(self):
+        self.faces = self.faces[:, [0,2,1]]
+        self.computeCentersAreas()
+          
 
 
     def smooth(self, n=30, smooth=0.1):
@@ -347,7 +352,7 @@ class Surface:
         self.fromPolyData(g,scales)
         z= self.surfVolume()
         if (z > 0):
-            self.faces = self.faces[:, [0,2,1]]
+            self.flipFaces()
             print 'flipping volume', z, self.surfVolume()
 
         #print g
@@ -460,7 +465,7 @@ class Surface:
 
         z= self.surfVolume()
         if (z > 0):
-            self.faces = f[:, [0,2,1]]
+            self.flipFaces()
 
 
 
