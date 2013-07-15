@@ -29,7 +29,7 @@ def kernelMatrixGauss(x, y=None, grid=None, par=[1], diff = False, diff2 = False
                 elif diff2:
                     K = K/(sig2*sig2)
         else:
-            K = np.exp(-dfun.cdist(x, y, 'sqeuclidean')/sig2)
+            K = np.exp(-dfun.cdist(y, x, 'sqeuclidean')/sig2)
             precomp = np.copy(K)
             if diff:
                 K = -K/sig2
@@ -192,7 +192,7 @@ def kernelMatrixLaplacianPrecompute(x, y=None, grid=None, par=[1., 3], diff=Fals
         else:
             u = np.sqrt(((grid[..., newaxis, :] - x)**2).sum(axis=-1))/sig
     else:
-        u = dfun.cdist(x, y)/sig
+        u = dfun.cdist(y, x)/sig
     precomp = [u, exp(-u)]
     return precomp
 
@@ -457,12 +457,19 @@ class Kernel(KernelSpec):
 
 
     # Computes sum_l div_1(K(x_k, x_l)a_l)
-    def applyDivergence(self, x, a):
-        zJ = np.zeros([x.shape[0],1])
+    def applyDivergence(self, x, a, y=None):
+        zJ = np.zeros([y.shape[0],1])
         if not (self.kernelMatrix == None):
-            r = self.precompute(x, diff=True)
-            zJ += 2 * (np.multiply(np.dot(r,a), x).sum(axis=1) - np.dot(r, np.multiply(a,x).sum(axis=1)))
-        if self.affine == 'affine':
-            xx = x-self.center
-            zJ += self.w1 * np.multiply(xx,a).sum(axis=1)
+            r = self.precompute(x, y=y,  diff=True)
+            if y==None:
+                zJ += 2 * (np.multiply(np.dot(r,a), x).sum(axis=1) - np.dot(r, np.multiply(a,x).sum(axis=1)))
+                if self.affine == 'affine':
+                    xx = x-self.center
+                    zJ += self.w1 * np.multiply(xx,a).sum(axis=1)
+            else:
+                #print r.shape, a.shape, y.shape, x.shape, zJ.shape
+                zJ += 2 * (np.multiply(np.dot(r,a), y).sum(axis=1) - np.dot(r, np.multiply(a,x).sum(axis=1)))
+                if self.affine == 'affine':
+                    xx = y-self.center
+                    zJ += self.w1 * np.multiply(xx,a).sum(axis=1)
         return zJ.T

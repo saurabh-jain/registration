@@ -15,7 +15,9 @@ from affineBasis import *
 #      errorType: 'measure' or 'current'
 #      typeKernel: 'gauss' or 'laplacian'
 class SurfaceMatchingParam:
-    def __init__(self, timeStep = .1, KparDiff = None, KparDist = None, sigmaKernel = 6.5, sigmaDist=2.5, sigmaError=1.0, errorType = 'measure', typeKernel='gauss'):
+    def __init__(self, timeStep = .1, KparDiff = None, KparDist =
+                 None, sigmaKernel = 6.5, sigmaDist=2.5,
+                 sigmaError=1.0, errorType = 'measure',  typeKernel='gauss'):
         self.timeStep = timeStep
         self.sigmaKernel = sigmaKernel
         self.sigmaDist = sigmaDist
@@ -65,7 +67,8 @@ class Direction:
 class SurfaceMatching:
 
     def __init__(self, Template=None, Target=None, fileTempl=None, fileTarg=None, param=None, maxIter=1000, regWeight = 1.0, affineWeight = 1.0, verb=True,
-                 rotWeight = None, scaleWeight = None, transWeight = None, testGradient=False, saveFile = 'evolution', affine = 'none', outputDir = '.'):
+                 subsampleTargetSize=-1,
+                 rotWeight = None, scaleWeight = None, transWeight = None, testGradient=True, saveFile = 'evolution', affine = 'none', outputDir = '.'):
         if Template==None:
             if fileTempl==None:
                 print 'Please provide a template surface'
@@ -85,8 +88,8 @@ class SurfaceMatching:
 
             #print np.fabs(self.fv1.surfel-self.fv0.surfel).max()
 
-        self.npt = self.fv0.vertices.shape[0]
-        self.dim = self.fv0.vertices.shape[1]
+        self.saveRate = 10
+        self.iter = 0
         self.outputDir = outputDir
         if not os.access(outputDir, os.W_OK):
             if os.access(outputDir, os.F_OK):
@@ -94,7 +97,7 @@ class SurfaceMatching:
                 return
             else:
                 os.mkdir(outputDir)
-        self.fvDef = surfaces.Surface(surf=self.fv0)
+        self.dim = self.fv0.vertices.shape[1]
         self.maxIter = maxIter
         self.verb = verb
         self.testGradient = testGradient
@@ -115,7 +118,14 @@ class SurfaceMatching:
             self.param = SurfaceMatchingParam()
         else:
             self.param = param
+
+        self.fv0Fine = surfaces.Surface(surf=self.fv0)
+        if (subsampleTargetSize > 0):
+            self.fv0.Simplify(subsampleTargetSize)
+            print 'simplified template', self.fv0.vertices.shape[0]
         x0 = self.fv0.vertices
+        self.fvDef = surfaces.Surface(surf=self.fv0)
+        self.npt = self.fv0.vertices.shape[0]
 
         self.Tsize = int(round(1.0/self.param.timeStep))
         self.at = np.zeros([self.Tsize, x0.shape[0], x0.shape[1]])
@@ -311,14 +321,32 @@ class SurfaceMatching:
         #print self.at
 
     def endOfIteration(self):
-        (obj1, self.xt, Jt) = self.objectiveFunDef(self.at, self.Afft, withTrajectory=True, withJacobian=True)
-        xtEPDiff, atEPdiff = evol.landmarkEPDiff(self.at.shape[0], self.fv0.vertices, np.squeeze(self.at[0, :, :]), self.param.KparDiff)
-        self.fvDef.updateVertices(np.squeeze(xtEPDiff[-1, :, :]))
-        self.fvDef.saveVTK(self.outputDir +'/'+ self.saveFile+'EPDiff.vtk')
-        print 'EPDiff difference', np.fabs(self.xt[-1,:,:] - xtEPDiff[-1,:,:]).sum() 
-        for kk in range(self.Tsize+1):
-            self.fvDef.updateVertices(np.squeeze(self.xt[kk, :, :]))
-            self.fvDef.saveVTK(self.outputDir +'/'+ self.saveFile+str(kk)+'.vtk', scalars = Jt[kk, :], scal_name='Jacobian')
+        self.iter += 1
+        if (self.iter % self.saveRate == 0) :
+            (obj1, self.xt) = self.objectiveFunDef(self.at, self.Afft, withTrajectory=True)
+            xtEPDiff, atEPdiff = evol.landmarkEPDiff(self.at.shape[0], self.fv0.vertices, np.squeeze(self.at[0, :, :]), self.param.KparDiff)
+            self.fvDef.updateVertices(np.squeeze(xtEPDiff[-1, :, :]))
+            self.fvDef.saveVTK(self.outputDir +'/'+ self.saveFile+'EPDiff.vtk')
+            print 'EPDiff difference', np.fabs(self.xt[-1,:,:] - xtEPDiff[-1,:,:]).sum() 
+            self.fvDef.updateVertices(np.squeeze(self.xt[-1, :, :]))
+            dim2 = self.dim**2
+            A = [np.zeros([self.Tsize, self.dim, self.dim]), np.zeros([self.Tsize, self.dim])]
+            if self.affineDim > 0:
+                for t in range(self.Tsize):
+                    AB = np.dot(self.affineBasis, Afft[t])
+                    A[0][t] = AB[0:dim2].reshape([self.dim, self.dim])
+                    A[1][t] = AB[dim2:dim2+self.dim]
+            (xt, yt, Jt)  = evol.landmarkDirectEvolutionEuler(self.fv0.vertices, self.at, self.param.KparDiff, affine=A,
+                                                              withPointSet = self.fv0Fine.vertices, withJacobian=True)
+            fvDef = surfaces.Surface(surf=self.fv0Fine)
+            for kk in range(self.Tsize+1):
+                fvDef.updateVertices(np.squeeze(yt[kk, :, :]))
+                fvDef.saveVTK(self.outputDir +'/'+ self.saveFile+str(kk)+'.vtk', scalars = Jt[kk, :], scal_name='Jacobian')
+                #self.fvDef.saveVTK(self.outputDir +'/'+ self.saveFile+str(kk)+'.vtk', scalars = self.idx, scal_name='Labels')
+        else:
+            (obj1, self.xt) = self.objectiveFunDef(self.at, self.Afft, withTrajectory=True)
+            self.fvDef.updateVertices(np.squeeze(self.xt[-1, :, :]))
+
 
     def optimizeMatching(self):
         #print 'dataterm', self.dataTerm(self.fvDef)

@@ -19,9 +19,6 @@ def landmarkDirectEvolutionEuler(x0, at, KparDiff, affine = None, withJacobian=F
         simpleOutput = False
         nt = np.zeros([M, N, dim])
         nt[0, ...] = withNormals
-    if withJacobian:
-        simpleOutput = False
-        Jt = np.zeros([M, N])
     if not(affine == None):
         A = affine[0]
         b = affine[1]
@@ -30,6 +27,13 @@ def landmarkDirectEvolutionEuler(x0, at, KparDiff, affine = None, withJacobian=F
         K = withPointSet.shape[0]
         yt = np.zeros([M,K,dim])
         yt[0,...] = withPointSet
+        if withJacobian:
+            simpleOutput = False
+            Jt = np.zeros([M, K])
+    else:
+        if withJacobian:
+            simpleOutput = False
+            Jt = np.zeros([M, N])
 
     for k in range(M-1):
         z = np.squeeze(xt[k, ...])
@@ -42,16 +46,21 @@ def landmarkDirectEvolutionEuler(x0, at, KparDiff, affine = None, withJacobian=F
             yt[k+1, :, :] = zy + timeStep * KparDiff.applyK(z, a, y=zy)
             if not (affine == None):
                 yt[k+1, :, :] += timeStep * (np.dot(zy, A[k].T) + b[k])
+            if withJacobian:
+                Jt[k+1, :] = Jt[k, :] + timeStep * KparDiff.applyDivergence(z, a, y=zy)
+                if not (affine == None):
+                    Jt[k+1, :] += timeStep * (np.trace(A[k]))
+        else:
+            if withJacobian:
+                Jt[k+1, :] = Jt[k, :] + timeStep * KparDiff.applyDivergence(z, a)
+                if not (affine == None):
+                    Jt[k+1, :] += timeStep * (np.trace(A[k]))
 
         if not (withNormals==None):
             zn = np.squeeze(nt[k, :, :])        
             nt[k+1, :, :] = zn - timeStep * KparDiff.applyDiffKT(z, [np.mat(zn)], [a]) 
             if not (affine == None):
                 nt[k+1, :, :] += timeStep * np.dot(zn, A[k])
-        if withJacobian:
-            Jt[k+1, :] = Jt[k, :] + timeStep * KparDiff.applyDivergence(z, a)
-            if not (affine == None):
-                Jt[k+1, :] += timeStep * (np.trace(A[k]))
     if simpleOutput:
         return xt
     else:
@@ -109,7 +118,6 @@ def gaussianDiffeonsEvolutionEuler(c0, S0, at, sigma, affine = None, withJacobia
             bt = np.zeros(np.concatenate([[T], b0.shape]))
             bt[0, ...] = b0
             
-        
     if not(affine == None):
         A = affine[0]
         b = affine[1]
@@ -270,7 +278,11 @@ def gaussianDiffeonsCovectorPset(c0, S0, x0,  at, pc1, pS1, px1, sigma, regweigh
         withJacobian = True
     else:
         J0 = None
-    (ct, St, xt, Jt) = gaussianDiffeonsEvolutionEuler(c0, S0, at, sigma, affine=affine, withPointSet=x0, withJacobian=J0)
+        withJacobian = False
+    if withJacobian:
+        (ct, St, xt, Jt) = gaussianDiffeonsEvolutionEuler(c0, S0, at, sigma, affine=affine, withPointSet=x0, withJacobian=J0)
+    else:
+        (ct, St, xt) = gaussianDiffeonsEvolutionEuler(c0, S0, at, sigma, affine=affine, withPointSet=x0)
     pct = np.zeros([T, M, dim])
     pSt = np.zeros([T, M, dim, dim])
     pxt = np.zeros(np.insert(x0.shape, 0, T))
@@ -289,7 +301,6 @@ def gaussianDiffeonsCovectorPset(c0, S0, x0,  at, pc1, pS1, px1, sigma, regweigh
     sigEye = sig2*np.eye(dim)
     for t in range(T-1):
         px = np.squeeze(pxt[T-t-1, ...])
-        pJ = np.squeeze(pJt[T-t-1, ...])
         pc = np.squeeze(pct[T-t-1, :, :])
         pS = np.squeeze(pSt[T-t-1, :, :])
         x = np.squeeze(xt[T-t-1, ...])
@@ -355,6 +366,7 @@ def gaussianDiffeonsCovectorPset(c0, S0, x0,  at, pc1, pS1, px1, sigma, regweigh
         zpS += (np.multiply(gcc, aa).reshape([M,M,1,1]) *(betaSymcc - R2 + R.reshape([M,1,dim,dim]))).sum(axis=1)
 
         if withJacobian:
+            pJ = np.squeeze(pJt[T-t-1, ...])
             #print betaxa.shape, betax.shape, Ra.shape
             u = (pJ[...,np.newaxis]*fx)[...,np.newaxis] *(betaxa[...,np.newaxis]*betax -Ra)
             zpx -= u.sum(axis=-2)

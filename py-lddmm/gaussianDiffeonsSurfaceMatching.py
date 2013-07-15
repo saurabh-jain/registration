@@ -158,7 +158,7 @@ class SurfaceMatching(surfaceMatching.SurfaceMatching):
                 self.x0 = self.fv0.vertices
             print 'simplified template', self.fv0.vertices.shape[0]
         self.fvDef = surfaces.Surface(surf=self.fv0)
-	self.ndf = self.c0.shape[0]
+        self.ndf = self.c0.shape[0]
         self.Tsize = int(round(1.0/self.param.timeStep))
         self.at = np.zeros([self.Tsize, self.c0.shape[0], self.x0.shape[1]])
         self.atTry = np.zeros([self.Tsize, self.c0.shape[0], self.x0.shape[1]])
@@ -442,9 +442,9 @@ class SurfaceMatching(surfaceMatching.SurfaceMatching):
                 for kk in range(self.Tsize+1):
                     self.fvDef.updateVertices(np.squeeze(self.xt[kk, :, :]))
                     fvDef.updateVertices(np.squeeze(xt[kk, :, :]))
-                    foo = (gd.diffeonCurrentNormDef(self.xt[kk], self.xSt[kk], self.bt[kk], self.fvDef, self.param.KparDist.sigma)
-                           + gd.diffeonCurrentNorm0(self.fvDef, self.param.KparDist))/ (self.param.sigmaError**2)
-                    print foo
+                    # foo = (gd.diffeonCurrentNormDef(self.xt[kk], self.xSt[kk], self.bt[kk], self.fvDef, self.param.KparDist.sigma)
+                    #        + gd.diffeonCurrentNorm0(self.fvDef, self.param.KparDist))/ (self.param.sigmaError**2)
+                    # print foo
                     fvDef.saveVTK(self.outputDir +'/'+ self.saveFile+str(kk)+'.vtk', scalars = Jt[kk, :], scal_name='Jacobian')
                     gd.saveDiffeons(self.outputDir +'/'+ self.saveFile+'Diffeons'+str(kk)+'.vtk', self.ct[kk,:,:], self.St[kk,:,:,:])
                     self.saveB(self.outputDir +'/'+ self.saveFile+'Bt'+str(kk)+'.vtk', self.xt[kk,:,:], self.bt[kk,:,:])

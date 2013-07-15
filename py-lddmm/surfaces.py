@@ -883,7 +883,7 @@ def currentNormDef(fvDef, fv1, KparDist):
     c2 = fv1.centers
     cr2 = fv1.surfel
     g11 = kfun.kernelMatrix(KparDist, c1)
-    g12 = kfun.kernelMatrix(KparDist, c1, c2)
+    g12 = kfun.kernelMatrix(KparDist, c2, c1)
     #print cr1-cr2
     obj = (np.multiply(np.dot(cr1,cr1.T), g11).sum() -
            2*np.multiply(np.dot(cr1, cr2.T), g12).sum())
@@ -908,9 +908,9 @@ def currentNormGradient(fvDef, fv1, KparDist):
     dg11 = kfun.kernelMatrix(KparDist, c1, diff=True)
     KparDist.release()
     
-    g12 = kfun.kernelMatrix(KparDist, c1, c2)
+    g12 = kfun.kernelMatrix(KparDist, c2, c1)
     KparDist.hold()
-    dg12 = kfun.kernelMatrix(KparDist, c1, c2, diff=True)
+    dg12 = kfun.kernelMatrix(KparDist, c2, c1, diff=True)
     KparDist.release()
 
 

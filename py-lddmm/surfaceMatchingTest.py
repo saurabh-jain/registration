@@ -46,10 +46,11 @@ def compute(createSurfaces=True):
             fv2  = Surface(filename='/Users/younes/Development/Results/Diffeons/fv2.vtk')
 
     ## Object kernel
-    K1 = Kernel(name='gauss', sigma = 20.0)
+    K1 = Kernel(name='gauss', sigma = 5.0)
 
     sm = SurfaceMatchingParam(timeStep=0.1, KparDiff=K1, sigmaDist=5, sigmaError=1., errorType='current')
-    f = SurfaceMatching(Template=fv1, Target=fv2, outputDir='/Users/younes/Development/Results/Surface',param=sm, testGradient=True,
+    f = SurfaceMatching(Template=fv1, Target=fv2, outputDir='/Users/younes/Development/Results/Surface/scale250',param=sm, testGradient=False,
+                        subsampleTargetSize = 250,
                          maxIter=1000, affine= 'none', rotWeight=1., transWeight = 1., scaleWeight=10., affineWeight=100.)
 
     f.optimizeMatching()
