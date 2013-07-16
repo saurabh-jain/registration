@@ -20,14 +20,14 @@ def compute(createSurfaces=True):
         
         u = (z + y)/s2
         v = (z - y)/s2
-        I1 = .05 - np.minimum((x-.7)**2 + 0.5*y**2 + z**2, (x-.30)**2 + 0.5*y**2 + z**2)  
+        I1 = np.maximum(0.05 - (x-.6)**2 - 0.5*y**2 - z**2, 0.03 - (x-.50)**2 - 0.5*y**2 - z**2)  
         #I1 = .06 - ((x-.50)**2 + 0.75*y**2 + z**2)  
         #I1 = .095 - ((x-.7)**2 + v**2 + 0.5*u**2) 
         fv2 = Surface() ;
         fv2.Isosurface(I1, value = 0, target=2000, scales=[1, 1, 1], smooth=0.01)
 
-        fv1.saveVTK('/Users/younes/Development/Results/Diffeons/fv1.vtk')
-        fv2.saveVTK('/Users/younes/Development/Results/Diffeons/fv2.vtk')
+        fv1.saveVTK('/Users/younes/Development/Results/Diffeons/fv1alt.vtk')
+        fv2.saveVTK('/Users/younes/Development/Results/Diffeons/fv2alt.vtk')
     else:
         if False:
             #path = '/Users/younes/Development/project/ncbc/data/template/PDS-II/AllScan1_PDSII/shape_analysis/hippocampus/'
@@ -44,26 +44,26 @@ def compute(createSurfaces=True):
                 fv2.flipFaces()
         else:
             #f1.append(surfaces.Surface(filename = path+'amygdala/biocardAmyg 2/'+sub2+'_amyg_L.byu'))
-            fv1 = Surface(filename='/Users/younes/Development/Results/Diffeons/fv1.vtk')
-            fv2  = Surface(filename='/Users/younes/Development/Results/Diffeons/fv2.vtk')
+            fv1 = Surface(filename='/Users/younes/Development/Results/Diffeons/fv1Alt.vtk')
+            fv2  = Surface(filename='/Users/younes/Development/Results/Diffeons/fv2Alt.vtk')
 
         #return fv1, fv2
 
     ## Object kernel
-    r0 = 25./fv1.vertices.shape[0]
+    r0 = 50./fv1.vertices.shape[0]
     T0 = 100
     withDiffeons=True
 
-    sm = SurfaceMatchingParam(timeStep=0.1, sigmaKernel=5., sigmaDist=5., sigmaError=1.,
-                              #errorType='diffeonCurrent')
-    errorType='current')
+    sm = SurfaceMatchingParam(timeStep=0.1, sigmaKernel=10., sigmaDist=5., sigmaError=1.,
+                              errorType='diffeonCurrent')
+        #errorType='current')
 
     if withDiffeons:
         gdOpt = gd.gdOptimizer(surf=fv1, sigmaDist = .5, DiffeonEpsForNet = r0, testGradient=False, maxIter=100)
         gdOpt.optimize()
-        f = SurfaceMatching(Template=fv1, Target=fv2, outputDir='/Users/younes/Development/Results/Diffeons/Balls25',param=sm, testGradient=False,
+        f = SurfaceMatching(Template=fv1, Target=fv2, outputDir='/Users/younes/Development/Results/Diffeons/BallsAlt50_500_d',param=sm, testGradient=False,
         Diffeons = (gdOpt.c0, gdOpt.S0, gdOpt.idx),
-        #subsampleTargetSize = 250,
+        subsampleTargetSize = 500,
         #DecimationTarget=100,
                             #DiffeonEpsForNet = r0,
                             #DiffeonSegmentationRatio=r0,

@@ -95,7 +95,7 @@ class Direction:
 #        maxIter: max iterations in conjugate gradient
 class ImageMatching:
     def __init__(self, Template=None, Target=None, Diffeons=None, EpsilonNet=None, DecimationTarget=1,
-                 subsampleTemplate = 1, targetMargin=10,
+                 subsampleTemplate = 1, targetMargin=10, templateMargin=0,
                  DiffeonEpsForNet=None, DiffeonSegmentationRatio=None, zeroVar=False, fileTempl=None,
                  fileTarg=None, param=None, maxIter=1000, regWeight = 1.0, affineWeight = 1.0, verb=True,
                  rotWeight = None, scaleWeight = None, transWeight = None, testGradient=False, saveFile = 'evolution', affine = 'none', outputDir = '.'):
@@ -122,6 +122,15 @@ class ImageMatching:
         print zoom
         self.im1.data = Img.interpolation.zoom(self.im1.data, zoom, order=0)
 
+        # Include template in bigger image
+        if templateMargin >0:
+            I = range(-templateMargin, self.im0.data.shape[0]+templateMargin)
+            for k in range(1, self.im0.data.ndim):
+                I = (I, range(-templateMargin, self.im0.data.shape[k]+templateMargin))
+            self.gr1 = np.array(np.meshgrid(*I, indexing='ij'))
+            #print self.im1.data.shape
+            self.im0.data = diffeo.multilinInterp(self.im0.data, self.gr1)
+
         # Include target in bigger image
         I = range(-targetMargin, self.im1.data.shape[0]+targetMargin)
         for k in range(1, self.im1.data.ndim):
@@ -132,7 +141,7 @@ class ImageMatching:
         self.gr1 = self.gr1.transpose(np.append(range(1,self.gr1.ndim), 0)) +targetMargin
         #print self.im1.data.shape
         self.im0Fine = diffeo.gridScalars(grid=self.im0)
-        self.saveRate = 10
+        self.saveRate = 5
         self.iter = 0
         self.gradEps = -1
         self.dim = self.im0.data.ndim
@@ -186,6 +195,7 @@ class ImageMatching:
             #     self.c0[:,1] = u[1].flatten()
             #     self.c0[:,2] = u[2].flatten()
             gradIm0 = diffeo.multilinInterp(gradIm0, self.c0.T)
+            #print gradIm0
             jj = 0
             for kk in range(self.c0.shape[0]):
                 if gradIm0[kk] > m0:
@@ -194,15 +204,15 @@ class ImageMatching:
             self.c0 = self.c0[0:jj, :]
             print 'keeping ', jj, ' diffeons' 
                 #print self.im0.resol
-            self.c0 = targetMargin + self.im0.origin + self.c0 * self.im0.resol
-            self.S0 = np.tile(2*DecimationTarget*np.diag(self.im0.resol), [self.c0.shape[0], 1, 1])
+            self.c0 = targetMargin - templateMargin + self.im0.origin + self.c0 * self.im0.resol
+            self.S0 = np.tile( (DecimationTarget*np.diag(self.im0.resol)/2)**2, [self.c0.shape[0], 1, 1])
         else:
             (self.c0, self.S0, self.idx) = Diffeons
 
         if zeroVar:
 	    self.S0 = np.zeros(self.S0.shape)
 
-        print self.c0.max(), self.gr1.max()
+            #print self.c0
             #print self.S0
         if subsampleTemplate == None:
             subsampleTemplate = 1
@@ -228,8 +238,8 @@ class ImageMatching:
         # elif self.dim == 3:
         #     self.im0.data = self.im0.data[0:self.im0.data.shape[0]:subsampleTemplate, 0:self.im0.data.shape[1]:subsampleTemplate, 0:self.im0.data.shape[2]:subsampleTemplate]
         #     self.gr0 = np.mgrid[0:self.im0.data.shape[0], 0:self.im0.data.shape[1], 0:self.im0.data.shape[2]].transpose((1,2, 3, 0))
-        self.gr0 = targetMargin+self.im1.origin + self.gr0 * self.im1.resol 
-        self.gr0Fine = targetMargin+self.im1.origin + self.gr0Fine * self.im1.resol 
+        self.gr0 = targetMargin-templateMargin+self.im1.origin + self.gr0 * self.im1.resol 
+        self.gr0Fine = targetMargin-templateMargin+self.im1.origin + self.gr0Fine * self.im1.resol 
         self.J0 = np.log(self.im0.resol.prod()) * np.ones(self.im0.data.shape) 
 	self.ndf = self.c0.shape[0]
         self.Tsize = int(round(1.0/self.param.timeStep))

@@ -20,13 +20,14 @@ def compute(createSurfaces=True):
         
         u = (z + y)/s2
         v = (z - y)/s2
-        I1 = .05 - np.minimum((x-.7)**2 + 0.5*y**2 + z**2, (x-.30)**2 + 0.5*y**2 + z**2)  
+        I1 = np.maximum(0.05 - (x-.7)**2 - 0.5*y**2 - z**2, 0.02 - (x-.50)**2 - 0.5*y**2 - z**2)  
+        #I1 = .05 - np.minimum((x-.7)**2 + 0.5*y**2 + z**2, (x-.30)**2 + 0.5*y**2 + z**2)  
         #I1 = .095 - ((x-.7)**2 + v**2 + 0.5*u**2) 
         fv2 = Surface() ;
         fv2.Isosurface(I1, value = 0, target=2000, scales=[1, 1, 1], smooth=0.01)
 
-        fv1.saveVTK('/Users/younes/Development/Results/Diffeons/fv1.vtk')
-        fv2.saveVTK('/Users/younes/Development/Results/Diffeons/fv2.vtk')
+        fv1.saveVTK('/Users/younes/Development/Results/Diffeons/fv1Alt.vtk')
+        fv2.saveVTK('/Users/younes/Development/Results/Diffeons/fv2Alt.vtk')
     else:
         if False:
             path = '/Users/younes/Development/project/ncbc/data/template/PDS-II/AllScan1_PDSII/shape_analysis/hippocampus/'
@@ -60,7 +61,7 @@ def compute(createSurfaces=True):
                 fv2  = Surface(filename='/Users/younes/Development/Results/Diffeons/fv2.vtk')
 
     ## Object kernel
-    K1 = Kernel(name='gauss', sigma = 5.0)
+    K1 = Kernel(name='gauss', sigma = 10.0)
 
     sm = SurfaceMatchingParam(timeStep=0.1, KparDiff=K1, sigmaDist=5, sigmaError=1., errorType='current')
     f = SurfaceMatching(Template=fv1, Target=fv2, outputDir='/Users/younes/Development/Results/Surface/Balls',param=sm, testGradient=False,
