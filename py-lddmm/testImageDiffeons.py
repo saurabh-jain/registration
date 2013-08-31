@@ -27,11 +27,11 @@ def compute(createImages=True):
         im2.saveImg('/Users/younes/Development/Results/Diffeons/Images/im2.png', normalize=True)
     else:
         if True:
-            path = '/Volumes/younes/IMAGES/'
+            path = '/Users/younes/IMAGES/'
             im1 = gridScalars(fileName = path+'database/camel07.pgm', dim=2)
             im2 = gridScalars(fileName = path+'database/camel08.pgm', dim=2)
-            #im1.data = filters.gaussian_filter(im1.data, 1)
-            #im2.data = filters.gaussian_filter(im2.data, 1)
+            im1.data = filters.gaussian_filter(im1.data, .5)
+            im2.data = filters.gaussian_filter(im2.data, .5)
             #im1 = gridScalars(fileName = path+'image_0031.jpg', dim=2)
             #im2 = gridScalars(fileName = path+'image_0043.jpg', dim=2)
             #im2.saveImg('/Users/younes/Development/Results/Diffeons/Images/imTest.png', normalize=True)
