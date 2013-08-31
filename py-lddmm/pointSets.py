@@ -2,6 +2,27 @@ import numpy as np
 import scipy as sp
 import os
 
+def read3DVector(filename):
+    try:
+        with open(filename, 'r') as fn:
+            ln0 = fn.readline()
+            N = int(ln[0])
+            #print 'reading ', filename, ':', N, ' landmarks'
+            v = np.zeros([N, 3])
+
+            for i in range(N):
+                ln = fn.readline()
+                ln0 = fn.readline().split()
+                #print ln0
+                for k in range(3):
+                    v[i,k] = float(ln0[k])
+                
+    except IOError:
+        print 'cannot open ', filename
+        raise
+    return v
+
+
 
 
 def loadlmk(filename, dim=3):

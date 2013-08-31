@@ -6,11 +6,11 @@ from scipy.spatial import distance as dfun
 ## Computes matrix associated with Gaussian kernel
 # par[0] = width
 # if y=None, computes K(x,x), otherwise computes K(x,y)
-def kernelMatrixGauss(x, y=None, grid=None, par=[1], diff = False, diff2 = False, constant_plane=False, precomp=None):
+def kernelMatrixGauss(x, firstVar=None, grid=None, par=[1], diff = False, diff2 = False, constant_plane=False, precomp=None):
     sig = par[0]
     sig2 = 2*sig*sig
     if precomp == None:
-        if y==None:
+        if firstVar==None:
             if grid == None:
                 u = np.exp(-dfun.pdist(x,'sqeuclidean')/sig2)
                 #        K = np.eye(x.shape[0]) + np.mat(dfun.squareform(u))
@@ -29,7 +29,7 @@ def kernelMatrixGauss(x, y=None, grid=None, par=[1], diff = False, diff2 = False
                 elif diff2:
                     K = K/(sig2*sig2)
         else:
-            K = np.exp(-dfun.cdist(y, x, 'sqeuclidean')/sig2)
+            K = np.exp(-dfun.cdist(firstVar, x, 'sqeuclidean')/sig2)
             precomp = np.copy(K)
             if diff:
                 K = -K/sig2
@@ -148,16 +148,16 @@ def lapPolDiff2(u, ord):
 
 # computes matrix associated with polynomial kernel
 # par[0] = width, par[1] =  order
-def kernelMatrixLaplacian(x, y=None, grid=None, par=[1., 3], diff=False, diff2 = False, constant_plane=False, precomp = None):
+def kernelMatrixLaplacian(x, firstVar=None, grid=None, par=[1., 3], diff=False, diff2 = False, constant_plane=False, precomp = None):
     sig = par[0]
     ord=par[1]
     if precomp == None:
-        precomp = kernelMatrixLaplacianPrecompute(x, y, grid, par)
+        precomp = kernelMatrixLaplacianPrecompute(x, firstVar, grid, par)
 
     u = precomp[0]
     expu = precomp[1]
 
-    if y == None and grid==None:
+    if firstVar == None and grid==None:
         if diff==False and diff2==False:
             K = dfun.squareform(lapPol(u,ord) *expu)
             np.fill_diagonal(K, 1)
@@ -183,7 +183,7 @@ def kernelMatrixLaplacian(x, y=None, grid=None, par=[1., 3], diff=False, diff2 =
     else:
         return K,precomp
 
-def kernelMatrixLaplacianPrecompute(x, y=None, grid=None, par=[1., 3], diff=False, diff2 = False, constant_plane=False):
+def kernelMatrixLaplacianPrecompute(x, firstVar=None, grid=None, par=[1., 3], diff=False, diff2 = False, constant_plane=False):
     sig = par[0]
     ord=par[1]
     if y==None:
@@ -192,12 +192,12 @@ def kernelMatrixLaplacianPrecompute(x, y=None, grid=None, par=[1., 3], diff=Fals
         else:
             u = np.sqrt(((grid[..., newaxis, :] - x)**2).sum(axis=-1))/sig
     else:
-        u = dfun.cdist(y, x)/sig
+        u = dfun.cdist(firstVar, x)/sig
     precomp = [u, exp(-u)]
     return precomp
 
 # Wrapper for kernel matrix computation
-def  kernelMatrix(Kpar, x, y=None, grid=None, diff = False, diff2=False, constant_plane = False):
+def  kernelMatrix(Kpar, x, firstVar=None, grid=None, diff = False, diff2=False, constant_plane = False):
     # [K, K2] = kernelMatrix(Kpar, varargin)
     # creates a kernel matrix based on kernel parameters Kpar
     # if varargin = z
@@ -211,9 +211,9 @@ def  kernelMatrix(Kpar, x, y=None, grid=None, diff = False, diff2=False, constan
 
 
     if Kpar.name == 'gauss':
-        res = kernelMatrixGauss(x,y=y, grid=grid, par = [Kpar.sigma], diff=diff, diff2=diff2, constant_plane = constant_plane, precomp=precomp)
+        res = kernelMatrixGauss(x,firstVar=firstVar, grid=grid, par = [Kpar.sigma], diff=diff, diff2=diff2, constant_plane = constant_plane, precomp=precomp)
     elif Kpar.name == 'laplacian':
-        res = kernelMatrixLaplacian(x,y=y, grid=grid, par = [Kpar.sigma, Kpar.order], diff=diff, diff2=diff2, constant_plane = constant_plane, precomp=precomp)
+        res = kernelMatrixLaplacian(x,firstVar=firstVar, grid=grid, par = [Kpar.sigma, Kpar.order], diff=diff, diff2=diff2, constant_plane = constant_plane, precomp=precomp)
     else:
         print 'unknown Kernel type'
         return []
@@ -277,7 +277,7 @@ class KernelSpec:
 
 # Main class for kernel definition
 class Kernel(KernelSpec):
-    def precompute(self, x,  y=None, grid=None, diff=False, diff2=False):
+    def precompute(self, x,  firstVar=None, grid=None, diff=False, diff2=False):
         if not (self.kernelMatrix == None):
             if self._hold:
                 precomp = self.precomp
@@ -285,7 +285,7 @@ class Kernel(KernelSpec):
                 precomp = None
 
             #precomp = None
-            r = self.kernelMatrix(x, y=y, grid = grid, par = self.par, precomp=precomp, diff=diff, diff2=diff2)
+            r = self.kernelMatrix(x, firstVar=firstVar, grid = grid, par = self.par, precomp=precomp, diff=diff, diff2=diff2)
             #self.prev_x = x
             #self.prev_y = y
             self.precomp = r[1]
@@ -297,16 +297,16 @@ class Kernel(KernelSpec):
         self._hold = False
 
     # Computes K(x,x)a or K(x,y)a
-    def applyK(self, x, a, y = None, grid=None):
+    def applyK(self, x, a, firstVar = None, grid=None):
         if not (self.kernelMatrix == None):
-            r = self.precompute(x, y=y, grid=grid, diff=False)
+            r = self.precompute(x, firstVar=firstVar, grid=grid, diff=False)
             z = np.dot(r, a)
         else:
             z = np.zeros([x.shape[0],a.shape[1]])
         if self.affine == 'affine':
             xx = x-self.center
             #aa = np.mat(a)
-            if y == None:
+            if firstVar == None:
                 if grid==None:
                     z += self.w1 * np.dot(xx, np.dot(xx.T, a)) + self.w2 * a.sum(axis=0)
                 else:
@@ -314,12 +314,12 @@ class Kernel(KernelSpec):
                     #yy = grid - self.center.reshape(np.concatenate([[self.center.size], np.ones(self.center.size)]))
                     z += self.w1 * np.dot(grid, np.dot(xx.T, a)) + self.w2 * a.sum(axis=0)
             else:
-                yy = y-self.center
+                yy = firstVar-self.center
                 z += self.w1 * np.dot(yy, np.dot(xx.T, a)) + self.w2 * a.sum(axis=0)
         elif self.affine == 'euclidean':
             xx = x-self.center
-            if not (y==None):
-                yy = y-self.center
+            if not (firstVar==None):
+                yy = firstVar-self.center
             if not (grid==None):
                 gg = grid - self.center
                 #self.center.reshape(np.concatenate([[self.center.size], np.ones(self.center.size)]))
@@ -327,7 +327,7 @@ class Kernel(KernelSpec):
             z += self.w2 * a.sum(axis=0)
             for E in self.affine_basis:
                 xE = np.dot(xx, E.T)
-                if y==None:
+                if firstVar==None:
                     if grid == None:
                         z += self.w1 * (xE * a).sum() * xE
                     else:
@@ -381,30 +381,32 @@ class Kernel(KernelSpec):
         return zpx
 
     # Computes array A(j) = sum_(k) nabla_1[a1(k, j). K(x(j), x)a2(k)]
-    def applyDiffKT(self, x, a1, a2, y=None):
+    def applyDiffKT(self, x, a1, a2, firstVar=None):
         zpx = np.zeros(x.shape)
         a = np.dot(a1[0], a2[0].T)
         for k in range(1,len(a1)):
             a += np.dot(a1[k], a2[k].T)
         if not (self.kernelMatrix == None):
-            r = self.precompute(x, diff=True, y=y)
-            g1 =  np.multiply(r, a)
+            r = self.precompute(x, diff=True, firstVar=firstVar)
+            g1 =  r*a
             #print a.shape, r.shape, g1.shape
-            if y==None:
-                zpx = 2*(np.multiply(x, g1.sum(axis=1).reshape([x.shape[0],1])) - np.dot(g1,x))
+            if firstVar==None:
+                zpx = 2*(x*g1.sum(axis=1).reshape([x.shape[0],1]) - np.dot(g1,x))
             else:
-                zpx = 2*(np.multiply(x, g1.sum(axis=1).reshape([x.shape[0], 1])) - np.dot(g1,y))
+                zpx = 2*(firstVar*g1.sum(axis=1).reshape([firstVar.shape[0], 1]) - np.dot(g1,x))
         if self.affine == 'affine':
-            if y==None:
-                xx = x-self.center
-            else:
-                xx = y-self.center
+            xx = x-self.center
+            # if firstVar==None:
+            #     xx = x-self.center
+            # else:
+            #     xx = firstVar-self.center
             zpx += self.w1 * np.dot(a, xx)
         elif self.affine == 'euclidean':
-            if y==None:
-                xx = x-self.center
-            else:
-                xx = y-self.center
+            xx = x-self.center
+            # if firstVar==None:
+            #     xx = x-self.center
+            # else:
+            #     xx = firstVar-self.center
             for E in self.affine_basis:
                 yy = np.dot(xx, E.T)
                 for k in range(len(a1)):
@@ -420,8 +422,7 @@ class Kernel(KernelSpec):
             r1 = self.precompute(x, diff=True)
             r2 = self.precompute(x, diff2=True)
             #xxp = -np.dot(p, x.T) + np.multiply(x, p).sum(axis=1)
-            xxp = -np.dot(p, x.T) + np.multiply(x,p).sum(axis=1).\
-                                reshape([x.shape[0],1])
+            xxp = -np.dot(p, x.T) + np.multiply(x,p).sum(axis=1).reshape([x.shape[0],1])
             na = np.dot(n, a.T)
             xpna = np.multiply(xxp, na)
             #u = np.multiply(xpna, x) - np.mutiply(xpna, x.T)
@@ -457,19 +458,19 @@ class Kernel(KernelSpec):
 
 
     # Computes sum_l div_1(K(x_k, x_l)a_l)
-    def applyDivergence(self, x, a, y=None):
+    def applyDivergence(self, x, a, firstVar=None):
         zJ = np.zeros([y.shape[0],1])
         if not (self.kernelMatrix == None):
-            r = self.precompute(x, y=y,  diff=True)
-            if y==None:
+            r = self.precompute(x, firstVar=firstVar,  diff=True)
+            if firstVar==None:
                 zJ += 2 * (np.multiply(np.dot(r,a), x).sum(axis=1) - np.dot(r, np.multiply(a,x).sum(axis=1)))
                 if self.affine == 'affine':
                     xx = x-self.center
                     zJ += self.w1 * np.multiply(xx,a).sum(axis=1)
             else:
                 #print r.shape, a.shape, y.shape, x.shape, zJ.shape
-                zJ += 2 * (np.multiply(np.dot(r,a), y).sum(axis=1) - np.dot(r, np.multiply(a,x).sum(axis=1)))
+                zJ += 2 * (np.multiply(np.dot(r,a), firstVar).sum(axis=1) - np.dot(r, np.multiply(a,x).sum(axis=1)))
                 if self.affine == 'affine':
-                    xx = y-self.center
+                    xx = firstVar-self.center
                     zJ += self.w1 * np.multiply(xx,a).sum(axis=1)
         return zJ.T

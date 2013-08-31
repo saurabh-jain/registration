@@ -127,7 +127,7 @@ class SurfaceMatching:
             print 'simplified template', self.fv0.vertices.shape[0]
         self.x0 = self.fv0.vertices
         self.fvDef = surfaces.Surface(surf=self.fv0)
-        self.npt = self.fv0.vertices.shape[0]
+        self.npt = self.y0.shape[0]
         self.a0 = np.zeros([self.y0.shape[0], self.x0.shape[1]])
 
         self.Tsize = int(round(1.0/self.param.timeStep))
@@ -161,7 +161,7 @@ class SurfaceMatching:
     def  objectiveFunDef(self, rhot, withTrajectory = False, withJacobian=False, Init = None):
         if Init == None:
             x0 = self.x0
-            y0 = self.x0
+            y0 = self.y0
             v0 = self.v0
             a0 = self.a0
         else:
@@ -173,6 +173,7 @@ class SurfaceMatching:
         param = self.param
         timeStep = 1.0/self.Tsize
         dim2 = self.dim**2
+        #print a0.shape
         if withJacobian:
             (xt, at, yt, vt, Jt)  = evol.secondOrderFiberEvolution(x0, a0, y0, v0, rhot, param.KparDiff, withJacobian=True)
         else:
@@ -182,9 +183,9 @@ class SurfaceMatching:
         obj=0
         for t in range(self.Tsize):
             v = np.squeeze(vt[t, :, :])
-            rho = np.squeeze(rhot[t, :, :])
+            rho = np.squeeze(rhot[t, :])
             
-            obj = obj + ((rho**2) * (v**2).sum(axis=1)).sum()/2
+            obj = obj + ((rho[:,np.newaxis]**2) * (v**2).sum(axis=1)).sum()/2
             #print xt.sum(), at.sum(), obj
         if withJacobian:
             return obj, xt, at, yt, vt, Jt
@@ -271,7 +272,7 @@ class SurfaceMatching:
 
     def randomDir(self):
         dirfoo = Direction()
-        dirfoo.diff = np.random.randn(self.Tsize, self.npt, self.dim)
+        dirfoo.diff = np.random.randn(self.Tsize, self.npt)
         return dirfoo
 
     def dotProduct(self, g1, g2):
