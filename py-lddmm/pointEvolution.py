@@ -43,11 +43,11 @@ def landmarkDirectEvolutionEuler(x0, at, KparDiff, affine = None, withJacobian=F
             xt[k+1, :, :] += timeStep * (np.dot(z, A[k].T) + b[k])
         if not (withPointSet == None):
             zy = np.squeeze(yt[k, :, :])
-            yt[k+1, :, :] = zy + timeStep * KparDiff.applyK(z, a, y=zy)
+            yt[k+1, :, :] = zy + timeStep * KparDiff.applyK(z, a, firstVar=zy)
             if not (affine == None):
                 yt[k+1, :, :] += timeStep * (np.dot(zy, A[k].T) + b[k])
             if withJacobian:
-                Jt[k+1, :] = Jt[k, :] + timeStep * KparDiff.applyDivergence(z, a, y=zy)
+                Jt[k+1, :] = Jt[k, :] + timeStep * KparDiff.applyDivergence(z, a, firstVar=zy)
                 if not (affine == None):
                     Jt[k+1, :] += timeStep * (np.trace(A[k]))
         else:
@@ -703,7 +703,7 @@ def landmarkEPDiff(T, x0, a0, KparDiff, affine = None, withJacobian=False, withN
             xt[k+1, :, :] += timeStep * (np.dot(z, A[k].T) + b[k])
         if not (withPointSet == None):
             zy = np.squeeze(yt[k, :, :])
-            yt[k+1, :, :] = zy + timeStep * KparDiff.applyK(z, a, y=zy)
+            yt[k+1, :, :] = zy + timeStep * KparDiff.applyK(z, a, firstVar=zy)
             if not (affine == None):
                 yt[k+1, :, :] += timeStep * (np.dot(zy, A[k].T) + b[k])
 
@@ -813,3 +813,138 @@ def landmarkHamiltonianGradient(x0, at, px1, KparDiff, regweight, getCovector = 
         else:
             return dat, dA, db, xt, pxt
 
+
+
+
+def secondOrderFiberEvolution(x0, a0, y0, v0, rhot, KparDiff, withJacobian=False, withPointSet=None):
+    T = rhot.shape[0]
+    N = x0.shape[0]
+    M = y0.shape[0]
+    #print M, N
+    dim = x0.shape[1]
+    timeStep = 1.0/T
+    at = np.zeros([T+1, M, dim])
+    yt = np.zeros([T+1, M, dim])
+    vt = np.zeros([T+1, M, dim])
+    xt = np.zeros([T+1, N, dim])
+    xt[0, :, :] = x0
+    at[0, :, :] = a0
+    yt[0, :, :] = y0
+    vt[0, :, :] = v0
+    simpleOutput = True
+    if not (withPointSet==None):
+        simpleOutput = False
+        K = withPointSet.shape[0]
+        zt = np.zeros([T+1,K,dim])
+        zt[0, :, :] = withPointSet
+        if withJacobian:
+            simpleOutput = False
+            Jt = np.zeros([T+1, K])
+    elif withJacobian:
+        simpleOutput = False
+        Jt = np.zeros([T+1, M])
+
+    for k in range(T):
+        x = np.squeeze(xt[k, :, :])
+        y = np.squeeze(yt[k, :, :])
+        a = np.squeeze(at[k, :, :])
+        v = np.squeeze(vt[k, :, :])
+        rho = np.squeeze(rhot[k,:])
+        xt[k+1, :, :] = x + timeStep * KparDiff.applyK(y, a, firstVar=x) 
+        yt[k+1, :, :] = y + timeStep * KparDiff.applyK(y, a)
+        #KparDiff.hold()
+        at[k+1, :, :] = a - timeStep * KparDiff.applyDiffKT(y, [a], [a]) + rho[:,np.newaxis] * v 
+        vt[k+1, :, :] = v + timeStep * KparDiff.applyDiffK(y, v, a) 
+        if not (withPointSet == None):
+            z = np.squeeze(zt[k, :, :])
+            zt[k+1, :, :] = zy + timeStep * KparDiff.applyK(y, a, firstVar=z)
+            if withJacobian:
+                Jt[k+1, :] = Jt[k, :] + timeStep * KparDiff.applyDivergence(y, a, firstVar=z)
+        elif withJacobian:
+            Jt[k+1, :] = Jt[k, :] + timeStep * KparDiff.applyDivergence(y, a)
+    if simpleOutput:
+        return xt, at, yt, vt
+    else:
+        output = [xt, at, yt, vt]
+        if not (withPointSet==None):
+            output.append(zt)
+        if withJacobian:
+            output.append(Jt)
+        return output
+
+def secondOrderFiberCovector(x0, a0, y0, v0, rhot, px1, pa1, py1, pv1, KparDiff):
+    T = rhot.shape[0]
+    N = x0.shape[0]
+    M = y0.shape[0]
+    dim = x0.shape[1]
+    timeStep = 1.0/T
+    [xt, at, yt, vt] = secondOrderFiberEvolution(x0, a0, y0, v0, rhot, KparDiff)
+    pxt = np.zeros([T, N, dim])
+    pxt[T-1, :, :] = px1
+    pat = np.zeros([T, M, dim])
+    pat[T-1, :, :] = pa1
+    pyt = np.zeros([T, M, dim])
+    pyt[T-1, :, :] = py1
+    pvt = np.zeros([T, M, dim])
+    pvt[T-1, :, :] = pv1
+    for t in range(T-1):
+        px = np.squeeze(pxt[T-t-1, :, :])
+        pa = np.squeeze(pat[T-t-1, :, :])
+        py = np.squeeze(pvt[T-t-1, :, :])
+        pv = np.squeeze(pvt[T-t-1, :, :])
+        x = np.squeeze(xt[T-t-1, :, :])
+        a = np.squeeze(at[T-t-1, :, :])
+        y = np.squeeze(vt[T-t-1, :, :])
+        v = np.squeeze(vt[T-t-1, :, :])
+        rho = np.squeeze(rhot[T-t-1, :])
+
+        zpx = KparDiff.applyDiffKT(y, [px], [a], firstVar=x)
+
+        zpa = KparDiff.applyK(x, px, firstVar=y)
+        zpy = KparDiff.applyDiffKT(x, [a], [px], firstVar=y)
+
+        zpy += KparDiff.applyDiffKT(y, [py, a], [a, py])
+        zpy += KparDiff.applyDDiffK11(y, pv, a, v) + KparDiff.applyDDiffK12(y, a, pv, v)
+        zpy -= KparDiff.applyDDiffK11(y, a, a, pa) + KparDiff.applyDDiffK12(y, a, a, pa)
+
+        zpv = KparDiff.applyDiffKT(y, [pv], [a]) + rho[:,np.newaxis]*pa - (rho[:,np.newaxis]**2)*v
+        zpa += (KparDiff.applyK(y, pa) + KparDiff.applyDiffK2(y, v, pv)
+               - KparDiff.applyDiffK(y, pa, a) - KparDiff.applyDiffK2(y, pa, a))
+        pxt[T-t-2, :, :] = px + timeStep * zpx
+        pat[T-t-2, :, :] = pa + timeStep * zpa
+        pyt[T-t-2, :, :] = py + timeStep * zpy
+        pvt[T-t-2, :, :] = pv + timeStep * zpv
+
+    return pxt, pat, pyt, pvt, xt, at, yt, vt
+
+# Computes gradient after covariant evolution for deformation cost a^TK(x,x) a
+def secondOrderFiberGradient(x0, a0, y0, v0, rhot, px1, pa1, py1, pv1, KparDiff, getCovector = False, affine = None):
+    (pxt, pat, pyt, pvt, xt, at, yt, vt) = secondOrderFiberCovector(x0, a0, y0, v0, rhot, px1, pa1, py1, pv1, KparDiff)
+    drhot = np.zeros(rhot.shape)
+    # if not (affine == None):
+    #     dA = np.zeros(affine[0].shape)
+    #     db = np.zeros(affine[1].shape)
+    for k in range(rhot.shape[0]):
+        rho = np.squeeze(rhot[k, :])
+        pa = np.squeeze(pat[k, :, :])
+        v = np.squeeze(vt[k, :, :])
+        #print 'testgr', (2*a-px).sum()
+        drhot[k, :] = ((pa-rho[:,np.newaxis]*v)*v).sum(axis=1)
+        # if not (affine == None):
+        #     dA[k] = np.dot(pxt[k].T, xt[k])
+        #     db[k] = pxt[k].sum(axis=0)
+    if getCovector == False:
+        return drhot, xt, at, yt, vt
+    else:
+        return drhot, xt, at, yt, vt, pxt, pat, pyt, pvt
+
+    # if affine == None:
+    #     if getCovector == False:
+    #         return dat, xt
+    #     else:
+    #         return dat, xt, pxt
+    # else:
+    #     if getCovector == False:
+    #         return dat, dA, db, xt
+    #     else:
+    #         return dat, dA, db, xt, pxt

@@ -104,6 +104,18 @@ class Surface:
                 print 'Warning: vertex ', k, 'has no face; use removeIsolated'
         return AV, AF
 
+    def computeVertexNormals(self):
+        self.computeCentersAreas() 
+        normals = np.zeros(self.vertices.shape)
+        F = self.faces
+        for k in range(F.shape[0]):
+            normals[F[k,0]] += self.surfel[k]
+            normals[F[k,1]] += self.surfel[k]
+            normals[F[k,2]] += self.surfel[k]
+        af = np.sqrt( (normals**2).sum(axis=1))
+        normals /=af.reshape([self.vertices.shape[0],1])
+
+        return normals
          
 
     # Computes edges from vertices/faces

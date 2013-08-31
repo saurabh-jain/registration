@@ -174,9 +174,9 @@ class ImageMatching:
             if DecimationTarget==None:
                 DecimationTarget = 1
             gradIm0 = Img.filters.maximum_filter(gradIm0, DecimationTarget)
-            I = range(0, self.im0.data.shape[0], DecimationTarget)
+            I = range(templateMargin, self.im0.data.shape[0]-templateMargin, DecimationTarget)
             for k in range(1, self.im0.data.ndim):
-                I = (I, range(0, self.im0.data.shape[k], DecimationTarget))
+                I = (I, range(templateMargin, self.im0.data.shape[k]-templateMargin, DecimationTarget))
             u = np.meshgrid(*I, indexing='ij')
             self.c0 = np.zeros([u[0].size, self.dim])
             for k in range(self.dim):
@@ -485,7 +485,7 @@ class ImageMatching:
                     diffx = self.gr1[..., np.newaxis, :] - self.ct[kk, ...]
                     betax = (R*diffx[..., np.newaxis, :]).sum(axis=-1)
                     dst = (betax * diffx).sum(axis=-1)
-                    diffIm = (255*(1-dst)*(dst < 1)).astype(float).sum(axis=-1)
+                    diffIm = np.minimum((255*(1-dst)*(dst < 1)).astype(float).sum(axis=-1), 255)
                     out = Image.fromarray(diffIm.astype(np.uint8))
                     out.save(self.outputDir +'/'+ self.saveFile+'Diffeons'+str(kk)+'.png')
         else:
