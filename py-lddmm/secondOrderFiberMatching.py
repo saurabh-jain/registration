@@ -2,7 +2,7 @@ import os
 import numpy as np
 import scipy as sp
 import surfaces
-from pointSets import read3DVector
+from pointSets import *
 import kernelFunctions as kfun
 import pointEvolution as evol
 import conjugateGradient as cg
@@ -133,7 +133,7 @@ class SurfaceMatching:
         self.Tsize = int(round(1.0/self.param.timeStep))
         self.rhot = np.zeros([self.Tsize, self.y0.shape[0]])
         self.rhotTry = np.zeros([self.Tsize, self.y0.shape[0]])
-        self.xt = np.tile(self.fv0.vertices, [self.Tsize+1, 1, 1])
+        self.xt = np.tile(self.x0, [self.Tsize+1, 1, 1])
         self.at = np.tile(self.a0, [self.Tsize+1, 1, 1])
         self.yt = np.tile(self.y0, [self.Tsize+1, 1, 1])
         self.vt = np.tile(self.v0, [self.Tsize+1, 1, 1])
@@ -185,7 +185,7 @@ class SurfaceMatching:
             v = np.squeeze(vt[t, :, :])
             rho = np.squeeze(rhot[t, :])
             
-            obj = obj + ((rho[:,np.newaxis]**2) * (v**2).sum(axis=1)).sum()/2
+            obj = obj + timeStep*((rho**2) * (v**2).sum(axis=1)).sum()/2
             #print xt.sum(), at.sum(), obj
         if withJacobian:
             return obj, xt, at, yt, vt, Jt
@@ -249,11 +249,11 @@ class SurfaceMatching:
     def getGradient(self, coeff=1.0):
         px1 = -self.endPointGradient()
         pa1 = np.zeros(self.a0.shape)
-        py1 = np.zeros(self.v0.shape)
+        py1 = np.zeros(self.y0.shape)
         pv1 = np.zeros(self.v0.shape)
         foo = evol.secondOrderFiberGradient(self.x0, self.a0, self.y0, self.v0, self.rhot, px1, pa1, py1, pv1, self.param.KparDiff)
         grd = Direction()
-        grd.diff = foo[0]/(coeff*self.Tsize)
+        grd.diff = foo[0]/(coeff*self.rhot.shape[0])
         return grd
 
 
@@ -278,10 +278,12 @@ class SurfaceMatching:
     def dotProduct(self, g1, g2):
         res = np.zeros(len(g2))
         gg = g1.diff
+        vn = (self.vt[0:-1,...]**2).sum(axis=2)
         ll = 0
         for gr in g2:
             ggOld = gr.diff
-            res[ll]  = (ggOld*gg).sum()
+            res[ll]  = (ggOld*vn*gg).sum()
+            #res[ll]  = (ggOld*gg).sum()
             ll = ll+1
 
         return res
@@ -302,6 +304,9 @@ class SurfaceMatching:
             for kk in range(self.Tsize+1):
                 fvDef.updateVertices(np.squeeze(zt[kk, :, :]))
                 fvDef.saveVTK(self.outputDir +'/'+ self.saveFile+str(kk)+'.vtk', scalars = Jt[kk, :], scal_name='Jacobian')
+                vn = np.squeeze(vt[kk,...])
+                vn = vn/np.sqrt((vn**2).sum(axis=1))[:, np.newaxis]
+                savePoints(self.outputDir +'/fiber_'+ self.saveFile+str(kk)+'.vtk', yt[kk, ...], vector=vn)
                 #self.fvDef.saveVTK(self.outputDir +'/'+ self.saveFile+str(kk)+'.vtk', scalars = self.idx, scal_name='Labels')
         else:
             (obj1, self.xt, self.at, self.yt, self.vt) = self.objectiveFunDef(self.rhot, withTrajectory=True)
@@ -316,6 +321,9 @@ class SurfaceMatching:
 
         self.gradEps = max(0.001, np.sqrt(grd2) / 10000)
         print 'Gradient lower bound:', self.gradEps
+        #print 'x0:', self.x0
+        #print 'y0:', self.y0
+        
         cg.cg(self, verb = self.verb, maxIter = self.maxIter,TestGradient=self.testGradient, epsInit=0.1)
         #return self.at, self.xt
 

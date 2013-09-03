@@ -103,6 +103,22 @@ def  savelmk(x, filename):
             fn.write(str)
         fn.write('1 1 \n')
 
+        
+# Saves in .vtk format
+def savePoints(fileName, x, vector=None):
+    with open(fileName, 'w') as fvtkout:
+        fvtkout.write('# vtk DataFile Version 3.0\nSurface Data\nASCII\nDATASET UNSTRUCTURED_GRID\n') 
+        fvtkout.write('\nPOINTS {0: d} float'.format(x.shape[0]))
+        for ll in range(x.shape[0]):
+            fvtkout.write('\n{0: f} {1: f} {2: f}'.format(x[ll,0], x[ll,1], x[ll,2]))
+        if vector != None:
+            fvtkout.write(('\nPOINT_DATA {0: d}').format(x.shape[0]))
+            fvtkout.write('\nVECTORS vector float')
+            for ll in range(x.shape[0]):
+                fvtkout.write('\n {0: .5f} {1: .5f} {2: .5f}'.format(vector[ll, 0], vector[ll, 1], vector[ll, 2]))
+
+        fvtkout.write('\n')
+
 
 
 def epsilonNet(x, rate):

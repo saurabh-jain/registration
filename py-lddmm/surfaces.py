@@ -978,7 +978,7 @@ def measureNormDef(fvDef, fv1, KparDist):
     cr2 = fv1.surfel
     cr2 = np.mat(np.sqrt((cr2**2).sum(axis=1)+1e-10))
     g11 = kfun.kernelMatrix(KparDist, c1)
-    g12 = kfun.kernelMatrix(KparDist, c1, c2)
+    g12 = kfun.kernelMatrix(KparDist, c2, c1)
     #obj = (np.multiply(cr1*cr1.T, g11).sum() - 2*np.multiply(cr1*(cr2.T), g12).sum())
     obj = (cr1 * g11 * cr1.T).sum() - 2* (cr1 * g12 *cr2.T).sum()
     return obj
@@ -1002,10 +1002,14 @@ def measureNormGradient(fvDef, fv1, KparDist):
     cr2 = np.divide(cr2, a2.T)
 
     g11 = kfun.kernelMatrix(KparDist, c1)
+    KparDist.hold()
     dg11 = kfun.kernelMatrix(KparDist, c1, diff=True)
+    KparDist.release()
     
-    g12 = kfun.kernelMatrix(KparDist, c1, c2)
-    dg12 = kfun.kernelMatrix(KparDist, c1, c2, diff=True)
+    g12 = kfun.kernelMatrix(KparDist, c2, c1)
+    KparDist.hold()
+    dg12 = kfun.kernelMatrix(KparDist, c2, c1, diff=True)
+    KparDist.release()
 
 
     z1 = g11*a1.T - g12 * a2.T
