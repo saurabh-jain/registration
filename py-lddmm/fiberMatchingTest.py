@@ -36,7 +36,7 @@ def compute(createSurfaces=True):
     ## Object kernel
     V1 = fv1.vertices/100 - [0,1,1]
     N1 = fv1.computeVertexNormals()
-    sel0 = V1[:,1] < 0.9*V1[:,1].max()
+    sel0 = V1[:,1] < 0.95*V1[:,1].max()
     I0 = np.nonzero(sel0)
     I0 = I0[0]
     V1 = V1[I0, :]
@@ -81,11 +81,11 @@ def compute(createSurfaces=True):
     v0[N:M, :] = v0[I1, :]
     v0[0:N,:] = c0*v0[0:N, :] - s0*N1
      
-    K1 = Kernel(name='gauss', sigma = 10.0)
+    K1 = Kernel(name='laplacian', sigma = 5.0)
     y0 = 100*(y0+[0,1,1])
     pointSets.savePoints('/Users/younes/Development/Results/Fibers/Ellipses/fibers.vtk', y0, vector=v0)
 
-    sm = SurfaceMatchingParam(timeStep=0.1, KparDiff=K1, sigmaDist=5, sigmaError=1., errorType='measure')
+    sm = SurfaceMatchingParam(timeStep=0.1, KparDiff=K1, sigmaDist=5, sigmaError=1., errorType='current')
     f = SurfaceMatching(Template=fv1, Target=fv2, Fiber=(y0,v0), outputDir='/Users/younes/Development/Results/Fibers/Ellipses',param=sm, testGradient=False,
                         #subsampleTargetSize = 500,
                          maxIter=1000)

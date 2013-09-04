@@ -186,14 +186,14 @@ def kernelMatrixLaplacian(x, firstVar=None, grid=None, par=[1., 3], diff=False, 
 def kernelMatrixLaplacianPrecompute(x, firstVar=None, grid=None, par=[1., 3], diff=False, diff2 = False, constant_plane=False):
     sig = par[0]
     ord=par[1]
-    if y==None:
+    if firstVar==None:
         if grid==None:
             u = dfun.pdist(x)/sig
         else:
             u = np.sqrt(((grid[..., newaxis, :] - x)**2).sum(axis=-1))/sig
     else:
         u = dfun.cdist(firstVar, x)/sig
-    precomp = [u, exp(-u)]
+    precomp = [u, np.exp(-u)]
     return precomp
 
 # Wrapper for kernel matrix computation
