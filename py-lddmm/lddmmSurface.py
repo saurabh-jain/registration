@@ -25,7 +25,7 @@ def main():
     args = parser.parse_args()
 
     if args.dirOut == '':
-        args.dirOut = args.dirIn
+        args.dirOut = '.'
 
     if args.tmpOut == '':
         args.tmpOut = args.dirOut + '/tmp'

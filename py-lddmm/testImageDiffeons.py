@@ -28,15 +28,15 @@ def compute(createImages=True):
     else:
         if True:
             path = '/Users/younes/IMAGES/'
-            im1 = gridScalars(fileName = path+'database/camel07.pgm', dim=2)
-            im2 = gridScalars(fileName = path+'database/camel08.pgm', dim=2)
-            # path = '/Volumes/younes/IMAGES/'
+            #im1 = gridScalars(fileName = path+'database/camel07.pgm', dim=2)
+            #im2 = gridScalars(fileName = path+'database/camel08.pgm', dim=2)
+            path = '/Volumes/younes/IMAGES/'
             # #im1 = gridScalars(fileName = path+'database/camel07.pgm', dim=2)
             # #im2 = gridScalars(fileName = path+'database/camel08.pgm', dim=2)
             # #im1 = gridScalars(fileName = path+'yalefaces/subject01.normal.gif', dim=2)
             # #im2 = gridScalars(fileName = path+'yalefaces/subject01.happy.gif', dim=2)
-            # im1 = gridScalars(fileName = path+'heart/heart01.tif', dim=2)
-            # im2 = gridScalars(fileName = path+'heart/heart09.tif', dim=2)
+            im1 = gridScalars(fileName = path+'heart/heart01.tif', dim=2)
+            im2 = gridScalars(fileName = path+'heart/heart09.tif', dim=2)
             im1.data = filters.gaussian_filter(im1.data, .5)
             im2.data = filters.gaussian_filter(im2.data, .5)
             #im1 = gridScalars(fileName = path+'image_0031.jpg', dim=2)
@@ -52,7 +52,7 @@ def compute(createImages=True):
 
     ## Object kernel
 
-    sm = ImageMatchingParam(timeStep=0.1, sigmaKernel=50., sigmaError=1.)
+    sm = ImageMatchingParam(timeStep=0.05, sigmaKernel=50., sigmaError=1.)
     f = ImageMatching(Template=im1, Target=im2, outputDir='/Users/younes/Development/Results/Diffeons/Images/Hearts',param=sm, testGradient=False,
                       subsampleTemplate = 2,
                         zeroVar=False,

@@ -20,6 +20,8 @@ class Surface:
                     (mainPart, ext) = os.path.splitext(filename)
                     if ext == '.byu':
                         self.readbyu(filename)
+                    elif ext=='.off':
+                        self.readOFF(filename)
                     elif ext=='.vtk':
                         self.readVTK(filename)
                     else:
@@ -704,6 +706,43 @@ class Surface:
             z += np.linalg.det(v[c[:], :])/6
         return z
 
+    # Reads from .off file
+    def readOFF(self, offfile):
+        with open(offfile,'r') as f:
+            ln0 = readskip(f,'#')
+            ln = ln0.split()
+            if ln[0].lower() != 'off':
+                print 'Not OFF format'
+                return
+            ln = readskip(f,'#').split()
+            # read header
+            npoints = int(ln[0])  # number of vertices
+            nfaces = int(ln[1]) # number of faces
+                                #print ln, npoints, nfaces
+                        #fscanf(fbyu,'%d',1);		% number of edges
+                        #%ntest = fscanf(fbyu,'%d',1);		% number of edges
+            # read data
+            self.vertices = np.empty([npoints, 3])
+            for k in range(npoints):
+                ln = readskip(f,'#').split()
+                self.vertices[k, 0] = float(ln[0]) 
+                self.vertices[k, 1] = float(ln[1]) 
+                self.vertices[k, 2] = float(ln[2])
+
+            self.faces = np.int_(np.empty([nfaces, 3]))
+            for k in range(nfaces):
+                ln = readskip(f,'#').split()
+                if (int(ln[0]) != 3):
+                    print 'Reading only triangulated surfaces'
+                    return
+                self.faces[k, 0] = int(ln[1]) 
+                self.faces[k, 1] = int(ln[2]) 
+                self.faces[k, 2] = int(ln[3])
+
+        self.computeCentersAreas()
+
+
+        
     # Reads from .byu file
     def readbyu(self, byufile):
         with open(byufile,'r') as fbyu:
@@ -718,7 +757,7 @@ class Surface:
             for k in range(ncomponents):
                 fbyu.readline() # components (ignored)
             # read data
-            self.vertices = np.empty([npoints, 3]) ;
+            self.vertices = np.empty([npoints, 3])
             k=-1
             while k < npoints-1:
                 ln = fbyu.readline().split()
@@ -1044,6 +1083,14 @@ def measureNormGradient(fvDef, fv1, KparDist):
         px[I[k], :] = px[I[k], :]+dz1[k, :] -  crs[k, :]
 
     return 2*px
+
+
+def readskip(f, c):
+    ln0 = f.readline()
+    #print ln0
+    while (len(ln0) > 0 and ln0[0] == c):
+        ln0 = f.readline()
+    return ln0
 
 # class MultiSurface:
 #     def __init__(self, pattern):

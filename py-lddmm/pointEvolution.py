@@ -37,7 +37,7 @@ def landmarkDirectEvolutionEuler(x0, at, KparDiff, affine = None, withJacobian=F
 
     for k in range(M-1):
         z = np.squeeze(xt[k, ...])
-        a = np.mat(np.squeeze(at[k, ...]))
+        a = np.squeeze(at[k, ...])
         xt[k+1, ...] = z + timeStep * KparDiff.applyK(z, a)
         if not (affine == None):
             xt[k+1, :, :] += timeStep * (np.dot(z, A[k].T) + b[k])
@@ -58,7 +58,7 @@ def landmarkDirectEvolutionEuler(x0, at, KparDiff, affine = None, withJacobian=F
 
         if not (withNormals==None):
             zn = np.squeeze(nt[k, :, :])        
-            nt[k+1, :, :] = zn - timeStep * KparDiff.applyDiffKT(z, [np.mat(zn)], [a]) 
+            nt[k+1, :, :] = zn - timeStep * KparDiff.applyDiffKT(z, [zn], [a]) 
             if not (affine == None):
                 nt[k+1, :, :] += timeStep * np.dot(zn, A[k])
     if simpleOutput:
@@ -694,7 +694,7 @@ def landmarkEPDiff(T, x0, a0, KparDiff, affine = None, withJacobian=False, withN
 
     for k in range(T):
         z = np.squeeze(xt[k, :, :])
-        a = np.mat(np.squeeze(at[k, :, :]))
+        a = np.squeeze(at[k, :, :])
         xt[k+1, :, :] = z + timeStep * KparDiff.applyK(z, a)
         #print 'test', px.sum()
         if k < (T-1):
@@ -709,7 +709,7 @@ def landmarkEPDiff(T, x0, a0, KparDiff, affine = None, withJacobian=False, withN
 
         if not (withNormals==None):
             zn = np.squeeze(nt[k, :, :])        
-            nt[k+1, :, :] = zn - timeStep * KparDiff.applyDiffKT(z, [np.mat(zn)], [a]) 
+            nt[k+1, :, :] = zn - timeStep * KparDiff.applyDiffKT(z, [zn], [a]) 
             if not (affine == None):
                 nt[k+1, :, :] += timeStep * np.dot(zn, A[k])
         if withJacobian:
