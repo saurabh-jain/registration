@@ -429,7 +429,7 @@ def currentNormDef(fvDef, fv1, KparDist):
     c2 = fv1.centers
     cr2 = fv1.lenel
     g11 = kfun.kernelMatrix(KparDist, c1)
-    g12 = kfun.kernelMatrix(KparDist, c1, c2)
+    g12 = kfun.kernelMatrix(KparDist, c2, c1)
     obj = (np.multiply(np.dot(cr1,cr1.T), g11).sum() - 2*np.multiply(np.dot(cr1, cr2.T), g12).sum())
     return obj
 
@@ -450,8 +450,8 @@ def currentNormGradient(fvDef, fv1, KparDist):
     g11 = kfun.kernelMatrix(KparDist, c1)
     dg11 = kfun.kernelMatrix(KparDist, c1, diff=True)
     
-    g12 = kfun.kernelMatrix(KparDist, c1, c2)
-    dg12 = kfun.kernelMatrix(KparDist, c1, c2, diff=True)
+    g12 = kfun.kernelMatrix(KparDist, c2, c1)
+    dg12 = kfun.kernelMatrix(KparDist, c2, c1, diff=True)
 
 
     z1 = np.dot(g11, cr1) - np.dot(g12, cr2)
@@ -502,7 +502,7 @@ def measureNormDef(fvDef, fv1, KparDist):
     cr2 = fv1.lenel
     cr2 = np.sqrt((cr2**2).sum(axis=1)+1e-10)
     g11 = kfun.kernelMatrix(KparDist, c1)
-    g12 = kfun.kernelMatrix(KparDist, c1, c2)
+    g12 = kfun.kernelMatrix(KparDist, c2, c1)
     #obj = (np.multiply(cr1*cr1.T, g11).sum() - 2*np.multiply(cr1*(cr2.T), g12).sum())
     obj = np.dot(np.dot(cr1, g11), cr1.T).sum() - 2* np.dot(np.dot(cr1, g12), cr2.T).sum()
     return obj
@@ -528,8 +528,8 @@ def measureNormGradient(fvDef, fv1, KparDist):
     g11 = kfun.kernelMatrix(KparDist, c1)
     dg11 = kfun.kernelMatrix(KparDist, c1, diff=True)
     
-    g12 = kfun.kernelMatrix(KparDist, c1, c2)
-    dg12 = kfun.kernelMatrix(KparDist, c1, c2, diff=True)
+    g12 = kfun.kernelMatrix(KparDist, c2, c1)
+    dg12 = kfun.kernelMatrix(KparDist, c2, c1, diff=True)
 
 
     z1 = np.dot(g11, a1) - np.dot(g12, a2)
