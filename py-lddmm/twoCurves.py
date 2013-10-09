@@ -30,7 +30,7 @@ def compute():
 
 
     ## Object kernel
-    K1 = Kernel(name='gauss', sigma = 2)
+    K1 = Kernel(name='laplacian', sigma = 2)
     ## Background kernel
     K2 = Kernel(name='laplacian', sigma = .2)
 
