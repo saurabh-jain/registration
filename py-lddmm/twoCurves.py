@@ -35,7 +35,7 @@ def compute():
     K2 = Kernel(name='laplacian', sigma = .2)
 
     sm = CurveMatchingParam(timeStep=0.1, KparDiff=K1, KparDiffOut=K2, sigmaDist=0.5, sigmaError=.01, errorType='current')
-    f = (CurveMatching(Template=(fv1,fv2), Target=(fv3,fv4), outputDir='/Users/younes/Development/Results/Curves_Sliding_0',param=sm, mu=.001,regWeightOut=1., testGradient=False,
+    f = (CurveMatching(Template=(fv1,fv2), Target=(fv3,fv4), outputDir='/Users/younes/Development/Results/Curves_Sliding_tmp',param=sm, mu=.001,regWeightOut=1., testGradient=True,
                        typeConstraint='sliding', maxIter_cg=10000, maxIter_al=100, affine='none', rotWeight=10))
     f.optimizeMatching()
 
