@@ -7,7 +7,7 @@ import scipy as sp
 import scipy.ndimage as Img
 from vtk import *
 import array
-from PIL import Image
+from PIL.Image import core as _imaging
 import vtk.util.numpy_support as v2n
 
 ## Functions for images and diffeomorphisms

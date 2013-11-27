@@ -82,6 +82,20 @@ class Grid:
             #print c
             w = c.sum()/np.pi
             #print w /np.pi
-            if abs(w) > .5:
+            if abs(w) > .001:
                 K[k] = 1
         return np.int_(K)
+
+    def distPolygon(self, fv):
+        nvert = self.vertices.shape[0]
+        D = np.zeros(nvert)
+        for k in range(nvert-1):
+            D[k] = np.min(np.sqrt((fv.vertices[:, 0] - self.vertices[k,0])**2 +
+                                  (fv.vertices[:, 1] - self.vertices[k,1])**2))
+        return D
+
+    def signedDistPolygon(self, fv):
+        D = self.distPolygon(fv)
+        K = self.inPolygon(fv)
+        D *= 1-2*K 
+        return D
