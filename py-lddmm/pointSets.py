@@ -2,6 +2,27 @@ import numpy as np
 import scipy as sp
 import os
 
+def read3DVector(filename):
+    try:
+        with open(filename, 'r') as fn:
+            ln0 = fn.readline()
+            N = int(ln[0])
+            #print 'reading ', filename, ':', N, ' landmarks'
+            v = np.zeros([N, 3])
+
+            for i in range(N):
+                ln = fn.readline()
+                ln0 = fn.readline().split()
+                #print ln0
+                for k in range(3):
+                    v[i,k] = float(ln0[k])
+                
+    except IOError:
+        print 'cannot open ', filename
+        raise
+    return v
+
+
 
 
 def loadlmk(filename, dim=3):
@@ -81,6 +102,22 @@ def  savelmk(x, filename):
             str = str + '\n'
             fn.write(str)
         fn.write('1 1 \n')
+
+        
+# Saves in .vtk format
+def savePoints(fileName, x, vector=None):
+    with open(fileName, 'w') as fvtkout:
+        fvtkout.write('# vtk DataFile Version 3.0\nSurface Data\nASCII\nDATASET UNSTRUCTURED_GRID\n') 
+        fvtkout.write('\nPOINTS {0: d} float'.format(x.shape[0]))
+        for ll in range(x.shape[0]):
+            fvtkout.write('\n{0: f} {1: f} {2: f}'.format(x[ll,0], x[ll,1], x[ll,2]))
+        if vector != None:
+            fvtkout.write(('\nPOINT_DATA {0: d}').format(x.shape[0]))
+            fvtkout.write('\nVECTORS vector float')
+            for ll in range(x.shape[0]):
+                fvtkout.write('\n {0: .5f} {1: .5f} {2: .5f}'.format(vector[ll, 0], vector[ll, 1], vector[ll, 2]))
+
+        fvtkout.write('\n')
 
 
 

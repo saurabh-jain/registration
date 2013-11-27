@@ -2,6 +2,7 @@ import os
 import numpy as np
 import scipy as sp
 import surfaces
+from pointSets import *
 import kernelFunctions as kfun
 import pointEvolution as evol
 import conjugateGradient as cg
@@ -46,7 +47,6 @@ class SurfaceMatchingParam:
 class Direction:
     def __init__(self):
         self.diff = []
-        self.aff = []
 
 
 ## Main class for surface matching
@@ -66,9 +66,8 @@ class Direction:
 #        maxIter: max iterations in conjugate gradient
 class SurfaceMatching:
 
-    def __init__(self, Template=None, Target=None, fileTempl=None, fileTarg=None, param=None, maxIter=1000, regWeight = 1.0, affineWeight = 1.0, verb=True,
-                 subsampleTargetSize=-1,
-                 rotWeight = None, scaleWeight = None, transWeight = None, testGradient=True, saveFile = 'evolution', affine = 'none', outputDir = '.'):
+    def __init__(self, Template=None, Target=None, Fiber=None, fileTempl=None, fileTarg=None, fileFiber=None, param=None, maxIter=1000, regWeight = 1.0, verb=True,
+                 subsampleTargetSize=-1, testGradient=True, saveFile = 'evolution', outputDir = '.'):
         if Template==None:
             if fileTempl==None:
                 print 'Please provide a template surface'
@@ -86,6 +85,16 @@ class SurfaceMatching:
         else:
             self.fv1 = surfaces.Surface(surf=Target)
 
+        if Fiber==None:
+            if fileFiber==None:
+                print 'Please provide fiber structure'
+                return
+            else:
+                (self.y0, self.v0) = read3DVectorField(fileFiber)
+        else:
+            self.y0 = np.copy(Fiber[0])
+            self.v0 = np.copy(Fiber[1])
+
             #print np.fabs(self.fv1.surfel-self.fv0.surfel).max()
 
         self.saveRate = 10
@@ -102,17 +111,6 @@ class SurfaceMatching:
         self.verb = verb
         self.testGradient = testGradient
         self.regweight = regWeight
-        self.affine = affine
-        affB = AffineBasis(self.dim, affine)
-        self.affineDim = affB.affineDim
-        self.affineBasis = affB.basis
-        self.affineWeight = affineWeight * np.ones([self.affineDim, 1])
-        if (len(affB.rotComp) > 0) & (rotWeight != None):
-            self.affineWeight[affB.rotComp] = rotWeight
-        if (len(affB.simComp) > 0) & (scaleWeight != None):
-            self.affineWeight[affB.simComp] = scaleWeight
-        if (len(affB.transComp) > 0) & (transWeight != None):
-            self.affineWeight[affB.transComp] = transWeight
 
         if param==None:
             self.param = SurfaceMatchingParam()
@@ -127,16 +125,18 @@ class SurfaceMatching:
             if (v0*v1 < 0):
                 self.fv1.flipFaces()
             print 'simplified template', self.fv0.vertices.shape[0]
-        x0 = self.fv0.vertices
+        self.x0 = self.fv0.vertices
         self.fvDef = surfaces.Surface(surf=self.fv0)
-        self.npt = self.fv0.vertices.shape[0]
+        self.npt = self.y0.shape[0]
+        self.a0 = np.zeros([self.y0.shape[0], self.x0.shape[1]])
 
         self.Tsize = int(round(1.0/self.param.timeStep))
-        self.at = np.zeros([self.Tsize, x0.shape[0], x0.shape[1]])
-        self.atTry = np.zeros([self.Tsize, x0.shape[0], x0.shape[1]])
-        self.Afft = np.zeros([self.Tsize, self.affineDim])
-        self.AfftTry = np.zeros([self.Tsize, self.affineDim])
-        self.xt = np.tile(self.fv0.vertices, [self.Tsize+1, 1, 1])
+        self.rhot = np.zeros([self.Tsize, self.y0.shape[0]])
+        self.rhotTry = np.zeros([self.Tsize, self.y0.shape[0]])
+        self.xt = np.tile(self.x0, [self.Tsize+1, 1, 1])
+        self.at = np.tile(self.a0, [self.Tsize+1, 1, 1])
+        self.yt = np.tile(self.y0, [self.Tsize+1, 1, 1])
+        self.vt = np.tile(self.v0, [self.Tsize+1, 1, 1])
         self.obj = None
         self.objTry = None
         self.gradCoeff = self.fv0.vertices.shape[0]
@@ -158,55 +158,56 @@ class SurfaceMatching:
         obj = self.param.fun_obj(_fvDef, self.fv1, self.param.KparDist) / (self.param.sigmaError**2)
         return obj
 
-    def  objectiveFunDef(self, at, Afft, withTrajectory = False, withJacobian=False, x0 = None):
-        if x0 == None:
-            x0 = self.fv0.vertices
+    def  objectiveFunDef(self, rhot, withTrajectory = False, withJacobian=False, Init = None):
+        if Init == None:
+            x0 = self.x0
+            y0 = self.y0
+            v0 = self.v0
+            a0 = self.a0
+        else:
+            x0 = Init[0]
+            y0 = Init[2]
+            v0 = Init[3]
+            a0 = Init[1]
+            
         param = self.param
         timeStep = 1.0/self.Tsize
         dim2 = self.dim**2
-        A = [np.zeros([self.Tsize, self.dim, self.dim]), np.zeros([self.Tsize, self.dim])]
-        if self.affineDim > 0:
-            for t in range(self.Tsize):
-                AB = np.dot(self.affineBasis, Afft[t])
-                A[0][t] = AB[0:dim2].reshape([self.dim, self.dim])
-                A[1][t] = AB[dim2:dim2+self.dim]
+        #print a0.shape
         if withJacobian:
-            (xt,Jt)  = evol.landmarkDirectEvolutionEuler(x0, at, param.KparDiff, affine=A, withJacobian=True)
+            (xt, at, yt, vt, Jt)  = evol.secondOrderFiberEvolution(x0, a0, y0, v0, rhot, param.KparDiff, withJacobian=True)
         else:
-            xt  = evol.landmarkDirectEvolutionEuler(x0, at, param.KparDiff, affine=A)
+            (xt, at, yt, vt)  = evol.secondOrderFiberEvolution(x0, a0, y0, v0, rhot, param.KparDiff)
         #print xt[-1, :, :]
         #print obj
         obj=0
         for t in range(self.Tsize):
-            z = np.squeeze(xt[t, :, :])
-            a = np.squeeze(at[t, :, :])
-            #rzz = kfun.kernelMatrix(param.KparDiff, z)
-            ra = param.KparDiff.applyK(z, a)
-            obj = obj + self.regweight*timeStep*np.multiply(a, (ra)).sum()
-            if self.affineDim > 0:
-                obj +=  timeStep * np.multiply(self.affineWeight.reshape(Afft[t].shape), Afft[t]**2).sum()
+            v = np.squeeze(vt[t, :, :])
+            rho = np.squeeze(rhot[t, :])
+            
+            obj = obj + timeStep*((rho**2) * (v**2).sum(axis=1)).sum()/2
             #print xt.sum(), at.sum(), obj
         if withJacobian:
-            return obj, xt, Jt
+            return obj, xt, at, yt, vt, Jt
         elif withTrajectory:
-            return obj, xt
+            return obj, xt, at, yt, vt
         else:
             return obj
 
-    def  _objectiveFun(self, at, Afft, withTrajectory = False):
-        (obj, xt) = self.objectiveFunDef(at, Afft, withTrajectory=True)
+    def  _objectiveFun(self, rhot, withTrajectory = False):
+        (obj, xt, at, yt, vt) = self.objectiveFunDef(rhot, withTrajectory=True)
         self.fvDef.updateVertices(np.squeeze(xt[-1, :, :]))
         obj0 = self.dataTerm(self.fvDef)
 
         if withTrajectory:
-            return obj+obj0, xt
+            return obj+obj0, xt, at, yt, vt
         else:
             return obj+obj0
 
     def objectiveFun(self):
         if self.obj == None:
             self.obj0 = self.param.fun_obj0(self.fv1, self.param.KparDist) / (self.param.sigmaError**2)
-            (self.obj, self.xt) = self.objectiveFunDef(self.at, self.Afft, withTrajectory=True)
+            (self.obj, self.xt, self.at, self.yt, self.vt) = self.objectiveFunDef(self.rhot, withTrajectory=True)
             foo = surfaces.Surface(surf=self.fvDef)
             self.fvDef.updateVertices(np.squeeze(self.xt[-1, :, :]))
             foo.computeCentersAreas()
@@ -216,16 +217,12 @@ class SurfaceMatching:
         return self.obj
 
     def getVariable(self):
-        return [self.at, self.Afft]
+        return self.rhot
 
     def updateTry(self, dir, eps, objRef=None):
         objTry = self.obj0
-        atTry = self.at - eps * dir.diff
-        if self.affineDim > 0:
-            AfftTry = self.Afft - eps * dir.aff
-        else:
-            AfftTry = self.Afft
-        foo = self.objectiveFunDef(atTry, AfftTry, withTrajectory=True)
+        rhotTry = self.rhot - eps * dir.diff
+        foo = self.objectiveFunDef(rhotTry, withTrajectory=True)
         objTry += foo[0]
 
         ff = surfaces.Surface(surf=self.fvDef)
@@ -236,9 +233,8 @@ class SurfaceMatching:
             return 1e500
 
         if (objRef == None) | (objTry < objRef):
-            self.atTry = atTry
+            self.rhotTry = rhotTry
             self.objTry = objTry
-            self.AfftTry = AfftTry
             #print 'objTry=',objTry, dir.diff.sum()
 
         return objTry
@@ -252,28 +248,12 @@ class SurfaceMatching:
 
     def getGradient(self, coeff=1.0):
         px1 = -self.endPointGradient()
-        A = [np.zeros([self.Tsize, self.dim, self.dim]), np.zeros([self.Tsize, self.dim])]
-        dim2 = self.dim**2
-        if self.affineDim > 0:
-            for t in range(self.Tsize):
-                AB = np.dot(self.affineBasis, self.Afft[t])
-                A[0][t] = AB[0:dim2].reshape([self.dim, self.dim])
-                A[1][t] = AB[dim2:dim2+self.dim]
-        foo = evol.landmarkHamiltonianGradient(self.fv0.vertices, self.at, px1, self.param.KparDiff, self.regweight, affine=A)
+        pa1 = np.zeros(self.a0.shape)
+        py1 = np.zeros(self.y0.shape)
+        pv1 = np.zeros(self.v0.shape)
+        foo = evol.secondOrderFiberGradient(self.x0, self.a0, self.y0, self.v0, self.rhot, px1, pa1, py1, pv1, self.param.KparDiff)
         grd = Direction()
-        grd.diff = foo[0]/(coeff*self.Tsize)
-        #print grd.diff.sum()
-        grd.aff = np.zeros(self.Afft.shape)
-        if self.affineDim > 0:
-            dA = foo[1]
-            db = foo[2]
-            #dAfft = 2*np.multiply(self.affineWeight.reshape([1, self.affineDim]), self.Afft)
-            grd.aff = 2 * self.Afft
-            for t in range(self.Tsize):
-               dAff = np.dot(self.affineBasis.T, np.vstack([dA[t].reshape([dim2,1]), db[t].reshape([self.dim, 1])]))
-               grd.aff[t] -=  np.divide(dAff.reshape(grd.aff[t].shape), self.affineWeight.reshape(grd.aff[t].shape))
-            grd.aff /= (coeff*self.Tsize)
-            #            dAfft[:,0:self.dim**2]/=100
+        grd.diff = foo[0]/(coeff*self.rhot.shape[0])
         return grd
 
 
@@ -281,74 +261,55 @@ class SurfaceMatching:
     def addProd(self, dir1, dir2, beta):
         dir = Direction()
         dir.diff = dir1.diff + beta * dir2.diff
-        dir.aff = dir1.aff + beta * dir2.aff
         return dir
 
     def copyDir(self, dir0):
         dir = Direction()
         dir.diff = np.copy(dir0.diff)
-        dir.aff = np.copy(dir0.aff)
 
         return dir
 
 
     def randomDir(self):
         dirfoo = Direction()
-        dirfoo.diff = np.random.randn(self.Tsize, self.npt, self.dim)
-        dirfoo.aff = np.random.randn(self.Tsize, self.affineDim)
+        dirfoo.diff = np.random.randn(self.Tsize, self.npt)
         return dirfoo
 
     def dotProduct(self, g1, g2):
         res = np.zeros(len(g2))
-        dim2 = self.dim**2
-        for t in range(self.Tsize):
-            z = np.squeeze(self.xt[t, :, :])
-            gg = np.squeeze(g1.diff[t, :, :])
-            u = self.param.KparDiff.applyK(z, gg)
-            uu = np.multiply(g1.aff[t], self.affineWeight.reshape(g1.aff[t].shape))
-            ll = 0
-            for gr in g2:
-                ggOld = np.squeeze(gr.diff[t, :, :])
-                res[ll]  = res[ll] + np.multiply(ggOld,u).sum()
-                if self.affineDim > 0:
-                    #print np.multiply(np.multiply(g1[1][t], gr[1][t]), self.affineWeight).shape
-                    res[ll] += np.multiply(uu, gr.aff[t]).sum()
-                    #                    +np.multiply(g1[1][t, dim2:dim2+self.dim], gr[1][t, dim2:dim2+self.dim]).sum())
-                ll = ll + 1
+        gg = g1.diff
+        vn = (self.vt[0:-1,...]**2).sum(axis=2)
+        ll = 0
+        for gr in g2:
+            ggOld = gr.diff
+            res[ll]  = (ggOld*vn*gg).sum()
+            #res[ll]  = (ggOld*gg).sum()
+            ll = ll+1
 
         return res
 
     def acceptVarTry(self):
         self.obj = self.objTry
-        self.at = np.copy(self.atTry)
-        self.Afft = np.copy(self.AfftTry)
+        self.rhot = np.copy(self.rhotTry)
         #print self.at
 
     def endOfIteration(self):
         self.iter += 1
         if (self.iter % self.saveRate == 0) :
-            (obj1, self.xt) = self.objectiveFunDef(self.at, self.Afft, withTrajectory=True)
-            xtEPDiff, atEPdiff = evol.landmarkEPDiff(self.at.shape[0], self.fv0.vertices, np.squeeze(self.at[0, :, :]), self.param.KparDiff)
-            self.fvDef.updateVertices(np.squeeze(xtEPDiff[-1, :, :]))
-            self.fvDef.saveVTK(self.outputDir +'/'+ self.saveFile+'EPDiff.vtk')
-            print 'EPDiff difference', np.fabs(self.xt[-1,:,:] - xtEPDiff[-1,:,:]).sum() 
+            (obj1, self.xt, self.at, self.yt, self.vt) = self.objectiveFunDef(self.rhot, withTrajectory=True)
             self.fvDef.updateVertices(np.squeeze(self.xt[-1, :, :]))
-            dim2 = self.dim**2
-            A = [np.zeros([self.Tsize, self.dim, self.dim]), np.zeros([self.Tsize, self.dim])]
-            if self.affineDim > 0:
-                for t in range(self.Tsize):
-                    AB = np.dot(self.affineBasis, Afft[t])
-                    A[0][t] = AB[0:dim2].reshape([self.dim, self.dim])
-                    A[1][t] = AB[dim2:dim2+self.dim]
-            (xt, yt, Jt)  = evol.landmarkDirectEvolutionEuler(self.fv0.vertices, self.at, self.param.KparDiff, affine=A,
-                                                              withPointSet = self.fv0Fine.vertices, withJacobian=True)
+            (xt, at, yt, vt, zt, Jt)  = evol.secondOrderFiberEvolution(self.x0, self.a0, self.y0, self.v0,  self.rhot, self.param.KparDiff,
+                                                           withPointSet = self.fv0Fine.vertices, withJacobian=True)
             fvDef = surfaces.Surface(surf=self.fv0Fine)
             for kk in range(self.Tsize+1):
-                fvDef.updateVertices(np.squeeze(yt[kk, :, :]))
+                fvDef.updateVertices(np.squeeze(zt[kk, :, :]))
                 fvDef.saveVTK(self.outputDir +'/'+ self.saveFile+str(kk)+'.vtk', scalars = Jt[kk, :], scal_name='Jacobian')
+                vn = np.squeeze(vt[kk,...])
+                vn = vn/np.sqrt((vn**2).sum(axis=1))[:, np.newaxis]
+                savePoints(self.outputDir +'/fiber_'+ self.saveFile+str(kk)+'.vtk', yt[kk, ...], vector=vn)
                 #self.fvDef.saveVTK(self.outputDir +'/'+ self.saveFile+str(kk)+'.vtk', scalars = self.idx, scal_name='Labels')
         else:
-            (obj1, self.xt) = self.objectiveFunDef(self.at, self.Afft, withTrajectory=True)
+            (obj1, self.xt, self.at, self.yt, self.vt) = self.objectiveFunDef(self.rhot, withTrajectory=True)
             self.fvDef.updateVertices(np.squeeze(self.xt[-1, :, :]))
 
 
@@ -360,6 +321,9 @@ class SurfaceMatching:
 
         self.gradEps = max(0.001, np.sqrt(grd2) / 10000)
         print 'Gradient lower bound:', self.gradEps
+        #print 'x0:', self.x0
+        #print 'y0:', self.y0
+        
         cg.cg(self, verb = self.verb, maxIter = self.maxIter,TestGradient=self.testGradient, epsInit=0.1)
         #return self.at, self.xt
 

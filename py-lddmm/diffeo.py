@@ -1,10 +1,13 @@
 import os
+import pickle
 import sys
 import struct
 import numpy as np
+import scipy as sp
+import scipy.ndimage as Img
 from vtk import *
 import array
-from PIL import Image
+from PIL.Image import core as _imaging
 import vtk.util.numpy_support as v2n
 
 ## Functions for images and diffeomorphisms
@@ -12,12 +15,20 @@ import vtk.util.numpy_support as v2n
 # Useful functions for multidimensianal arrays
 class gridScalars:
    # initializes either form a previous array (data) or from a file 
-   def __init__(self, data=None, fileName = None, dim = 3, resol = [1., 1., 1.], origin=[0.,0.,0.], force_axun=False, withBug=False):
+   def __init__(self, grid=None, data=None, fileName = None, dim = 3, resol = 1., origin= 0., force_axun=False, withBug=False):
       if not (data == None):
          self.data = np.copy(data)
-         self.resol = np.copy(resol)
-         self.origin = np.copy(origin)
+         if type(resol) == float:
+            self.resol = resol *np.ones(data.ndim)
+         else:
+            self.resol = np.copy(resol)
+         if type(origin) == float:
+            self.origin = origin*np.ones(data.ndim)
+         else:
+            self.origin = np.copy(origin)
+         self.dim = dim
       elif not (fileName==None):
+         self.dim = dim 
          if (dim == 1):
             self.resol = 1.
             self.origin = 0.
@@ -41,9 +52,14 @@ class gridScalars:
             # u.setFileName(fileName)
             # u.Update()
             # v = u.GetOutput()
-            img = Image.open(fileName)
-            self.data = np.array(img.convert("L").getdata())
-            self.data.resize(img.size)
+            # img = Image.open(fileName)
+            img=Img.imread(fileName).astype(float)
+            print img.shape
+            if (img.ndim == 3):
+               img = img.sum(axis=2)/(img.shape[2]+1)
+            self.data = img
+            #np.array(img.convert("L").getdata())
+            #self.data.resize(img.size)
          elif (dim == 3):
             (nm, ext) = os.path.splitext(fileName)
             if ext=='.hdr':
@@ -53,6 +69,34 @@ class gridScalars:
          else:
             print "get_image: unsupported input dimensions"
             return
+      elif not(grid==None):
+         self.data = np.copy(grid.data)
+         self.resol = np.copy(grid.resol)
+         self.origin = np.copy(grid.origin)
+         self.dim = grid.dim
+
+   def save(self, filename):
+      with open(filename, 'w') as f:
+         pickle.dump(self, f)
+
+   def load(self, filename):
+      with open(filename, 'r') as f:
+         pickle.load(self, f)
+
+   def saveImg(self, filename, normalize=False):
+      if self.dim == 2:
+         if normalize:
+            src = 255 * (self.data - self.data.min()) / (self.data.max()-self.data.min())
+         else:
+            src = self.data
+         out = Image.fromarray(src.astype(np.uint8))
+         out.save(filename)
+      else:
+         [u, v] = os.path.splitext(filename)
+         if v=='.vtk':
+            self.saveVTK(filename)
+         else:
+            self.saveAnalyze(filename)
 
    # Reads from vtk file
    def readVTK(self, filename):
@@ -65,6 +109,7 @@ class gridScalars:
       self.origin = v.GetOrigin() ;
       self.resol = v.GetSpacing()
       self.data = np.ndarray(shape=dim, order='F', buffer = v.GetPointData().GetScalars())
+      self.dim = 3
 
    # Saves in vtk file
    def saveVTK(self, filename, scalarName='scalars_', title='lddmm data'):
@@ -185,6 +230,7 @@ class gridScalars:
             if withBug:
                self.data  = self.data[::-1,::-1,::-1]
             #self.saveAnalyze('Data/foo.hdr')
+      
 
    def zeroPad(self, h):
       d = np.copy(self.data)
@@ -213,44 +259,100 @@ class Diffeomorphism:
 
 # multilinear interpolation
 def multilinInterp(img, diffeo):
-   if img.ndim > 3:
+   ndim = img.ndim
+   if ndim > 3:
       print 'interpolate only in dimension 1 to 3'
       return
-   for k in range(img.ndim, 3):
-      np.expand_dims(img, k)
-      np.expand_dims(diffeo, k)
+
+   #print diffeo.shape
    tooLarge = diffeo.min() < 0
    for k in range(img.ndim):
-      if (diffeo[k, :,:,:].max(axis=k) > img.shape[k]-1):
+      if np.any(diffeo[k, ...].max() > img.shape[k]-1):
          tooLarge = True
-         if tooLarge:
-            dfo = np.copy(diffeo)
-            dfo = max(df0, 0)
-            for k in range(img.ndim):
-               dfo[k, :, :, :] = min(dfo[k, :,:,:], img.shape[k]-1)
-      else:
-         dfo = diffeo
+   if tooLarge:
+      dfo = np.copy(diffeo)
+      dfo = np.maximum(dfo, 0)
+      for k in range(img.ndim):
+         dfo[k, ...] = np.minimum(dfo[k, ...], img.shape[k]-1)
+   else:
+      dfo = diffeo
 
-   res = np.copy(img)
-   if img.shape[0] > 1:
-      i0  = np.floor(dfo[0,:,:,:])
-      i1 = min(i0+1, img.shape[0]-1)
-      r0 = dfo[0,:,:,:] - i0
-      res = np.multiply(img[i0, :, :], 1-r0) + np.multiply(img[i1, :, :], r0)
-   if img.shape[1] > 1:
-      i0  = np.floor(dfo[1,:,:,:])
-      i1 = min(i0+1, img.shape[1]-1)
-      r0 = dfo[1,:,:,:] - i0
-      res = np.multiply(res[:, i0, :], 1-r0) + np.multiply(res[:, i1, :], r0)
-   if img.shape[2] > 1:
-      i0  = np.floor(dfo[2,:,:,:])
-      i1 = min(i0+1, img.shape[2]-1)
-      r0 = dfo[2,:,:,:] - i0
-      res = np.multiply(res[:, :, i0], 1-r0) + np.multiply(res[:, :, i1], r0)
+   I = np.int_(np.floor(dfo))
+   J = np.zeros(I.shape, dtype=np.int)
+   r = np.zeros(I.shape)
+   for k in range(ndim):
+      J[k, ...] = np.minimum(I[k, ...]+1, img.shape[k]-1) 
+      r[k, ...] = dfo[k, ...] - I[k, ...]
 
-   img = np.squeeze(img)
-   diffeo = np.squeeze(diffeo)
-   return np.squeeze(res)
+   if ndim ==1:
+      res = (1-r[0, ...]) * img[I[0, ...]] + r[0, ...] * img[J[0, ...]]
+   elif ndim==2:
+      res = ((1-r[1, ...]) * ((1-r[0, ...]) * img[I[0, ...], I[1,...]] + r[0, ...] * img[J[0, ...], I[1,...]])
+             + r[1, ...] * ((1-r[0, ...]) * img[I[0, ...], J[1,...]] + r[0, ...] * img[J[0, ...], J[1,...]]))
+   elif ndim==3:
+      res = ((1-r[2,...]) * ((1-r[1, ...]) * ((1-r[0, ...]) * img[I[0, ...], I[1,...], I[2, ...]] + r[0, ...] * img[J[0, ...], I[1,...], I[2,...]])
+                             + r[1, ...] * ((1-r[0, ...]) * img[I[0, ...], J[1,...], I[2, ...]] + r[0, ...] * img[J[0, ...], J[1,...], I[2,...]]))
+            + r[2,...] * ((1-r[1, ...]) * ((1-r[0, ...]) * img[I[0, ...], I[1,...], J[2, ...]] + r[0, ...] * img[J[0, ...], I[1,...], J[2,...]])
+                           + r[1, ...] * ((1-r[0, ...]) * img[I[0, ...], J[1,...], J[2, ...]] + r[0, ...] * img[J[0, ...], J[1,...], J[2,...]])))
+   else:
+      print 'interpolate only in dimension 1 to 3'
+      return
+
+   return res
+
+def multilinInterpGradient(img, diffeo):
+   ndim = img.ndim
+   if ndim > 3:
+      print 'interpolate only in dimension 1 to 3'
+      return
+
+   #print diffeo.shape
+   tooLarge = diffeo.min() < 0
+   for k in range(img.ndim):
+      if np.any(diffeo[k, ...].max() > img.shape[k]-1):
+         tooLarge = True
+   if tooLarge:
+      dfo = np.copy(diffeo)
+      dfo = np.maximum(dfo, 0)
+      for k in range(img.ndim):
+         dfo[k, ...] = np.minimum(dfo[k, ...], img.shape[k]-1)
+   else:
+      dfo = diffeo
+
+   I = np.int_(np.floor(dfo))
+   J = np.zeros(I.shape, dtype=np.int)
+   r = np.zeros(I.shape)
+   for k in range(ndim):
+      J[k, ...] = np.minimum(I[k, ...]+1, img.shape[k]-1) 
+      r[k, ...] = dfo[k, ...] - I[k, ...]
+
+   if ndim ==1:
+      res = img[J[0, ...]] - img[I[0, ...]] 
+   elif ndim==2:
+      res = np.zeros(I.shape)
+      res[0,...] = ((1-r[1, ...]) * (-img[I[0, ...], I[1,...]] + img[J[0, ...], I[1,...]])
+             + r[1, ...] * (-img[I[0, ...], J[1,...]] + img[J[0, ...], J[1,...]]))
+      res[1, ...] = (- ((1-r[0, ...]) * img[I[0, ...], I[1,...]] + r[0, ...] * img[J[0, ...], I[1,...]])
+             + ((1-r[0, ...]) * img[I[0, ...], J[1,...]] + r[0, ...] * img[J[0, ...], J[1,...]]))
+   elif ndim==3:
+      res = np.zeros(np.insert(img.shape, 0, 3))
+      res[0,...] = ((1-r[2,...]) * ((1-r[1, ...]) * (-img[I[0, ...], I[1,...], I[2, ...]] + img[J[0, ...], I[1,...], I[2,...]])
+                             + r[1, ...] * (-img[I[0, ...], J[1,...], I[2, ...]] + img[J[0, ...], J[1,...], I[2,...]]))
+            + r[2,...] * ((1-r[1, ...]) * (- img[I[0, ...], I[1,...], J[2, ...]] + img[J[0, ...], I[1,...], J[2,...]])
+                           + r[1, ...] * (-img[I[0, ...], J[1,...], J[2, ...]] + img[J[0, ...], J[1,...], J[2,...]])))
+      res[1, ...] = ((1-r[2,...]) * (-((1-r[0, ...]) * img[I[0, ...], I[1,...], I[2, ...]] + r[0, ...] * img[J[0, ...], I[1,...], I[2,...]])
+                             + ((1-r[0, ...]) * img[I[0, ...], J[1,...], I[2, ...]] + r[0, ...] * img[J[0, ...], J[1,...], I[2,...]]))
+            + r[2,...] * (-((1-r[0, ...]) * img[I[0, ...], I[1,...], J[2, ...]] + r[0, ...] * img[J[0, ...], I[1,...], J[2,...]])
+                           + ((1-r[0, ...]) * img[I[0, ...], J[1,...], J[2, ...]] + r[0, ...] * img[J[0, ...], J[1,...], J[2,...]])))
+      res[2, ...] = (-((1-r[1, ...]) * ((1-r[0, ...]) * img[I[0, ...], I[1,...], I[2, ...]] + r[0, ...] * img[J[0, ...], I[1,...], I[2,...]])
+                             + r[1, ...] * ((1-r[0, ...]) * img[I[0, ...], J[1,...], I[2, ...]] + r[0, ...] * img[J[0, ...], J[1,...], I[2,...]]))
+            + ((1-r[1, ...]) * ((1-r[0, ...]) * img[I[0, ...], I[1,...], J[2, ...]] + r[0, ...] * img[J[0, ...], I[1,...], J[2,...]])
+                           + r[1, ...] * ((1-r[0, ...]) * img[I[0, ...], J[1,...], J[2, ...]] + r[0, ...] * img[J[0, ...], J[1,...], J[2,...]])))
+   else:
+      print 'interpolate only in dimension 1 to 3'
+      return
+
+   return res
 
 
 # Computes gradient
@@ -258,9 +360,6 @@ def gradient(img, resol=None):
    if img.ndim > 3:
       print 'gradient only in dimension 1 to 3'
       return
-   for k in range(img.ndim, 3):
-      np.expand_dims(img, k)
-      np.expand_dims(diffeo, k)
 
    if img.ndim == 3:
       if resol == None:

@@ -81,7 +81,89 @@ class CurveMatching(curveMatching.CurveMatching):
             else:
                 os.mkdir(outputDir)
 
+        if self.dim == 2:
+            xmin = 1e10
+            xmax = -1e10
+            ymin = 1e10
+            ymax = -1e10
+            for kk in range(len(self.fv0)):
+                xmin = min(xmin ,self.fv0[kk].vertices[:,0].min(), self.fv1[kk].vertices[:,0].min())
+                xmax = max(xmax, self.fv0[kk].vertices[:,0].max(), self.fv1[kk].vertices[:,0].max())
+                ymin = min(ymin, self.fv0[kk].vertices[:,1].min(), self.fv1[kk].vertices[:,1].min())
+                ymax = max(ymax, self.fv0[kk].vertices[:,1].max(), self.fv1[kk].vertices[:,1].max())
+            dx = 0.01*(xmax-xmin)
+            dy = 0.01*(ymax-ymin)
+            dxy = min(dx,dy)
+            [x,y] = np.mgrid[(xmin-10*dxy):(xmax+10*dxy):dxy, (ymin-10*dxy):(ymax+10*dxy):dxy]
+            gridDef = grid.Grid(gridPoints=(x,y))
 
+            self.gridDef = []
+            self.gridxy = []
+            self.inGrid = []
+            Kout = np.ones(gridDef.vertices.shape[0])
+
+            for fk in range(len(self.fv0)):
+                vdisc = np.zeros(self.fv0[fk].vertices.shape)
+                vdisc0 = np.zeros(self.fv0[fk].vertices.shape)
+                vdisc[:,0] = xmin + dxy * (np.floor(0.5+(self.fv0[fk].vertices[:,0] - xmin)/dxy))
+                vdisc[:,1] = ymin + dxy * (np.floor(0.5+(self.fv0[fk].vertices[:,1] - ymin)/dxy))
+                #print vdisc, self.fv0[fk].vertices
+                firstFound = - np.ones(vdisc.shape[0], dtype=np.int)
+                vdisc0[0, :] = vdisc[0,:]
+                firstFound[0] = 0
+                k0 = 1 
+                for k in range(1,vdisc.shape[0]):
+                    d = ((vdisc[k, :] - vdisc0[0:k0, :])**2).sum(axis=1)
+                    #print d
+                    kk = np.nonzero(d < 1e-10)
+                    #print k, k0, kk[0]
+                    if len(kk[0])>0:
+                        firstFound[k] = kk[0][0]
+                    else:
+                        vdisc0[k0, :] = vdisc[k, :]
+                        firstFound[k] = k0
+                        k0 += 1
+
+                vdisc0 = vdisc0[0:k0, :]
+                fdisc = np.zeros(self.fv0[fk].faces.shape,dtype=np.int)
+                k0 = 0
+                for k in range(self.fv0[fk].faces.shape[0]):
+                    if firstFound[self.fv0[fk].faces[k, 0]] != firstFound[self.fv0[fk].faces[k,1]]:
+                        fdisc[k0, 0] = firstFound[self.fv0[fk].faces[k, 0]]
+                        fdisc[k0, 1] = firstFound[self.fv0[fk].faces[k, 1]]
+                        k0 += 1
+                fv = curves.Curve(FV=(fdisc,vdisc0))
+
+                gr = grid.Grid()
+                gr.copy(gridDef)
+                D = gr.signedDistPolygon(fv) ;
+                print D.min(), D.max(), dxy
+                K = D < 1e-10 ; #gr.inPolygon(self.fv0[kk])
+                gr.restrict(K)
+                self.inGrid.append(K)
+                self.gridDef.append(gr)
+                self.gridxy.append(self.gridDef[-1].vertices)
+                if np.fabs((fv.vertices[fv.faces[:,1]]- fv.vertices[fv.faces[:,0]]).sum(axis=0)).sum() < 0.0001:
+                    print 'closed curve' 
+                    K1 = D > - 1e-10 ;
+                    Kout = np.multiply(Kout, K1)
+                else:
+                    print 'open curve'
+                    #print self.fv0[kk].vertices[self.fv0[kk].faces[:,1]]- self.fv0[kk].vertices[self.fv0[kk].faces[:,0]]
+            gr = grid.Grid()
+            gr.copy(gridDef)
+            gr.restrict(np.int_(Kout))
+            self.gridDef.append(gr)
+            self.gridxy.append(self.gridDef[-1].vertices)
+            self.gridAll = gridDef       
+            self.inGrid.append(np.int_(Kout)) 
+
+                #print self.fv0[fk].vertices.shape
+
+                #print self.fv0[0].vertices.shape
+                
+
+                        
         self.fvDef = [] 
         self.fvDefB = [] 
         for fv in self.fv0:
@@ -167,40 +249,19 @@ class CurveMatching(curveMatching.CurveMatching):
             npt = npt1
         self.xt.append(np.tile(self.x0[self.ncurve], [self.Tsize+1, 1, 1]))
 
-        if self.dim == 2:
-            xmin = 1e10
-            xmax = -1e10
-            ymin = 1e10
-            ymax = -1e10
-            for kk in range(self.ncurve):
-                xmin = min(xmin ,self.fv0[kk].vertices[:,0].min(), self.fv1[kk].vertices[:,0].min())
-                xmax = max(xmax, self.fv0[kk].vertices[:,0].max(), self.fv1[kk].vertices[:,0].max())
-                ymin = min(ymin, self.fv0[kk].vertices[:,1].min(), self.fv1[kk].vertices[:,1].min())
-                ymax = max(ymax, self.fv0[kk].vertices[:,1].max(), self.fv1[kk].vertices[:,1].max())
-            dx = 0.025*(xmax-xmin)
-            dy = 0.025*(ymax-ymin)
-            dxy = min(dx,dy)
-            [x,y] = np.mgrid[(xmin-10*dxy):(xmax+10*dxy):dxy, (ymin-10*dxy):(ymax+10*dxy):dxy]
-            gridDef = grid.Grid(gridPoints=(x,y))
-
-            self.gridDef = []
-            self.gridxy = []
-            Kout = np.ones(gridDef.vertices.shape[0])
-            for kk in range(self.ncurve):
-                gr = grid.Grid()
-                gr.copy(gridDef)
-                K = gr.inPolygon(self.fv0[kk])
-                gr.restrict(K)
-                self.gridDef.append(gr)
-                self.gridxy.append(self.gridDef[-1].vertices)
-                Kout = np.multiply(Kout, 1-K)
-            gr = grid.Grid()
-            gr.copy(gridDef)
-            gr.restrict(np.int_(Kout))
-            self.gridDef.append(gr)
-            self.gridxy.append(self.gridDef[-1].vertices)
-            
-                
+        #if self.dim == 2:
+            # xmin = 1e10
+            # xmax = -1e10
+            # ymin = 1e10
+            # ymax = -1e10
+            # for kk in range(self.ncurve):
+            #     xmin = min(xmin ,self.fv0[kk].vertices[:,0].min(), self.fv1[kk].vertices[:,0].min())
+            #     xmax = max(xmax, self.fv0[kk].vertices[:,0].max(), self.fv1[kk].vertices[:,0].max())
+            #     ymin = min(ymin, self.fv0[kk].vertices[:,1].min(), self.fv1[kk].vertices[:,1].min())
+            #     ymax = max(ymax, self.fv0[kk].vertices[:,1].max(), self.fv1[kk].vertices[:,1].max())
+            # dx = 0.01*(xmax-xmin)
+            # dy = 0.01*(ymax-ymin)
+            # dxy = min(dx,dy)
 
         self.typeConstraint = typeConstraint
 
@@ -320,7 +381,7 @@ class CurveMatching(curveMatching.CurveMatching):
                 nu /= np.sqrt((nu**2).sum(axis=1)).reshape([nu.shape[0], 1])
 
 
-                r = self.param.KparDiff.applyK(z, a, y=x) + np.dot(z, A.T) + b
+                r = self.param.KparDiff.applyK(x, a, firstVar=z) + np.dot(z, A.T) + b
                 cval[t,npt:npt1] = np.squeeze(np.multiply(nu, r - r2[npt:npt1, :]).sum(axis=1))
                 npt = npt1
 
@@ -372,20 +433,20 @@ class CurveMatching(curveMatching.CurveMatching):
                 normNu = np.sqrt((nu**2).sum(axis=1))
                 nu /= normNu.reshape([nu.shape[0], 1])
 
-                dv = self.param.KparDiff.applyK(z, a, y=x) + np.dot(z, A.T) + b - r2[npt:npt1, :]
+                dv = self.param.KparDiff.applyK(x, a, firstVar=z) + np.dot(z, A.T) + b - r2[npt:npt1, :]
                 lmb[t, npt:npt1] = self.lmb[t, npt:npt1] - self.derCstrFun(np.multiply(nu, dv).sum(axis=1)/self.mu)/self.mu
                 #lnu = np.multiply(nu, np.mat(lmb[t, npt:npt1]).T)
                 lnu = np.multiply(nu, lmb[t, npt:npt1].reshape([self.npt[k], 1]))
                 #print lnu.shape
-                dxcval[k][t] = self.param.KparDiff.applyDiffKT(x, [a], [lnu], y=z)
-                dxcval[self.ncurve][t][npt:npt1, :] += (self.param.KparDiff.applyDiffKT(z, [lnu], [a], y=x)
-                                         - self.param.KparDiffOut.applyDiffKT(z, [lnu], [aB], y=zB))
-                dxcval[self.ncurve][t] -= self.param.KparDiffOut.applyDiffKT(zB, [aB], [lnu], y=z)
+                dxcval[k][t] = self.param.KparDiff.applyDiffKT(z, [a], [lnu], firstVar=x)
+                dxcval[self.ncurve][t][npt:npt1, :] += (self.param.KparDiff.applyDiffKT(x, [lnu], [a], firstVar=z)
+                                         - self.param.KparDiffOut.applyDiffKT(zB, [lnu], [aB], firstVar=z))
+                dxcval[self.ncurve][t] -= self.param.KparDiffOut.applyDiffKT(z, [aB], [lnu], firstVar=zB)
                 dxcval[self.ncurve][t][npt:npt1, :] += np.dot(lnu, A)
-                dacval[k][t] = self.param.KparDiff.applyK(x, lnu, y=z)
+                dacval[k][t] = self.param.KparDiff.applyK(z, lnu, firstVar=x)
                 if self.affineDim > 0:
                     dAffcval[k][t, :] = (np.dot(self.affineBasis.T, np.vstack([np.dot(lnu.T, z).reshape([dim2,1]), lnu.sum(axis=0).reshape([self.dim,1])]))).flatten()
-                dacval[self.ncurve][t] -= self.param.KparDiffOut.applyK(zB, lnu, y=z)
+                dacval[self.ncurve][t] -= self.param.KparDiffOut.applyK(z, lnu, firstVar=zB)
                 lv = np.multiply(dv, lmb[t, npt:npt1].reshape([self.npt[k],1]))
                 lv /= normNu.reshape([nu.shape[0], 1])
                 lv -= np.multiply(nu, np.multiply(nu, lv).sum(axis=1).reshape([nu.shape[0], 1]))
@@ -802,28 +863,7 @@ class CurveMatching(curveMatching.CurveMatching):
         #self.testConstraintTerm(self.xt, self.nut, self.at, self.Afft)
         self.iter += 1
         if self.iter %10 == 0:
-            nn = 0 ;
-            for k in range(self.ncurve):
-                if self.dim==2:
-                    A = self.affB.getTransforms(self.Afft[k])
-                    (xt,yt) = evol.landmarkDirectEvolutionEuler(self.x0[k], self.at[k], self.param.KparDiff, affine=A, withPointSet=self.gridxy[k])
-                    #print xt.shape, yt.shape
-                n1 = self.xt[k].shape[1] ;
-                for kk in range(self.Tsize+1):
-                    self.fvDefB[k].updateVertices(np.squeeze(self.xt[-1][kk, nn:nn+n1, :]))
-                    self.fvDefB[k].saveVTK(self.outputDir +'/'+ self.saveFile+str(k)+'Out'+str(kk)+'.vtk', scalars = Jt[-1][kk, nn:nn+n1], scal_name='Jacobian')
-                    self.fvDef[k].updateVertices(np.squeeze(self.xt[k][kk, :, :]))
-                    self.fvDef[k].saveVTK(self.outputDir +'/'+self.saveFile+str(k)+'In'+str(kk)+'.vtk', scalars = Jt[k][kk, :], scal_name='Jacobian')
-                    if self.dim == 2:
-                        self.gridDef[k].vertices = np.copy(yt[kk, :, :])
-                        self.gridDef[k].saveVTK(self.outputDir +'/grid'+str(k)+'In'+str(kk)+'.vtk')
-                nn += n1
-            if self.dim==2:
-                (xt,yt) = evol.landmarkDirectEvolutionEuler(self.x0[self.ncurve], self.at[self.ncurve], self.param.KparDiffOut, withPointSet=self.gridxy[-1])
-                #print xt.shape, yt.shape
-                for kk in range(self.Tsize+1):
-                    self.gridDef[-1].vertices = np.copy(yt[kk, :, :])
-                    self.gridDef[-1].saveVTK(self.outputDir +'/gridOut'+str(kk)+'.vtk')
+            self.printResults(Jt)
         else:
             nn = 0 
             for k in range(self.ncurve):
@@ -831,58 +871,70 @@ class CurveMatching(curveMatching.CurveMatching):
                 self.fvDefB[k].updateVertices(np.squeeze(self.xt[-1][-1, nn:nn+n1, :]))
                 self.fvDef[k].updateVertices(np.squeeze(self.xt[k][-1, :, :]))
                 nn += n1
+                
+    def printResults(self,Jt):
+        nn = 0 ;
+        yt0 = [] ;
+        for k in range(self.ncurve):
+            if self.dim==2:
+                A = self.affB.getTransforms(self.Afft[k])
+                (xt,yt) = evol.landmarkDirectEvolutionEuler(self.x0[k], self.at[k], self.param.KparDiff, affine=A, withPointSet=self.gridxy[k])
+                yt0.append(yt)
+                #print xt.shape, yt.shape
+            n1 = self.xt[k].shape[1] ;
+            for kk in range(self.Tsize+1):
+                self.fvDef[k].updateVertices(np.squeeze(self.xt[-1][kk, nn:nn+n1, :]))
+                self.fvDef[k].saveVTK(self.outputDir +'/'+ self.saveFile+str(k)+'Out'+str(kk)+'.vtk', scalars = Jt[-1][kk, nn:nn+n1], scal_name='Jacobian')
+                self.fvDef[k].updateVertices(np.squeeze(self.xt[k][kk, :, :]))
+                self.fvDef[k].saveVTK(self.outputDir +'/'+self.saveFile+str(k)+'In'+str(kk)+'.vtk', scalars = Jt[k][kk, :], scal_name='Jacobian')
+                if self.dim == 2:
+                    self.gridDef[k].vertices = np.copy(yt[kk, :, :])
+                    self.gridDef[k].saveVTK(self.outputDir +'/grid'+str(k)+'In'+str(kk)+'.vtk')
+            nn += n1
+            #print xt.shape, yt.shape
+            I1 = np.nonzero(self.inGrid[-1])
+        if self.dim==2:
+            (xt,yt) = evol.landmarkDirectEvolutionEuler(self.x0[self.ncurve], self.at[self.ncurve], self.param.KparDiffOut, withPointSet=self.gridxy[-1])
+            yt0.append(yt)
+            for kk in range(self.Tsize+1):
+                self.gridDef[-1].vertices = np.copy(yt[kk, :, :])
+                self.gridDef[-1].saveVTK(self.outputDir +'/gridOut'+str(kk)+'.vtk')
+                for k in range(self.ncurve+1):
+                    I1 = np.nonzero(self.inGrid[k])
+                    self.gridAll.vertices[I1] = np.copy(yt0[k][kk, ...])
+                self.gridAll.saveVTK(self.outputDir +'/gridAll'+str(kk)+'.vtk')
 
     def endOptim(self):
         if self.iter %10 > 0:
             (obj1, self.xt, Jt, self.cval) = self.objectiveFunDef(self.at, self.Afft, withJacobian=True)
-            nn = 0 ;
-            for k in range(self.ncurve):
-                if self.dim==2:
-                    A = self.affB.getTransforms(self.Afft[k])
-                    (xt,yt) = evol.landmarkDirectEvolutionEuler(self.x0[k], self.at[k], self.param.KparDiff, affine=A, withPointSet=self.gridxy[k])
-                    #print xt.shape, yt.shape
-                n1 = self.xt[k].shape[1] ;
-                for kk in range(self.Tsize+1):
-                    self.fvDef[k].updateVertices(np.squeeze(self.xt[-1][kk, nn:nn+n1, :]))
-                    self.fvDef[k].saveVTK(self.outputDir +'/'+ self.saveFile+str(k)+'Out'+str(kk)+'.vtk', scalars = Jt[-1][kk, nn:nn+n1], scal_name='Jacobian')
-                    self.fvDef[k].updateVertices(np.squeeze(self.xt[k][kk, :, :]))
-                    self.fvDef[k].saveVTK(self.outputDir +'/'+self.saveFile+str(k)+'In'+str(kk)+'.vtk', scalars = Jt[k][kk, :], scal_name='Jacobian')
-                    if self.dim == 2:
-                        self.gridDef[k].vertices = np.copy(yt[kk, :, :])
-                        self.gridDef[k].saveVTK(self.outputDir +'/grid'+str(k)+'In'+str(kk)+'.vtk')
-                nn += n1
-            if self.dim==2:
-                (xt,yt) = evol.landmarkDirectEvolutionEuler(self.x0[self.ncurve], self.at[self.ncurve], self.param.KparDiffOut, withPointSet=self.gridxy[-1])
-                #print xt.shape, yt.shape
-                for kk in range(self.Tsize+1):
-                    self.gridDef[-1].vertices = np.copy(yt[kk, :, :])
-                    self.gridDef[-1].saveVTK(self.outputDir +'/gridOut'+str(kk)+'.vtk')
+            self.printResults(Jt)
 
     def optimizeMatching(self):
 	self.coeffZ = 1.0
 	grd = self.getGradient(self.gradCoeff)
 	[grd2] = self.dotProduct(grd, [grd])
 
-        self.gradEps = np.sqrt(grd2) / 100
-        self.muEps = 1.0
+        self.gradEps = np.sqrt(grd2) / 1000
+        self.muEps = 0.01
         it = 0
-        while (self.muEps > 0.005) & (it<self.maxIter_al)  :
+        self.muEpsCount = 1;
+        while (self.muEpsCount < 20) & (it<self.maxIter_al)  :
             print 'Starting Minimization: gradEps = ', self.gradEps, ' muEps = ', self.muEps, ' mu = ', self.mu
             self.iter = 0 
             #self.coeffZ = max(1.0, self.mu)
             cg.cg(self, verb = self.verb, maxIter = self.maxIter_cg, TestGradient = self.testGradient, epsInit=0.1)
-            for t in range(self.Tsize+1):
-                if self.typeConstraint=='stitched':
-                    self.lmb[t, :, :] -= 0.5*self.derCstrFun(self.cval[t, :, :]/self.mu)/self.mu
-                else:
-                    self.lmb[t, :] -= 0.5*self.derCstrFun(self.cval[t, :]/self.mu)/self.mu
-            print 'mean lambdas', np.fabs(self.lmb).sum() / self.lmb.size
             if self.converged:
-                self.gradEps *= .5
                 if (((self.cval**2).sum()/self.cval.size) > self.muEps**2):
-                    self.mu *= 0.5
+                    self.mu *= 0.1
+                    self.gradEps *= 10
                 else:
-                    self.muEps = self.muEps /2
+                    self.gradEps *= .5
+                    for t in range(self.Tsize+1):
+                        self.lmb[t, ...] -= 0.5*self.derCstrFun(self.cval[t, ...]/self.mu)/self.mu
+                    print 'mean lambdas', np.fabs(self.lmb).sum() / self.lmb.size
+                    self.muEps = np.sqrt((self.cval**2).sum()/(1.5*self.cval.size))
+                    self.muEpsCount += 1
+                    #self.muEps /2
             # else:
             #     self.mu *= 0.9
             self.obj = None

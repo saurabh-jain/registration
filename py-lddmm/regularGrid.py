@@ -200,8 +200,14 @@ class RegularGrid(object):
 
 
     def create_vtk_sg(self):
-        self.sg = tvtk.StructuredGrid(dimensions=self.vtk_dim, \
-                                points=self.nodes)
+        # self.sg = tvtk.StructuredGrid(dimensions=self.vtk_dim, \
+        #                         points=self.nodes)
+        self.sg = vtkStructureGrid() 
+        self.sg.SetDimensions(self.vtk_dim)
+        points = vtkPoints()
+        
+        
+        self.sg.SetPoints(points)
 
     def create_vtk_fourier_sg(self):
         self.sg = tvtk.StructuredGrid(dimensions=self.vtk_dim, \

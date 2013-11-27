@@ -20,6 +20,8 @@ class Surface:
                     (mainPart, ext) = os.path.splitext(filename)
                     if ext == '.byu':
                         self.readbyu(filename)
+                    elif ext=='.off':
+                        self.readOFF(filename)
                     elif ext=='.vtk':
                         self.readVTK(filename)
                     else:
@@ -106,6 +108,18 @@ class Surface:
                 print 'Warning: vertex ', k, 'has no face; use removeIsolated'
         return AV, AF
 
+    def computeVertexNormals(self):
+        self.computeCentersAreas() 
+        normals = np.zeros(self.vertices.shape)
+        F = self.faces
+        for k in range(F.shape[0]):
+            normals[F[k,0]] += self.surfel[k]
+            normals[F[k,1]] += self.surfel[k]
+            normals[F[k,2]] += self.surfel[k]
+        af = np.sqrt( (normals**2).sum(axis=1))
+        normals /=af.reshape([self.vertices.shape[0],1])
+
+        return normals
          
 
     # Computes edges from vertices/faces
@@ -256,6 +270,16 @@ class Surface:
         # self.vertices = V
         # self.faces = np.int_(F[0:gf, :])
         # self.computeCentersAreas()
+        z= self.surfVolume()
+        if (z > 0):
+            self.flipFaces()
+            print 'flipping volume', z, self.surfVolume()
+
+    def flipFaces(self):
+        self.faces = self.faces[:, [0,2,1]]
+        self.computeCentersAreas()
+          
+
 
     def smooth(self, n=30, smooth=0.1):
         g = self.toPolyData()
@@ -344,7 +368,7 @@ class Surface:
         self.fromPolyData(g,scales)
         z= self.surfVolume()
         if (z > 0):
-            self.faces = self.faces[:, [0,2,1]]
+            self.flipFaces()
             print 'flipping volume', z, self.surfVolume()
 
         #print g
@@ -457,7 +481,7 @@ class Surface:
 
         z= self.surfVolume()
         if (z > 0):
-            self.faces = f[:, [0,2,1]]
+            self.flipFaces()
 
 
 
@@ -682,6 +706,43 @@ class Surface:
             z += np.linalg.det(v[c[:], :])/6
         return z
 
+    # Reads from .off file
+    def readOFF(self, offfile):
+        with open(offfile,'r') as f:
+            ln0 = readskip(f,'#')
+            ln = ln0.split()
+            if ln[0].lower() != 'off':
+                print 'Not OFF format'
+                return
+            ln = readskip(f,'#').split()
+            # read header
+            npoints = int(ln[0])  # number of vertices
+            nfaces = int(ln[1]) # number of faces
+                                #print ln, npoints, nfaces
+                        #fscanf(fbyu,'%d',1);		% number of edges
+                        #%ntest = fscanf(fbyu,'%d',1);		% number of edges
+            # read data
+            self.vertices = np.empty([npoints, 3])
+            for k in range(npoints):
+                ln = readskip(f,'#').split()
+                self.vertices[k, 0] = float(ln[0]) 
+                self.vertices[k, 1] = float(ln[1]) 
+                self.vertices[k, 2] = float(ln[2])
+
+            self.faces = np.int_(np.empty([nfaces, 3]))
+            for k in range(nfaces):
+                ln = readskip(f,'#').split()
+                if (int(ln[0]) != 3):
+                    print 'Reading only triangulated surfaces'
+                    return
+                self.faces[k, 0] = int(ln[1]) 
+                self.faces[k, 1] = int(ln[2]) 
+                self.faces[k, 2] = int(ln[3])
+
+        self.computeCentersAreas()
+
+
+        
     # Reads from .byu file
     def readbyu(self, byufile):
         with open(byufile,'r') as fbyu:
@@ -696,7 +757,7 @@ class Surface:
             for k in range(ncomponents):
                 fbyu.readline() # components (ignored)
             # read data
-            self.vertices = np.empty([npoints, 3]) ;
+            self.vertices = np.empty([npoints, 3])
             k=-1
             while k < npoints-1:
                 ln = fbyu.readline().split()
@@ -778,7 +839,7 @@ class Surface:
                     j=0
 
     # Saves in .vtk format
-    def saveVTK(self, fileName, scalars = None, normals = None, tensors=None, scal_name='scalars'):
+    def saveVTK(self, fileName, scalars = None, normals = None, tensors=None, scal_name='scalars', vectors=None, vect_name='vectors'):
         F = self.faces ;
         V = self.vertices ;
 
@@ -798,6 +859,11 @@ class Surface:
                 for ll in range(V.shape[0]):
                     #print scalars[ll]
                     fvtkout.write('\n {0: .5f}'.format(scalars[ll]))
+            if not (vectors==None):
+                fvtkout.write('\nVECTORS '+ vect_name +' float')
+                for ll in range(V.shape[0]):
+                    fvtkout.write('\n {0: .5f} {1: .5f} {2: .5f}'.format(vectors[ll, 0], vectors[ll, 1], vectors[ll, 2]))
+
             if not (normals == None):
                 fvtkout.write('\nNORMALS normals float')
                 for ll in range(V.shape[0]):
@@ -875,7 +941,7 @@ def currentNormDef(fvDef, fv1, KparDist):
     c2 = fv1.centers
     cr2 = fv1.surfel
     g11 = kfun.kernelMatrix(KparDist, c1)
-    g12 = kfun.kernelMatrix(KparDist, c1, c2)
+    g12 = kfun.kernelMatrix(KparDist, c2, c1)
     #print cr1-cr2
     obj = (np.multiply(np.dot(cr1,cr1.T), g11).sum() -
            2*np.multiply(np.dot(cr1, cr2.T), g12).sum())
@@ -896,10 +962,14 @@ def currentNormGradient(fvDef, fv1, KparDist):
     dim = c1.shape[1]
 
     g11 = kfun.kernelMatrix(KparDist, c1)
+    KparDist.hold()
     dg11 = kfun.kernelMatrix(KparDist, c1, diff=True)
+    KparDist.release()
     
-    g12 = kfun.kernelMatrix(KparDist, c1, c2)
-    dg12 = kfun.kernelMatrix(KparDist, c1, c2, diff=True)
+    g12 = kfun.kernelMatrix(KparDist, c2, c1)
+    KparDist.hold()
+    dg12 = kfun.kernelMatrix(KparDist, c2, c1, diff=True)
+    KparDist.release()
 
 
     z1 = g11*cr1 - g12 * cr2
@@ -949,7 +1019,7 @@ def measureNormDef(fvDef, fv1, KparDist):
     cr2 = fv1.surfel
     cr2 = np.mat(np.sqrt((cr2**2).sum(axis=1)+1e-10))
     g11 = kfun.kernelMatrix(KparDist, c1)
-    g12 = kfun.kernelMatrix(KparDist, c1, c2)
+    g12 = kfun.kernelMatrix(KparDist, c2, c1)
     #obj = (np.multiply(cr1*cr1.T, g11).sum() - 2*np.multiply(cr1*(cr2.T), g12).sum())
     obj = (cr1 * g11 * cr1.T).sum() - 2* (cr1 * g12 *cr2.T).sum()
     return obj
@@ -973,10 +1043,14 @@ def measureNormGradient(fvDef, fv1, KparDist):
     cr2 = np.divide(cr2, a2.T)
 
     g11 = kfun.kernelMatrix(KparDist, c1)
+    KparDist.hold()
     dg11 = kfun.kernelMatrix(KparDist, c1, diff=True)
+    KparDist.release()
     
-    g12 = kfun.kernelMatrix(KparDist, c1, c2)
-    dg12 = kfun.kernelMatrix(KparDist, c1, c2, diff=True)
+    g12 = kfun.kernelMatrix(KparDist, c2, c1)
+    KparDist.hold()
+    dg12 = kfun.kernelMatrix(KparDist, c2, c1, diff=True)
+    KparDist.release()
 
 
     z1 = g11*a1.T - g12 * a2.T
@@ -1009,6 +1083,14 @@ def measureNormGradient(fvDef, fv1, KparDist):
         px[I[k], :] = px[I[k], :]+dz1[k, :] -  crs[k, :]
 
     return 2*px
+
+
+def readskip(f, c):
+    ln0 = f.readline()
+    #print ln0
+    while (len(ln0) > 0 and ln0[0] == c):
+        ln0 = f.readline()
+    return ln0
 
 # class MultiSurface:
 #     def __init__(self, pattern):
