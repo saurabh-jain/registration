@@ -136,6 +136,92 @@ num_times,num_nodes,x,m,z,J,v)
 
 end subroutine shoot
 
+subroutine shoot_NoJ(dt,sfactor,kvs,kvo,khs,kho,alpha,x0,m0,z0,&
+num_times,num_nodes,x,m,z,v)
+  implicit none
+  integer :: num_nodes, num_times, kvo, kho
+  real(8) :: sfactor, dt
+  real(8) :: kvs, khs
+  real(8) :: x(num_nodes, 3, num_times)
+  real(8) :: x0(num_nodes, 3)
+  real(8) :: m(num_nodes, num_times)
+  real(8) :: m0(num_nodes)
+  real(8) :: z(num_nodes, 3, num_times)
+  real(8) :: z0(num_nodes, 3)
+  real(8) :: alpha(num_nodes)
+  real(8) :: v(num_nodes, 3, num_times)
+
+  real(8) :: kv_ut, kh_ut, Kv, Kv_diff, Kh, Kh_diff, lpt
+  real(8) :: zdz, kvz
+  real(8) :: x_diff(3)
+  integer :: t, k, l
+  real(8) :: dx(3), dz(3), dm, dJ
+  
+!f2py integer, intent(in) :: num_nodes, num_times, kvo, kho
+!f2py real(8), intent(in) :: sfactor, dt, kvs, khs
+!f2py real(8), intent(in), dimension(num_nodes, 3) :: x0
+!f2py real(8), intent(in), dimension(num_nodes) :: alpha 
+!f2py real(8), intent(in), dimension(num_nodes) :: m0
+!f2py real(8), intent(in), dimension(num_nodes, 3): z0
+!f2py real(8), intent(out), dimension(num_nodes, 3, num_times) :: x
+!f2py real(8), intent(out), dimension(num_nodes, num_times) :: J
+!f2py real(8), intent(out), dimension(num_nodes, num_times) :: m
+!f2py real(8), intent(out), dimension(num_nodes, 3, num_times) :: z
+!f2py real(8), intent(out), dimension(num_nodes, 3, num_times) :: v
+
+  x(:,:,1) = x0
+  m(:,1) = m0
+  z(:,:,1) = z0
+  
+  do t = 1, num_times-1, 1
+   !$omp parallel do private(k,kv_ut,kh_ut,lpt,Kv,Kv_diff,Kh,Kh_diff, &
+   !$omp& zdz,x_diff,kvz,dx,dz,dm,dJ) shared (alpha,x,m,z,J,kvs,khs,kvo,kho)
+	do k = 1, num_nodes, 1
+	  dx=0
+	  dz=0
+	  dm=0
+	
+	  do l=1, num_nodes, 1
+	  
+		kv_ut = sqrt((x(k,1,t)-x(l,1,t))**2 + (x(k,2,t)-x(l,2,t))**2) / kvs 
+		kh_ut = sqrt((x(k,1,t)-x(l,1,t))**2 + (x(k,2,t)-x(l,2,t))**2) / khs 
+		
+		if (k==l) then
+		  Kv = 1.0
+		  Kv_diff = -1.0/((2*kvo-1)*2*kvs*kvs)
+		  Kh = 1.0
+		  Kh_diff = -1.0/((2*kho-1)*2*khs*khs)
+		else
+		  lpt = (105 + 105*kv_ut + 45*kv_ut**2 + 10*kv_ut**3 + kv_ut**4)/105
+		  Kv = lpt * exp(-1.0*kv_ut)
+		  lpt = (105 + 105*kh_ut + 45*kh_ut**2 + 10*kh_ut**3 + kh_ut**4)/105
+		  Kh = lpt * exp(-1.0*kh_ut)
+		  lpt = (15 + 15*kv_ut + 6*kv_ut**2 + kv_ut**3)/105
+		  Kv_diff = -lpt * exp(-1.0*kv_ut)/(2*kvs**2)
+		  lpt = (15 + 15*kh_ut + 6*kh_ut**2 + kh_ut**3)/105
+		  Kh_diff = -lpt * exp(-1.0*kh_ut)/(2*khs**2)
+		end if
+		
+		dx = dx + sfactor*Kv*alpha(l)*z(l,:,t)
+		zdz = z(l,1,t)*z(k,1,t) + z(l,2,t)*z(k,2,t) + z(l,3,t)*z(k,3,t)
+		x_diff = x(k,:,t)-x(l,:,t)
+		dz = dz - sfactor*Kv_diff*alpha(l)*zdz*2* &
+				  x_diff - Kh_diff*alpha(l)*2*x_diff
+		dm = dm + 0*sfactor*Kv*alpha(l)*zdz + Kh*alpha(l)
+		kvz = dot_product(x_diff,z(l,:,t))
+
+	end do !l
+	x(k,:,t+1) = x(k,:,t) + dt*dx
+	v(k,:,t) = dx
+	m(k,t+1) = m(k,t) + dt*dm
+	z(k,:,t+1) = z(k,:,t) + dt*dz
+	end do !k
+	!$omp end parallel do
+
+  end do !t
+
+end subroutine shoot_NoJ
+
 subroutine adjointSystem(dt,sfactor,kvs,kvo,khs,kho,alpha,x,m,z,J,&
 dx,dm,dJ,num_times,num_nodes,ealpha,ex)
   implicit none
@@ -265,6 +351,119 @@ dx,dm,dJ,num_times,num_nodes,ealpha,ex)
 
 end subroutine adjointSystem
 
+subroutine adjointSystem_NoJ(dt,sfactor,kvs,kvo,khs,kho,alpha,x,m,z,&
+dx,dm,num_times,num_nodes,ealpha,ex)
+  implicit none
+  integer :: num_nodes, num_times, kvo, kho
+  real(8) :: sfactor, dt
+  real(8) :: kvs, khs
+  real(8) :: x(num_nodes, 3, num_times)
+  real(8) :: x0(num_nodes, 3)
+  real(8) :: m(num_nodes, num_times)
+  real(8) :: m0(num_nodes)
+  real(8) :: z(num_nodes, 3, num_times)
+  real(8) :: z0(num_nodes, 3)
+  real(8) :: alpha(num_nodes)
+  real(8) :: dx(num_nodes,3)
+  real(8) :: dm(num_nodes)
+  real(8) :: ex(num_nodes,3,num_times)
+  real(8) :: ez(num_nodes,3,num_times)
+  real(8) :: em(num_nodes,num_times)
+  real(8) :: ealpha(num_nodes,num_times)
+  
+  real(8) :: kv_ut, kh_ut, Kv, Kv_diff, Kh, Kh_diff, lpt
+  real(8) :: Kv_diff2, Kh_diff2
+  real(8) :: x_diff(3), x_diff_sqr, zdz
+  integer :: t, k, l
+  real(8) :: dex(3), dez(3), dem, deJ, dea
+  
+!f2py integer, intent(in) :: num_nodes, num_times, kvo, kho
+!f2py real(8), intent(in) :: sfactor, dt, kvs, khs
+!f2py real(8), intent(in), dimension(num_nodes) :: alpha 
+!f2py real(8), intent(in), dimension(num_nodes, 3, num_times) :: x
+!f2py real(8), intent(in), dimension(num_nodes, num_times) :: J
+!f2py real(8), intent(in), dimension(num_nodes, num_times) :: m
+!f2py real(8), intent(in), dimension(num_nodes, 3, num_times) :: z
+!f2py real(8), intent(out), dimension(num_nodes, num_times) :: ealpha 
+!f2py real(8), intent(out), dimension(num_nodes, 3, num_times) :: ex 
+
+  ex(:,:,num_times) = dx
+  em(:,num_times) = dm
+  ealpha(:,num_times) = 0
+  ez(:,:,num_times) = 0
+  
+  do t=num_times,2,-1
+   !$omp parallel do private(k,kv_ut,kh_ut,lpt,Kv,Kv_diff,Kh,Kh_diff, &
+   !$omp& Kv_diff2,Kh_diff2,dex,dez,dea,deJ, & 
+   !$omp& zdz,x_diff) shared (dt,alpha,x,m,z,J,ex,ez,em,eJ,ealpha, &
+   !$omp& kvs,khs,kvo,kho)
+	do k=1,num_nodes,1
+	  dex = 0
+	  dez = 0
+	  dea = 0
+	  do l=1,num_nodes,1
+  
+		kv_ut = sqrt((x(k,1,t)-x(l,1,t))**2 + (x(k,2,t)-x(l,2,t))**2) / kvs 
+		kh_ut = sqrt((x(k,1,t)-x(l,1,t))**2 + (x(k,2,t)-x(l,2,t))**2) / khs 
+		
+		if (k==l) then
+		  Kv = 1.0
+		  Kv_diff = -1.0/((2*kvo-1)*2*kvs*kvs)
+		  Kh = 1.0
+		  Kh_diff = -1.0/((2*kho-1)*2*khs*khs)
+		  Kv_diff2 = 1.0/((35)*4*kvs**4)
+		  Kh_diff2 = 1.0/((35)*4*khs**4)
+		else
+		  lpt = (105 + 105*kv_ut + 45*kv_ut**2 + 10*kv_ut**3 + kv_ut**4)/105
+		  Kv = lpt * exp(-1.0*kv_ut)
+		  lpt = (105 + 105*kh_ut + 45*kh_ut**2 + 10*kh_ut**3 + kh_ut**4)/105
+		  Kh = lpt * exp(-1.0*kh_ut)
+		  lpt = (15 + 15*kv_ut + 6*kv_ut**2 + kv_ut**3)/105
+		  Kv_diff = -lpt * exp(-1.0*kv_ut)/(2*kvs**2)
+		  lpt = (15 + 15*kh_ut + 6*kh_ut**2 + kh_ut**3)/105
+		  Kh_diff = -lpt * exp(-1.0*kh_ut)/(2*khs**2)
+		  lpt = (3 + 3*kv_ut + kv_ut**2)/105
+		  Kv_diff2 = lpt * exp(-1.0*kv_ut)/(4*kvs**4)
+		  lpt = (3 + 3*kh_ut + kh_ut**2)/105
+		  Kh_diff2 = lpt * exp(-1.0*kh_ut)/(4*khs**4)
+		end if
+  
+		x_diff = x(k,:,t)-x(l,:,t)
+		zdz = dot_product(z(k,:,t),z(l,:,t))
+		dex = dex + (-sfactor)*( &
+			Kv_diff*2.0*x_diff*alpha(l)*dot_product(z(l,:,t),ex(k,:,t)) &
+			+ Kv_diff*2.0*x_diff*alpha(k)*dot_product(z(k,:,t),ex(l,:,t)) ) &
+			+ sfactor*( &
+			alpha(l)*zdz*(x_diff*Kv_diff2*4*dot_product(x_diff,ez(k,:,t)) &
+			+2*Kv_diff*ez(k,:,t)) &
+			+ alpha(k)*zdz*(-1*x_diff*Kv_diff2*4*dot_product(x_diff,ez(l,:,t)) &
+			-2*Kv_diff*ez(l,:,t)) ) &
+			+ alpha(l)*(x_diff*Kh_diff2*4*dot_product(x_diff,ez(k,:,t)) &
+			+2*Kh_diff*ez(k,:,t)) &
+			+ alpha(k)*(-1*x_diff*Kh_diff2*4*dot_product(x_diff,ez(l,:,t)) &
+			-2*Kh_diff*ez(l,:,t)) & 
+			- alpha(l)*Kh_diff*2*x_diff*em(k,t) &
+			- alpha(k)*Kh_diff*2*x_diff*em(l,t) 
+		
+		dez = dez + (-sfactor)*Kv*alpha(k)*ex(l,:,t) & 
+			+ sfactor*alpha(l)*z(l,:,t)*Kv_diff*2*dot_product(x_diff,ez(k,:,t)) &
+			+ sfactor*alpha(k)*z(l,:,t)*Kv_diff*2*dot_product(-1*x_diff,ez(l,:,t)) 
+			
+		dea = dea + (-sfactor)*dot_product(z(k,:,t),Kv*ex(l,:,t)) & 
+			+ sfactor*dot_product(z(k,:,t),z(l,:,t))*Kv_diff*2* &
+			dot_product(-1*x_diff,ez(l,:,t)) &
+			+ Kh_diff*2*dot_product(-1*x_diff,ez(l,:,t)) &
+			- Kh*em(l,t) 
+	  end do ! l
+	ex(k,:,t-1) = ex(k,:,t) - dt*dex
+	ez(k,:,t-1) = ez(k,:,t) - dt*dez
+	ealpha(k,t-1) = ealpha(k,t) - dt*dea
+	em(k,t-1) = em(k,t)
+	end do ! k
+	!$omp end parallel do
+  end do ! t
+
+end subroutine adjointSystem_NoJ
 
 subroutine applyK(x, y, beta, sig, ord, num_nodes, f)
   implicit none

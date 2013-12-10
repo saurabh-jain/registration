@@ -5,18 +5,19 @@ import sys
 import os
 import diffeomorphisms
 
-compute_path = os.environ["PYLDDMM_COMPUTE_PATH"]
+compute_path = os.environ["HOME"] + '/Development/Results/py-meta'
 log_file_name = "metamorphosis.log"
 compute_output_dir = compute_path + "/output/smoothImage_meta/"
-image_dir = compute_path + "/input/meta_images/test_images/"
-inho_image_dir =  compute_path + "/input/meta_images/inho/"
+image_dir =  os.environ["HOME"] + "/Development/Data/meta_images/test_images/"
+inho_image_dir =  compute_path + "/Development/Data/meta_images/inho/"
 phantoms_image_dir = compute_path + "/input/meta_images/phantoms/"
-file_write_iter = 100
+file_write_iter = 25
 
 def configure(sim, config_name):
     sim.config_name = config_name
     modname = globals()['__name__']
     module = sys.modules[modname]
+    print module
     method = getattr(module, config_name)
     method(sim)
 
