@@ -306,7 +306,8 @@ class SmoothImageMeta(object):
     def endOfIteration(self):
         self.optimize_iteration += 1
         if (self.optimize_iteration % self.write_iter == 0):
-            self.writeData("iter%d" % (self.optimize_iteration))
+            #self.writeData("iter%d" % (self.optimize_iteration))
+            self.writeData("iter")
     # ***********************************************************************
     # end of non-linear cg callbacks
     # ***********************************************************************
@@ -323,6 +324,7 @@ class SmoothImageMeta(object):
         self.m = m
         self.z = z
         self.v = v
+        #print numpy.fabs(v).max()
 
     def shoot_numpy(self):
         rg, N, T = self.getSimData()

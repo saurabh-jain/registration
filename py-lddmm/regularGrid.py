@@ -234,7 +234,7 @@ class RegularGrid(object):
             self.sg.GetPointData().SetVectors(var)
             self.sg.GetPointData().GetVectors().SetName(name)
             return
-        print var.shape
+        #print var.shape
         var2 = vtkFloatArray()
         if len(var.shape)== 2:
             var2.SetNumberOfComponents(3)
