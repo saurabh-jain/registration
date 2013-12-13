@@ -42,11 +42,12 @@ class SplineInterp(object):
     """
     Implements the RKHS spline interpolation problem using cg
     """
-    def __init__(self, rg, K, khs, kho, verbose=False):
+    def __init__(self, rg, khs, kho, h, verbose=False):
         self.rg = rg
         self.cg_iter = 0
         self.khs = khs
         self.kho = kho
+        self.h = h 
         self.verbose_logging = verbose
         #mat = self.K.precompute(self.rg.nodes, diff=False)
         #self.nm = numpy.sqrt(numpy.power(mat,2).sum())
@@ -68,7 +69,7 @@ class SplineInterp(object):
         energy = .5 * numpy.dot(sol_k, ka) - \
                              numpy.dot(sol_k, self.h)
 
-        if (self.verbose_output):
+        if (self.verbose_logging):
             logging.info("cg iteration %d: energy %f" % (self.cg_iter, energy))
             rg = self.rg
             rg.create_vtk_sg()
@@ -104,6 +105,7 @@ class SmoothImageMeta(object):
         self.letter_match = letter_match
 
         smoothImageConfig.configure(self, config_name)
+        self.khSmooth = self.khs
 
         self.rg = regularGrid.RegularGrid(self.dim, self.num_points, \
                              self.domain_max, self.dx, "meta")
@@ -138,9 +140,10 @@ class SmoothImageMeta(object):
         rg.vtk_write(0, "images", output_dir=self.output_dir)
 
         if self.spline_interp:
-            si = SplineInterp(rg, self.KH, self.template_in)
+            self.khSmooth = self.khs
+            si = SplineInterp(rg, self.khs, self.kho, self.template_in)
             self.dual_template = si.minimize()
-            si = SplineInterp(rg, self.KH, self.target_in)
+            si = SplineInterp(rg, self.khs, self.kho, self.target_in)
             self.dual_target = si.minimize()
         else:
             self.dual_template = self.template_in.copy()
@@ -148,16 +151,16 @@ class SmoothImageMeta(object):
 
         (templ, dtempl) = kernelMatrix_fort.applyk_and_diff( \
                     rg.nodes, rg.nodes, self.dual_template,
-                    self.khs, self.kho, self.rg.num_nodes)
+                    self.khSmooth, self.kho, self.rg.num_nodes)
         self.target = kernelMatrix_fort.applyk( \
                     rg.nodes, rg.nodes, self.dual_target,
-                    self.khs, self.kho, self.rg.num_nodes)
+                    self.khSmooth, self.kho, self.rg.num_nodes)
         self.template = templ
         self.D_template = dtempl
 
         if True:
             temp = numpy.zeros(rg.num_nodes)
-            temp[50] = 1.
+            temp[rg.num_nodes/2 + rg.num_points[1]/2] = 1.
             kvt = kernelMatrix_fort.applyk( \
                         rg.nodes, rg.nodes, temp,
                         self.kvs, self.kvo, self.rg.num_nodes)
@@ -195,7 +198,7 @@ class SmoothImageMeta(object):
         interp_loc = self.xt[:,:,T-1].copy()
         interp_target = kernelMatrix_fort.applyk( \
                     interp_loc, rg.nodes, self.dual_target,
-                    self.khs, self.kho, self.rg.num_nodes)
+                    self.khSmooth, self.kho, self.rg.num_nodes)
         diff = self.m[:,T-1] - interp_target
         objFun = numpy.multiply(diff, diff).sum()
         objFun *= rg.element_volumes[0]
@@ -257,7 +260,7 @@ class SmoothImageMeta(object):
 
         (interp_target, d_interp) = kernelMatrix_fort.applyk_and_diff( \
                     interp_loc, rg.nodes, self.dual_target,
-                    self.khs, self.kho, self.rg.num_nodes)
+                    self.khSmooth, self.kho, self.rg.num_nodes)
 
         diff = self.m[:,T-1] - interp_target
 
@@ -280,7 +283,7 @@ class SmoothImageMeta(object):
 
             x1 = self.xt[:,:,T-1] + eps * xr
             m1 = self.m[:,T-1] + eps * mr
-            interp_target = self.KH.applyK(x1, self.dual_target, y=rg.nodes)
+            interp_target = kernelMatrix_fort.applyk(x1, rg.nodes, self.dual_target, self.khSmooth, self.kho, self.rg.num_nodes)
             diff = m1 - interp_target.real
             objFun = numpy.multiply(diff, diff).sum() * self.g_eps * \
                                          rg.element_volumes[0]
@@ -393,17 +396,17 @@ class SmoothImageMeta(object):
     def adjointSystem(self, dx, dm):
         rg, N, T = self.getSimData()
 
-        ealpha, ex = kernelMatrix_fort.adjointsystem_noj( \
+        ealpha, ex, ez = kernelMatrix_fort.adjointsystem_noj( \
                     self.dt, self.sfactor, self.kvs, self.kvo, \
                     self.khs, self.kho, \
                     self.alpha, self.xt, self.m, self.z, \
                     dx, dm, self.num_times, rg.num_nodes)
-
-        if self.spline_interp:
-            si = SplineInterp(rg, self.KH, ealpha[:,0])
+                    #if self.spline_interp:
+        if False:
+            si = SplineInterp(rg, self.KH, ealpha)
             ge = si.minimize()
         else:
-            ge = ealpha[:,0]
+            ge = ealpha
         return ge, ex
 
     def adjointSystem_numpy(self, dx, dm):
@@ -584,9 +587,19 @@ class SmoothImageMeta(object):
 
     def writeData(self, name):
         rg, N, T = self.getSimData()
+        print self.xt.shape
+        yt = kernelMatrix_fort.backwardflow(self.dt, self.sfactor, self.kvs, \
+                                            self.kvo, self.alpha, self.xt, self.z,\
+                                            rg.nodes, self.num_times, self.rg.num_nodes)
         for t in range(T):
             rg.create_vtk_sg()
             xtc = self.xt[:,:,t].copy()
+            interp_target = kernelMatrix_fort.applyk( \
+                            xtc, rg.nodes, self.dual_target,
+                            self.khSmooth, self.kho, self.rg.num_nodes)
+            meta = kernelMatrix_fort.applyk( \
+                            yt[:, :, t], rg.nodes, self.m[:,t],
+                            self.khSmooth, self.kho, self.rg.num_nodes)
             xtc[:,0] = xtc[:,0] - self.id_x
             xtc[:,1] = xtc[:,1] - self.id_y
             rg.add_vtk_point_data(self.xt[:,:,t], "x")
@@ -597,6 +610,8 @@ class SmoothImageMeta(object):
             rg.add_vtk_point_data(self.v[...,t], "v")
             rg.add_vtk_point_data(self.template, "template")
             rg.add_vtk_point_data(self.target, "target")
+            rg.add_vtk_point_data(interp_target.real, "deformedTarget")
+            rg.add_vtk_point_data(meta.real, "metamorphosis")
             rg.vtk_write(t, name, output_dir=self.output_dir)
 
 if __name__ == "__main__":

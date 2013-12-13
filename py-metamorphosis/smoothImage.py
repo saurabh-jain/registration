@@ -290,7 +290,7 @@ class SmoothImageMeta(object):
             x1 = self.xt[:,:,T-1] + eps * xr
             m1 = self.m[:,T-1] + eps * mr
             J1 = self.J[:,T-1] + eps * jr
-            interp_target = self.KH.applyK(x1, self.dual_target, y=rg.nodes)
+            interp_target = kernelMatrix_fort.applyk(x1, rg.nodes, self.dual_target, self.khs, self.kho, self.rg.num_nodes)
             diff = m1 - interp_target.real
             sqrtJ = numpy.sqrt(J1)
             objFun = numpy.dot(diff*sqrtJ, sqrtJ*diff) * self.g_eps * \
@@ -424,7 +424,7 @@ class SmoothImageMeta(object):
             si = SplineInterp(rg, self.KH, ealpha[:,0])
             ge = si.minimize()
         else:
-            ge = ealpha[:,0]
+            ge = ealpha
         return ge, ex
 
     def adjointSystem_numpy(self, dx, dm, dJ):
@@ -643,7 +643,7 @@ class SmoothImageMeta(object):
         return ge
 
     def computeMatching(self):
-        conjugateGradient.cg(self, True, maxIter=1000, TestGradient=False, \
+        conjugateGradient.cg(self, True, maxIter=1000, TestGradient=True, \
                             epsInit=self.cg_init_eps)
         return self
 
@@ -652,6 +652,9 @@ class SmoothImageMeta(object):
         for t in range(T):
             rg.create_vtk_sg()
             xtc = self.xt[:,:,t].copy()
+            interp_target = kernelMatrix_fort.applyk( \
+                            xtc, rg.nodes, self.dual_target,
+                            self.khs, self.kho, self.rg.num_nodes)
             xtc[:,0] = xtc[:,0] - self.id_x
             xtc[:,1] = xtc[:,1] - self.id_y
             rg.add_vtk_point_data(self.xt[:,:,t], "x")
@@ -662,6 +665,7 @@ class SmoothImageMeta(object):
             rg.add_vtk_point_data(self.alpha, "alpha")
             rg.add_vtk_point_data(self.v[...,t], "v")
             rg.add_vtk_point_data(self.template, "template")
+            rg.add_vtk_point_data(interp_target.real, "deformedTarget")
             rg.add_vtk_point_data(self.target, "target")
             rg.vtk_write(t, name, output_dir=self.output_dir)
 
