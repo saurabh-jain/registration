@@ -151,7 +151,7 @@ def eight(sim):
     sim.kvn = 'laplacian'
     sim.khn = 'laplacian'
     sim.kvs = 1.0
-    sim.khs = 0.15
+    sim.khs = 0.5
     sim.kvo = 4
     sim.kho = 4
     logging.info("KV params: name=%s, sigma=%f, order=%f" \
