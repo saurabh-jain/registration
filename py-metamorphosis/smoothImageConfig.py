@@ -5,11 +5,18 @@ import sys
 import os
 import diffeomorphisms
 
-compute_path = os.environ["HOME"] + '/Development/Results/py-meta'
+where = os.environ["HOME"] 
+if where.startswith('/Users'):
+    compute_path = os.environ["HOME"] + '/Development/Results/py-meta'
+    image_dir =  os.environ["HOME"] + "/Development/Data/meta_images/test_images/"
+    inho_image_dir =  compute_path + "/Development/Data/meta_images/inho/"
+else:
+    compute_path = os.environ["HOME"] + '/MorphingData/py-meta'
+    image_dir =  os.environ["HOME"] + "/IMAGES/meta_images/test_images/"
+    inho_image_dir =  compute_path + "/IMAGES/meta_images/inho/"
+
 log_file_name = "metamorphosis.log"
 compute_output_dir = compute_path + "/"
-image_dir =  os.environ["HOME"] + "/Development/Data/meta_images/test_images/"
-inho_image_dir =  compute_path + "/Development/Data/meta_images/inho/"
 phantoms_image_dir = compute_path + "/input/meta_images/phantoms/"
 file_write_iter = 10
 

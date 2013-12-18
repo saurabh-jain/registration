@@ -418,6 +418,9 @@ class SmoothImageMeta(object):
         if (self.optimize_iteration % self.write_iter == 0):
             #self.writeData("iter%d" % (self.optimize_iteration))
             self.writeData("iter")
+
+    def endOptim(self):
+            self.writeData("final")
     # ***********************************************************************
     # end of non-linear cg callbacks
     # ***********************************************************************
