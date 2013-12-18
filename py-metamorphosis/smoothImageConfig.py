@@ -137,7 +137,7 @@ def d72_unit_cube(sim):
 
 def eight(sim):
     sim.dim = 2
-    sim.sigma = .1
+    sim.sigma = .2
     sim.sfactor = 1./numpy.power(sim.sigma, 2)
     sim.num_points = (40,40)
     #sim.domain_max = (1., 1.)
@@ -150,7 +150,7 @@ def eight(sim):
 
     sim.kvn = 'laplacian'
     sim.khn = 'laplacian'
-    sim.kvs = 1.0
+    sim.kvs = 1.5
     sim.khs = 0.5
     sim.kvo = 4
     sim.kho = 4

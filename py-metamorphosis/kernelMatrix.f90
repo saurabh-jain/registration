@@ -877,17 +877,20 @@ subroutine adjointSystem_unconstrained(dt,sfactor,kvs,kvo,khs,kho,alpha,x,m,z,&
 
   do t=num_times,2,-1
      !$omp parallel do private(k,kv_ut,kh_ut,lpt,Kv,Kv_diff,Kh,Kh_diff, &
-     !$omp& Kv_diff2,Kh_diff2,dex,dez,dea, & 
+     !$omp& Kv_diff2,Kh_diff2, & 
      !$omp& zdz,x_diff) shared (dt,alpha,x,m,z,ex,ez,em,ealpha, &
-     !$omp& kvs,khs,kvo,kho)
+     !$omp& kvs,khs,kvo,kho,dex,dez,dea)
      do k=1,num_nodes,1
         dex(k,:) = 0
         dez(k,:) = 0
         dea(k) = 0
         do l=1,num_nodes,1
 
-           kv_ut = norm2(x(k,:,t-1)-x(l,:,t-1)) / kvs 
-           kh_ut = norm2(x(k,:,t-1)-x(l,:,t-1)) / khs 
+           x_diff = x(k,:,t-1)-x(l,:,t-1)
+           zdz = dot_product(z(k,:,t-1),z(l,:,t-1))
+           kv_ut = norm2(x_diff) 
+           kh_ut = kv_ut / khs 
+           kv_ut = kv_ut / kvs 
 
            if (k==l) then
               Kv = 1.0
@@ -911,8 +914,6 @@ subroutine adjointSystem_unconstrained(dt,sfactor,kvs,kvo,khs,kho,alpha,x,m,z,&
               Kh_diff2 = lpt * exp(-1.0*kh_ut)/(4*khs**4)
            end if
 
-           x_diff = x(k,:,t-1)-x(l,:,t-1)
-           zdz = dot_product(z(k,:,t-1),z(l,:,t-1))
            dex(k,:) = dex(k,:) + (-sfactor)*( &
                 Kv_diff*2.0*x_diff*dot_product(z(l,:,t-1),ex(k,:,t)) &
                 + Kv_diff*2.0*x_diff*dot_product(z(k,:,t-1),ex(l,:,t)) ) &
