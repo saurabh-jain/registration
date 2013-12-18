@@ -27,12 +27,13 @@ def compute(createImages=True):
         im2.saveImg('/Users/younes/Development/Results/Diffeons/Images/im2.png', normalize=True)
     else:
         if True:
-            path = '/Users/younes/Development/Data/Images/'
-            #im1 = gridScalars(fileName = path+'bird17.pgm', dim=2)
-            #im2 = gridScalars(fileName = path+'bird09.pgm', dim=2)
-            im1 = gridScalars(fileName = path+'image_0031.jpg', dim=2)
-            im2 = gridScalars(fileName = path+'image_0043.jpg', dim=2)
-            im2.saveImg('/Users/younes/Development/Results/Diffeons/Images/imTest.png', normalize=True)
+            #path = '/Users/younes/Development/Data/Images/'
+            path = '/cis/home/younes/IMAGES/database/'
+            im1 = gridScalars(fileName = path+'bird15.pgm', dim=2)
+            im2 = gridScalars(fileName = path+'bird26.pgm', dim=2)
+            # im1 = gridScalars(fileName = path+'image_0031.jpg', dim=2)
+            # im2 = gridScalars(fileName = path+'image_0043.jpg', dim=2)
+            #im2.saveImg('/Users/younes/Development/Results/Diffeons/Images/imTest.png', normalize=True)
             print im2.data.max()
         else:
             #f1.append(surfaces.Surface(filename = path+'amygdala/biocardAmyg 2/'+sub2+'_amyg_L.byu'))
