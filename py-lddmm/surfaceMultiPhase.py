@@ -258,7 +258,7 @@ class SurfaceMatching(surfaceMatching.SurfaceMatching):
                 nu = np.squeeze(nut[k][t, :, :])
                 npt1 = npt + self.npt[k]
                 r = self.param.KparDiff.applyK(x, a) + np.dot(x, A.T) + b
-                r2 = self.param.KparDiffOut.applyK(x, aB, y=zB)
+                r2 = self.param.KparDiffOut.applyK(zB, aB, firstVar=x)
                 #print nu.shape, r.shape, r2.shape, cval[t,npt:npt1].shape, npt, npt1
                 cval[t,npt:npt1] = np.squeeze(np.multiply(nu, r-r2).sum(axis=1))
                 npt = npt1
@@ -340,7 +340,7 @@ class SurfaceMatching(surfaceMatching.SurfaceMatching):
                 nu /= np.sqrt((nu**2).sum(axis=1)).reshape([nu.shape[0], 1])
 
 
-                r = self.param.KparDiff.applyK(z, a, y=x) + np.dot(z, A.T) + b
+                r = self.param.KparDiff.applyK(x, a, firstVar=z) + np.dot(z, A.T) + b
                 cval[t,npt:npt1] = np.squeeze(np.multiply(nu, r - r2[npt:npt1, :]).sum(axis=1))
                 npt = npt1
 
@@ -395,20 +395,20 @@ class SurfaceMatching(surfaceMatching.SurfaceMatching):
                 normNu = np.sqrt((nu**2).sum(axis=1))
                 nu /= normNu.reshape([nu.shape[0], 1])
 
-                dv = self.param.KparDiff.applyK(z, a, y=x) + np.dot(z, A.T) + b - r2[npt:npt1, :]
+                dv = self.param.KparDiff.applyK(x, a, firstVar=z) + np.dot(z, A.T) + b - r2[npt:npt1, :]
                 lmb[t, npt:npt1] = self.lmb[t, npt:npt1] - self.derCstrFun(np.multiply(nu, dv).sum(axis=1)/self.mu)/self.mu
                 #lnu = np.multiply(nu, np.mat(lmb[t, npt:npt1]).T)
                 lnu = np.multiply(nu, lmb[t, npt:npt1].reshape([self.npt[k], 1]))
                 #print lnu.shape
-                dxcval[k][t] = self.param.KparDiff.applyDiffKT(x, [a], [lnu], y=z)
-                dxcval[self.nsurf][t][npt:npt1, :] += (self.param.KparDiff.applyDiffKT(z, [lnu], [a], y=x)
-                                         - self.param.KparDiffOut.applyDiffKT(z, [lnu], [aB], y=zB))
-                dxcval[self.nsurf][t] -= self.param.KparDiffOut.applyDiffKT(zB, [aB], [lnu], y=z)
+                dxcval[k][t] = self.param.KparDiff.applyDiffKT(z, [a], [lnu], firstVar=x)
+                dxcval[self.nsurf][t][npt:npt1, :] += (self.param.KparDiff.applyDiffKT(x, [lnu], [a], firstVar=z)
+                                         - self.param.KparDiffOut.applyDiffKT(zB, [lnu], [aB], firstVar=z))
+                dxcval[self.nsurf][t] -= self.param.KparDiffOut.applyDiffKT(z, [aB], [lnu], firstVar=zB)
                 dxcval[self.nsurf][t][npt:npt1, :] += np.dot(lnu, A)
-                dacval[k][t] = self.param.KparDiff.applyK(x, lnu, y=z)
+                dacval[k][t] = self.param.KparDiff.applyK(z, lnu, firstVar=x)
                 if self.affineDim > 0:
                     dAffcval[k][t, :] = (np.dot(self.affineBasis.T, np.vstack([np.dot(lnu.T, z).reshape([dim2,1]), lnu.sum(axis=0).reshape([self.dim,1])]))).flatten()
-                dacval[self.nsurf][t] -= self.param.KparDiffOut.applyK(zB, lnu, y=z)
+                dacval[self.nsurf][t] -= self.param.KparDiffOut.applyK(z, lnu, firstVar=zB)
                 lv = np.multiply(dv, lmb[t, npt:npt1].reshape([self.npt[k],1]))
                 lv /= normNu.reshape([nu.shape[0], 1])
                 lv -= np.multiply(nu, np.multiply(nu, lv).sum(axis=1).reshape([nu.shape[0], 1]))
@@ -466,15 +466,15 @@ class SurfaceMatching(surfaceMatching.SurfaceMatching):
                 nu = np.squeeze(nut[k][t, :, :])
                 npt1 = npt + self.npt[k]
                 r = self.param.KparDiff.applyK(x, a)
-                r2 = self.param.KparDiffOut.applyK(x, aB, y=zB)
+                r2 = self.param.KparDiffOut.applyK(zB, aB, firstVar=x)
                 lmb[t, npt:npt1] = self.lmb[t, npt:npt1] - self.derCstrFun(np.squeeze(np.multiply(nu, r-r2).sum(axis=1))/self.mu)/self.mu
                 lnu = np.multiply(nu, lmb[t, npt:npt1].reshape([self.npt[k], 1]))
                 dxcval[k][t] = (self.param.KparDiff.applyDiffKT(x, [lnu,a], [a,lnu]) -
-                                self.param.KparDiffOut.applyDiffKT(x, [lnu], [aB], y=zB))
+                                self.param.KparDiffOut.applyDiffKT(zB, [lnu], [aB], firstVar=x))
                 dxcval[k][t] += np.dot(lnu, A)
-                dxcval[self.nsurf][t] -= self.param.KparDiffOut.applyDiffKT(zB, [aB], [lnu], y=x)
+                dxcval[self.nsurf][t] -= self.param.KparDiffOut.applyDiffKT(x, [aB], [lnu], firstVar=zB)
                 dacval[k][t] = self.param.KparDiff.applyK(x, lnu)
-                dacval[self.nsurf][t] -= self.param.KparDiffOut.applyK(zB, lnu, y=x) 
+                dacval[self.nsurf][t] -= self.param.KparDiffOut.applyK(x, lnu, firstVar=zB) 
                 dAffcval[k][t] = np.dot(self.affineBasis.T, np.concatenate(np.dot(lnu.T, x).flatten(), lnu.sum(axis=0)))
                 dnucval[k][t] = np.multiply(r-r2, lmb[t, npt:npt1].reshape([self.npt[k], 1]))
                 npt = npt1

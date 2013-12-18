@@ -38,18 +38,18 @@ def branches(angles, lengths = .75, radii=.1, center = [0,0,0],
         img[I1, I2, I3] = 1
     fv = Surface()
     print 'computing isosurface'
-    fv.Isosurface(img, value = 0.5, target=1000, scales=[1, 1, 1], smooth=0.001)
+    fv.Isosurface(img, value = 0.5, target=1000, scales=[1, 1, 1])
     return fv
 
 def compute():
 
-    fv1 = branches([[0,0], [pi/4, pi/2.5], [-pi/4, -3*pi/4]])
-    fv2 = branches([[0,0], [pi/2.5, pi/4], [-pi/2, -0.7*pi]])
+    fv1 = branches([[pi/8,pi/4], [pi/4, pi/2.5], [-pi/4, -3*pi/4]])
+    fv2 = branches([[pi/8,pi/4], [pi/2.5, pi/4], [-pi/2, -0.7*pi]])
     K1 = Kernel(name='laplacian', sigma = 20.0, order=3)
 
-    sm = surfaceMatching.SurfaceMatchingParam(timeStep=0.1, KparDiff=K1, sigmaDist=10, sigmaError=1., errorType='measure')
+    sm = surfaceMatching.SurfaceMatchingParam(timeStep=0.05, KparDiff=K1, sigmaDist=10, sigmaError=1., errorType='measure')
     f = SurfaceWithIsometries(Template=fv1, Target=fv2, outputDir='/Users/younes/Development/Results/IsometriesShortNorm1', centerRadius = [100., 100., 100., 30.],
-                               param=sm, mu=.001, testGradient=True, maxIter_cg=1000, maxIter_al=100, affine='none', rotWeight=1.,
+                               param=sm, mu=.001, testGradient=False, maxIter_cg=1000, maxIter_al=100, affine='none', rotWeight=1.,
     transWeight=1.)
     print f.gradCoeff
     f.optimizeMatching()

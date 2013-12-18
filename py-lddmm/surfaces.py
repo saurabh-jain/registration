@@ -6,6 +6,13 @@ import glob
 from vtk import *
 import kernelFunctions as kfun
 
+class vtkFields:
+    def __init__(self):
+        self.scalars = [] 
+        self.vectors = []
+        self.normals = []
+        self.tensors = []
+        
 # General surface class
 class Surface:
     def __init__(self, surf=None, filename=None, FV = None):
@@ -20,6 +27,8 @@ class Surface:
                     (mainPart, ext) = os.path.splitext(filename)
                     if ext == '.byu':
                         self.readbyu(filename)
+                    elif ext=='.off':
+                        self.readOFF(filename)
                     elif ext=='.vtk':
                         self.readVTK(filename)
                     else:
@@ -35,6 +44,8 @@ class Surface:
         else:
             self.vertices = np.copy(surf.vertices)
             self.faces = np.copy(surf.faces)
+            self.surfel = np.copy(surf.surfel)
+            self.centers = np.copy(surf.centers)
             self.computeCentersAreas()
 
     # face centers and area weighted normal
@@ -104,6 +115,18 @@ class Surface:
                 print 'Warning: vertex ', k, 'has no face; use removeIsolated'
         return AV, AF
 
+    def computeVertexNormals(self):
+        self.computeCentersAreas() 
+        normals = np.zeros(self.vertices.shape)
+        F = self.faces
+        for k in range(F.shape[0]):
+            normals[F[k,0]] += self.surfel[k]
+            normals[F[k,1]] += self.surfel[k]
+            normals[F[k,2]] += self.surfel[k]
+        af = np.sqrt( (normals**2).sum(axis=1))
+        normals /=af.reshape([self.vertices.shape[0],1])
+
+        return normals
          
 
     # Computes edges from vertices/faces
@@ -690,6 +713,43 @@ class Surface:
             z += np.linalg.det(v[c[:], :])/6
         return z
 
+    # Reads from .off file
+    def readOFF(self, offfile):
+        with open(offfile,'r') as f:
+            ln0 = readskip(f,'#')
+            ln = ln0.split()
+            if ln[0].lower() != 'off':
+                print 'Not OFF format'
+                return
+            ln = readskip(f,'#').split()
+            # read header
+            npoints = int(ln[0])  # number of vertices
+            nfaces = int(ln[1]) # number of faces
+                                #print ln, npoints, nfaces
+                        #fscanf(fbyu,'%d',1);		% number of edges
+                        #%ntest = fscanf(fbyu,'%d',1);		% number of edges
+            # read data
+            self.vertices = np.empty([npoints, 3])
+            for k in range(npoints):
+                ln = readskip(f,'#').split()
+                self.vertices[k, 0] = float(ln[0]) 
+                self.vertices[k, 1] = float(ln[1]) 
+                self.vertices[k, 2] = float(ln[2])
+
+            self.faces = np.int_(np.empty([nfaces, 3]))
+            for k in range(nfaces):
+                ln = readskip(f,'#').split()
+                if (int(ln[0]) != 3):
+                    print 'Reading only triangulated surfaces'
+                    return
+                self.faces[k, 0] = int(ln[1]) 
+                self.faces[k, 1] = int(ln[2]) 
+                self.faces[k, 2] = int(ln[3])
+
+        self.computeCentersAreas()
+
+
+        
     # Reads from .byu file
     def readbyu(self, byufile):
         with open(byufile,'r') as fbyu:
@@ -704,7 +764,7 @@ class Surface:
             for k in range(ncomponents):
                 fbyu.readline() # components (ignored)
             # read data
-            self.vertices = np.empty([npoints, 3]) ;
+            self.vertices = np.empty([npoints, 3])
             k=-1
             while k < npoints-1:
                 ln = fbyu.readline().split()
@@ -785,8 +845,24 @@ class Surface:
                     fbyu.write('\n')
                     j=0
 
-    # Saves in .vtk format
     def saveVTK(self, fileName, scalars = None, normals = None, tensors=None, scal_name='scalars', vectors=None, vect_name='vectors'):
+        vf = vtkFields()
+        if not (scalars==None):
+            vf.scalars.append(scal_name)
+            vf.scalars.append(scalars)
+        if not (vectors==None):
+            vf.vectors.append(vect_name)
+            vf.vectors.append(vectors)
+        if not (normals==None):
+            vf.normals.append('normals')
+            vf.normals.append(normals)
+        if not (tensors==None):
+            vf.tensors.append('tensors')
+            vf.tensors.append(tensors)
+        self.saveVTK2(fileName, vf)
+
+    # Saves in .vtk format
+    def saveVTK2(self, fileName, vtkFields = None):
         F = self.faces ;
         V = self.vertices ;
 
@@ -798,29 +874,50 @@ class Surface:
             fvtkout.write('\nPOLYGONS {0:d} {1:d}'.format(F.shape[0], 4*F.shape[0]))
             for ll in range(F.shape[0]):
                 fvtkout.write('\n3 {0: d} {1: d} {2: d}'.format(F[ll,0], F[ll,1], F[ll,2]))
-            if (not (scalars == None)) | (not (normals==None)):
-                fvtkout.write(('\nPOINT_DATA {0: d}').format(V.shape[0]))
-            if not (scalars == None):
-                #print scalars
-                fvtkout.write('\nSCALARS '+scal_name+' float 1\nLOOKUP_TABLE default')
-                for ll in range(V.shape[0]):
-                    #print scalars[ll]
-                    fvtkout.write('\n {0: .5f}'.format(scalars[ll]))
-            if not (vectors==None):
-                fvtkout.write('\nVECTORS '+ vect_name +' float')
-                for ll in range(V.shape[0]):
-                    fvtkout.write('\n {0: .5f} {1: .5f} {2: .5f}'.format(vectors[ll, 0], vectors[ll, 1], vectors[ll, 2]))
-
-            if not (normals == None):
-                fvtkout.write('\nNORMALS normals float')
-                for ll in range(V.shape[0]):
-                    fvtkout.write('\n {0: .5f} {1: .5f} {2: .5f}'.format(normals[ll, 0], normals[ll, 1], normals[ll, 2]))
-            if not (tensors == None):
-                fvtkout.write('\nTENSORS tensors float')
-                for ll in range(V.shape[0]):
-                    for kk in range(2):
-                        fvtkout.write('\n {0: .5f} {1: .5f} {2: .5f}'.format(tensors[ll, kk, 0], tensors[ll, kk, 1], tensors[ll, kk, 2]))
-            fvtkout.write('\n')
+            if not (vtkFields == None):
+                wrote_pd_hdr = False
+                if len(vtkFields.scalars) > 0:
+                    if not wrote_pd_hdr:
+                        fvtkout.write(('\nPOINT_DATA {0: d}').format(V.shape[0]))
+                        wrote_pd_hdr = True
+                    nf = len(vtkFields.scalars)/2
+                    for k in range(nf):
+                        fvtkout.write('\nSCALARS '+ vtkFields.scalars[2*k] +' float 1\nLOOKUP_TABLE default')
+                        for ll in range(V.shape[0]):
+                            #print scalars[ll]
+                            fvtkout.write('\n {0: .5f}'.format(vtkFields.scalars[2*k+1][ll]))
+                if len(vtkFields.vectors) > 0:
+                    if not wrote_pd_hdr:
+                        fvtkout.write(('\nPOINT_DATA {0: d}').format(V.shape[0]))
+                        wrote_pd_hdr = True
+                    nf = len(vtkFields.vectors)/2
+                    for k in range(nf):
+                        fvtkout.write('\nVECTORS '+ vtkFields.vectors[2*k] +' float')
+                        vectors = vtkFields.vectors[2*k+1]
+                        for ll in range(V.shape[0]):
+                            fvtkout.write('\n {0: .5f} {1: .5f} {2: .5f}'.format(vectors[ll, 0], vectors[ll, 1], vectors[ll, 2]))
+                if len(vtkFields.normals) > 0:
+                    if not wrote_pd_hdr:
+                        fvtkout.write(('\nPOINT_DATA {0: d}').format(V.shape[0]))
+                        wrote_pd_hdr = True
+                    nf = len(vtkFields.normals)/2
+                    for k in range(nf):
+                        fvtkout.write('\nNORMALS '+ vtkFields.normals[2*k] +' float')
+                        vectors = vtkFields.normals[2*k+1]
+                        for ll in range(V.shape[0]):
+                            fvtkout.write('\n {0: .5f} {1: .5f} {2: .5f}'.format(vectors[ll, 0], vectors[ll, 1], vectors[ll, 2]))
+                if len(vtkFields.tensors) > 0:
+                    if not wrote_pd_hdr:
+                        fvtkout.write(('\nPOINT_DATA {0: d}').format(V.shape[0]))
+                        wrote_pd_hdr = True
+                    nf = len(vtkFields.tensors)/2
+                    for k in range(nf):
+                        fvtkout.write('\nTENSORS '+ vtkFields.tensors[2*k] +' float')
+                        tensors = vtkFields.tensors[2*k+1]
+                        for ll in range(V.shape[0]):
+                            for kk in range(2):
+                                fvtkout.write('\n {0: .5f} {1: .5f} {2: .5f}'.format(tensors[ll, kk, 0], tensors[ll, kk, 1], tensors[ll, kk, 2]))
+                fvtkout.write('\n')
 
 
     # Reads .vtk file
@@ -966,7 +1063,7 @@ def measureNormDef(fvDef, fv1, KparDist):
     cr2 = fv1.surfel
     cr2 = np.mat(np.sqrt((cr2**2).sum(axis=1)+1e-10))
     g11 = kfun.kernelMatrix(KparDist, c1)
-    g12 = kfun.kernelMatrix(KparDist, c1, c2)
+    g12 = kfun.kernelMatrix(KparDist, c2, c1)
     #obj = (np.multiply(cr1*cr1.T, g11).sum() - 2*np.multiply(cr1*(cr2.T), g12).sum())
     obj = (cr1 * g11 * cr1.T).sum() - 2* (cr1 * g12 *cr2.T).sum()
     return obj
@@ -990,10 +1087,14 @@ def measureNormGradient(fvDef, fv1, KparDist):
     cr2 = np.divide(cr2, a2.T)
 
     g11 = kfun.kernelMatrix(KparDist, c1)
+    KparDist.hold()
     dg11 = kfun.kernelMatrix(KparDist, c1, diff=True)
+    KparDist.release()
     
-    g12 = kfun.kernelMatrix(KparDist, c1, c2)
-    dg12 = kfun.kernelMatrix(KparDist, c1, c2, diff=True)
+    g12 = kfun.kernelMatrix(KparDist, c2, c1)
+    KparDist.hold()
+    dg12 = kfun.kernelMatrix(KparDist, c2, c1, diff=True)
+    KparDist.release()
 
 
     z1 = g11*a1.T - g12 * a2.T
@@ -1026,6 +1127,14 @@ def measureNormGradient(fvDef, fv1, KparDist):
         px[I[k], :] = px[I[k], :]+dz1[k, :] -  crs[k, :]
 
     return 2*px
+
+
+def readskip(f, c):
+    ln0 = f.readline()
+    #print ln0
+    while (len(ln0) > 0 and ln0[0] == c):
+        ln0 = f.readline()
+    return ln0
 
 # class MultiSurface:
 #     def __init__(self, pattern):

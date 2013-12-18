@@ -27,12 +27,20 @@ def compute(createImages=True):
         im2.saveImg('/Users/younes/Development/Results/Diffeons/Images/im2.png', normalize=True)
     else:
         if True:
-            #path = '/Users/younes/Development/Data/Images/'
-            path = '/cis/home/younes/IMAGES/database/'
-            im1 = gridScalars(fileName = path+'bird15.pgm', dim=2)
-            im2 = gridScalars(fileName = path+'bird26.pgm', dim=2)
-            # im1 = gridScalars(fileName = path+'image_0031.jpg', dim=2)
-            # im2 = gridScalars(fileName = path+'image_0043.jpg', dim=2)
+            path = '/Users/younes/IMAGES/'
+            #im1 = gridScalars(fileName = path+'database/camel07.pgm', dim=2)
+            #im2 = gridScalars(fileName = path+'database/camel08.pgm', dim=2)
+            path = '/Volumes/younes/IMAGES/'
+            # #im1 = gridScalars(fileName = path+'database/camel07.pgm', dim=2)
+            # #im2 = gridScalars(fileName = path+'database/camel08.pgm', dim=2)
+            # #im1 = gridScalars(fileName = path+'yalefaces/subject01.normal.gif', dim=2)
+            # #im2 = gridScalars(fileName = path+'yalefaces/subject01.happy.gif', dim=2)
+            im1 = gridScalars(fileName = path+'heart/heart01.tif', dim=2)
+            im2 = gridScalars(fileName = path+'heart/heart09.tif', dim=2)
+            im1.data = filters.gaussian_filter(im1.data, .5)
+            im2.data = filters.gaussian_filter(im2.data, .5)
+            #im1 = gridScalars(fileName = path+'image_0031.jpg', dim=2)
+            #im2 = gridScalars(fileName = path+'image_0043.jpg', dim=2)
             #im2.saveImg('/Users/younes/Development/Results/Diffeons/Images/imTest.png', normalize=True)
             print im2.data.max()
         else:
@@ -44,11 +52,12 @@ def compute(createImages=True):
 
     ## Object kernel
 
-    sm = ImageMatchingParam(timeStep=0.1, sigmaKernel=10., sigmaError=1.)
-    f = ImageMatching(Template=im1, Target=im2, outputDir='/Users/younes/Development/Results/Diffeons/Images/Planes',param=sm, testGradient=False,
-                      subsampleTemplate = 5,
+    sm = ImageMatchingParam(timeStep=0.05, sigmaKernel=50., sigmaError=1.)
+    f = ImageMatching(Template=im1, Target=im2, outputDir='/Users/younes/Development/Results/Diffeons/Images/Hearts',param=sm, testGradient=False,
+                      subsampleTemplate = 2,
                         zeroVar=False,
-                        targetMargin=10,
+                        targetMargin=20,
+                        templateMargin=20,
                         DecimationTarget=20,
                         maxIter=10000, affine='none', rotWeight=1., transWeight = 1., scaleWeight=10., affineWeight=100.)
 
