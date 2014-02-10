@@ -27,11 +27,11 @@ def compute(createSurfaces=True):
         
         fv2.vertices[:,1] += 20 - 15/s
 
-        fv1.saveVTK('/Users/younes/Development/Results/Fibers/fv1.vtk')
-        fv2.saveVTK('/Users/younes/Development/Results/Fibers/fv2.vtk')
+        fv1.saveVTK('/Users/saurabh/Desktop/Fibers/fv1.vtk')
+        fv2.saveVTK('/Users/saurabh/Desktop/Fibers/fv2.vtk')
     else:
-        fv1 = Surface(filename='/Users/younes/Development/Results/Fibers/fv1.vtk')
-        fv2  = Surface(filename='/Users/younes/Development/Results/Fibers/fv2.vtk')
+        fv1 = Surface(filename='/Users/saurabh/Desktop/Fibers/fv1.vtk')
+        fv2 = Surface(filename='/Users/saurabh/Desktop/Fibers/fv2.vtk')
 
     ## Object kernel
     V1 = fv1.vertices/100 - [0,1,1]
@@ -83,10 +83,10 @@ def compute(createSurfaces=True):
      
     K1 = Kernel(name='gauss', sigma = 10.0)
     y0 = 100*(y0+[0,1,1])
-    pointSets.savePoints('/Users/younes/Development/Results/Fibers/Ellipses/fibers.vtk', y0, vector=v0)
+    pointSets.savePoints('/Users/saurabh/Desktop/Fibers/fibers.vtk', y0, vector=v0)
 
     sm = SurfaceMatchingParam(timeStep=0.1, KparDiff=K1, sigmaDist=5, sigmaError=1., errorType='measure')
-    f = SurfaceMatching(Template=fv1, Target=fv2, Fiber=(y0,v0), outputDir='/Users/younes/Development/Results/Fibers/Ellipses',param=sm, testGradient=False,
+    f = SurfaceMatching(Template=fv1, Target=fv2, Fiber=(y0,v0), outputDir='/Users/saurabh/Desktop/Fibers/Output',param=sm, testGradient=True,
                         #subsampleTargetSize = 500,
                          maxIter=1000)
 
