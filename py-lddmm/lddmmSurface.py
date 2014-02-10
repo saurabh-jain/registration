@@ -15,6 +15,7 @@ def main():
     parser = argparse.ArgumentParser(description='runs surface matching registration over directories (relative to the template)')
     parser.add_argument('template', metavar='template', type = str, help='template')
     parser.add_argument('target', metavar='target', type = str, help='target')
+    parser.add_argument('--typeKernel', metavar='typeKernel', type=str, dest='typeKernel', default = 'gauss', help='kernel type') 
     parser.add_argument('--sigmaKernel', metavar='sigmaKernel', type=float, dest='sigmaKernel', default = 6.5, help='kernel width') 
     parser.add_argument('--sigmaDist', metavar='sigmaDist', type=float, dest='sigmaDist', default = 2.5, help='kernel width (error term); (default = 2.5)') 
     parser.add_argument('--sigmaError', metavar='sigmaError', type=float, dest='sigmaError', default = 1.0, help='std error; (default = 1.0)') 
@@ -25,7 +26,7 @@ def main():
     args = parser.parse_args()
 
     if args.dirOut == '':
-        args.dirOut = args.dirIn
+        args.dirOut = '.'
 
     if args.tmpOut == '':
         args.tmpOut = args.dirOut + '/tmp'
@@ -36,7 +37,7 @@ def main():
 
 
     tmpl = surfaces.Surface(filename=args.template)
-    K1 = Kernel(name='gauss', sigma = args.sigmaKernel)
+    K1 = Kernel(name=args.typeKernel, sigma = args.sigmaKernel)
     sm = SurfaceMatchingParam(timeStep=0.05, KparDiff=K1, sigmaDist=args.sigmaDist, sigmaError=args.sigmaError, errorType=args.typeError)
     fv = surfaces.Surface(filename=args.target)
     #print fv.vertices

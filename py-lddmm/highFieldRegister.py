@@ -23,6 +23,9 @@ def main():
     parser.add_argument('--typeError', metavar='typeError', type=str, dest='typeError', default = 'measure', help='type error term (default: measure)') 
     parser.add_argument('--dirOut', metavar = 'dirOut', type = str, dest = 'dirOut', default = '', help='Output directory')
     parser.add_argument('--tmpOut', metavar = 'tmpOut', type = str, dest = 'tmpOut', default = '', help='info files directory')
+    parser.add_argument('--initialRotation', metavar = 'initRot', type = float, dest = 'initRot', default = (0,0,0), nargs=3, help='theta and phi for initial rotation')
+    parser.add_argument('--flip', action = 'store_true', dest = 'flip', default = False, help='flip before rigid registration')
+    
     args = parser.parse_args()
 
     if args.dirOut == '':
@@ -59,11 +62,23 @@ def main():
     K1 = Kernel(name='gauss', sigma = args.sigmaKernel)
     sm = SurfaceMatchingParam(timeStep=0.1, KparDiff=K1, sigmaDist=args.sigmaDist, sigmaError=args.sigmaError, errorType=args.typeError)
 
-    R0, T0 = rigidRegistration(surfaces = (hf.vertices, targ.vertices),  rotWeight=5.0, flipMidPoint=True, verb=False, temperature=10., annealing=True, translationOnly=False)
-    hf.vertices = np.dot(hf.vertices, R0.T) + T0
+    psi, phi, th = np.array(args.initRot) * (np.pi/180)
+    cth = np.cos(th)
+    cphi = np.cos(phi)
+    cpsi = np.cos(psi)
+    sth = np.sin(th)
+    sphi = np.sin(phi)
+    spsi = np.sin(psi)
+    Rinit = np.array([[cphi, -sphi*cpsi,sphi*spsi],[cth*sphi,cth*cphi*cpsi,-cth*cphi*spsi],[sth*sphi,sth*cphi*cpsi,cth*cpsi]]) 
+    #print Rinit
     u = path.split(args.highfield)
     [nm,ext] = path.splitext(u[1])
-    print hfLabel
+    hf.vertices = np.dot(hf.vertices, Rinit.T) 
+    hf.saveVTK(args.dirOut+'/'+nm+'Init.vtk', scalars=hfLabel, scal_name='Labels')
+
+    R0, T0 = rigidRegistration(surfaces = (hf.vertices, targ.vertices),  rotWeight=1.0, rotationOnly=True, flipMidPoint=args.flip, verb=False, temperature=1., annealing=True, translationOnly=False)
+    hf.vertices = np.dot(hf.vertices, R0.T) + T0
+    #print hfLabel
     hf.saveVTK(args.dirOut+'/'+nm+'.vtk', scalars=hfLabel, scal_name='Labels')
 
     print 'Starting Matching'
