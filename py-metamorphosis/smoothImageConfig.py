@@ -5,18 +5,26 @@ import sys
 import os
 import diffeomorphisms
 
-compute_path = os.environ["PYLDDMM_COMPUTE_PATH"]
+where = os.environ["HOME"] 
+if where.startswith('/Users'):
+    compute_path = os.environ["HOME"] + '/Development/Results/py-meta'
+    image_dir =  os.environ["HOME"] + "/Development/Data/meta_images/test_images/"
+    inho_image_dir =  compute_path + "/Development/Data/meta_images/inho/"
+else:
+    compute_path = os.environ["HOME"] + '/MorphingData/py-meta'
+    image_dir =  os.environ["HOME"] + "/IMAGES/meta_images/test_images/"
+    inho_image_dir =  compute_path + "/IMAGES/meta_images/inho/"
+
 log_file_name = "metamorphosis.log"
-compute_output_dir = compute_path + "/output/smoothImage_meta/"
-image_dir = compute_path + "/input/meta_images/test_images/"
-inho_image_dir =  compute_path + "/input/meta_images/inho/"
+compute_output_dir = compute_path + "/"
 phantoms_image_dir = compute_path + "/input/meta_images/phantoms/"
-file_write_iter = 100
+file_write_iter = 10
 
 def configure(sim, config_name):
     sim.config_name = config_name
     modname = globals()['__name__']
     module = sys.modules[modname]
+    print module
     method = getattr(module, config_name)
     method(sim)
 
@@ -34,10 +42,10 @@ def letter(sim):
     sim.write_iter = file_write_iter
     sim.kvn = 'laplacian'
     sim.khn = 'laplacian'
-    sim.kvs = .75
-    sim.khs = .25
+    sim.kvs = 1.5
+    sim.khs = .5
     sim.kvo = 4
-    sim.kho = 4
+    sim.kho = 1
     logging.info("KV params: name=%s, sigma=%f, order=%f" \
                         % (sim.kvn,sim.kvs,sim.kvo))
     logging.info("KH params: name=%s, sigma=%f, order=%f" \
@@ -136,7 +144,7 @@ def d72_unit_cube(sim):
 
 def eight(sim):
     sim.dim = 2
-    sim.sigma = .4
+    sim.sigma = .2
     sim.sfactor = 1./numpy.power(sim.sigma, 2)
     sim.num_points = (40,40)
     #sim.domain_max = (1., 1.)
@@ -149,8 +157,8 @@ def eight(sim):
 
     sim.kvn = 'laplacian'
     sim.khn = 'laplacian'
-    sim.kvs = 1.
-    sim.khs = .15
+    sim.kvs = 1.5
+    sim.khs = 0.5
     sim.kvo = 4
     sim.kho = 4
     logging.info("KV params: name=%s, sigma=%f, order=%f" \

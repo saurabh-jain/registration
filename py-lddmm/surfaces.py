@@ -6,6 +6,13 @@ import glob
 from vtk import *
 import kernelFunctions as kfun
 
+class vtkFields:
+    def __init__(self):
+        self.scalars = [] 
+        self.vectors = []
+        self.normals = []
+        self.tensors = []
+        
 # General surface class
 class Surface:
     def __init__(self, surf=None, filename=None, FV = None):
@@ -305,8 +312,11 @@ class Surface:
         else:
             img = vtkImageData()
             img.SetDimensions(data.shape)
-            img.SetNumberOfScalarComponents(1)
             img.SetOrigin(0,0,0)
+            if vtkVersion.GetVTKMajorVersion() >= 6:
+                img.AllocateScalars(VTK_FLOAT,1)
+            else:
+                img.SetNumberOfScalarComponents(1)
             v = vtkDoubleArray()
             v.SetNumberOfValues(data.size)
             v.SetNumberOfComponents(1)
@@ -315,7 +325,10 @@ class Surface:
                 img.GetPointData().SetScalars(v)
                 
         cf = vtkContourFilter()
-        cf.SetInput(img)
+        if vtkVersion.GetVTKMajorVersion() >= 6:
+            cf.SetInputData(img)
+        else:
+            cf.SetInput(img)
         cf.SetValue(0,value)
         cf.SetNumberOfContours(1)
         cf.Update()
@@ -323,13 +336,19 @@ class Surface:
         connectivity = vtkPolyDataConnectivityFilter()
         connectivity.ScalarConnectivityOff()
         connectivity.SetExtractionModeToLargestRegion()
-        connectivity.SetInput(cf.GetOutput())
+        if vtkVersion.GetVTKMajorVersion() >= 6:
+            connectivity.SetInputData(cf.GetOutput())
+        else:
+            connectivity.SetInput(cf.GetOutput())
         connectivity.Update()
         g = connectivity.GetOutput()
 
         if smooth > 0:
             smoother= vtkWindowedSincPolyDataFilter()
-            smoother.SetInput(g)
+            if vtkVersion.GetVTKMajorVersion() >= 6:
+                smoother.SetInputData(g)
+            else:
+                smoother.SetInput(g)
             #     else:
             # smoother.SetInputConnection(contour.GetOutputPort())    
             smoother.SetNumberOfIterations(30)
@@ -353,13 +372,21 @@ class Surface:
         #dc.AttributeErrorMetricOn()
         #dc.SetDegree(10)
         #dc.SetSplitting(0)
-        dc.SetInput(g)
+        if vtkVersion.GetVTKMajorVersion() >= 6:
+            dc.SetInputData(g)
+        else:
+            dc.SetInput(g)
+            #dc.SetInput(g)
         #print dc
         dc.Update()
         g = dc.GetOutput()
         #print 'points:', g.GetNumberOfPoints()
         cp = vtkCleanPolyData()
-        cp.SetInput(dc.GetOutput())
+        if vtkVersion.GetVTKMajorVersion() >= 6:
+            cp.SetInputData(dc.GetOutput())
+        else:
+            cp.SetInput(dc.GetOutput())
+            #        cp.SetInput(dc.GetOutput())
         #cp.SetPointMerging(1)
         cp.ConvertPolysToLinesOn()
         cp.SetAbsoluteTolerance(1e-5)
@@ -838,8 +865,24 @@ class Surface:
                     fbyu.write('\n')
                     j=0
 
-    # Saves in .vtk format
     def saveVTK(self, fileName, scalars = None, normals = None, tensors=None, scal_name='scalars', vectors=None, vect_name='vectors'):
+        vf = vtkFields()
+        if not (scalars==None):
+            vf.scalars.append(scal_name)
+            vf.scalars.append(scalars)
+        if not (vectors==None):
+            vf.vectors.append(vect_name)
+            vf.vectors.append(vectors)
+        if not (normals==None):
+            vf.normals.append('normals')
+            vf.normals.append(normals)
+        if not (tensors==None):
+            vf.tensors.append('tensors')
+            vf.tensors.append(tensors)
+        self.saveVTK2(fileName, vf)
+
+    # Saves in .vtk format
+    def saveVTK2(self, fileName, vtkFields = None):
         F = self.faces ;
         V = self.vertices ;
 
@@ -851,29 +894,50 @@ class Surface:
             fvtkout.write('\nPOLYGONS {0:d} {1:d}'.format(F.shape[0], 4*F.shape[0]))
             for ll in range(F.shape[0]):
                 fvtkout.write('\n3 {0: d} {1: d} {2: d}'.format(F[ll,0], F[ll,1], F[ll,2]))
-            if (not (scalars == None)) | (not (normals==None)):
-                fvtkout.write(('\nPOINT_DATA {0: d}').format(V.shape[0]))
-            if not (scalars == None):
-                #print scalars
-                fvtkout.write('\nSCALARS '+scal_name+' float 1\nLOOKUP_TABLE default')
-                for ll in range(V.shape[0]):
-                    #print scalars[ll]
-                    fvtkout.write('\n {0: .5f}'.format(scalars[ll]))
-            if not (vectors==None):
-                fvtkout.write('\nVECTORS '+ vect_name +' float')
-                for ll in range(V.shape[0]):
-                    fvtkout.write('\n {0: .5f} {1: .5f} {2: .5f}'.format(vectors[ll, 0], vectors[ll, 1], vectors[ll, 2]))
-
-            if not (normals == None):
-                fvtkout.write('\nNORMALS normals float')
-                for ll in range(V.shape[0]):
-                    fvtkout.write('\n {0: .5f} {1: .5f} {2: .5f}'.format(normals[ll, 0], normals[ll, 1], normals[ll, 2]))
-            if not (tensors == None):
-                fvtkout.write('\nTENSORS tensors float')
-                for ll in range(V.shape[0]):
-                    for kk in range(2):
-                        fvtkout.write('\n {0: .5f} {1: .5f} {2: .5f}'.format(tensors[ll, kk, 0], tensors[ll, kk, 1], tensors[ll, kk, 2]))
-            fvtkout.write('\n')
+            if not (vtkFields == None):
+                wrote_pd_hdr = False
+                if len(vtkFields.scalars) > 0:
+                    if not wrote_pd_hdr:
+                        fvtkout.write(('\nPOINT_DATA {0: d}').format(V.shape[0]))
+                        wrote_pd_hdr = True
+                    nf = len(vtkFields.scalars)/2
+                    for k in range(nf):
+                        fvtkout.write('\nSCALARS '+ vtkFields.scalars[2*k] +' float 1\nLOOKUP_TABLE default')
+                        for ll in range(V.shape[0]):
+                            #print scalars[ll]
+                            fvtkout.write('\n {0: .5f}'.format(vtkFields.scalars[2*k+1][ll]))
+                if len(vtkFields.vectors) > 0:
+                    if not wrote_pd_hdr:
+                        fvtkout.write(('\nPOINT_DATA {0: d}').format(V.shape[0]))
+                        wrote_pd_hdr = True
+                    nf = len(vtkFields.vectors)/2
+                    for k in range(nf):
+                        fvtkout.write('\nVECTORS '+ vtkFields.vectors[2*k] +' float')
+                        vectors = vtkFields.vectors[2*k+1]
+                        for ll in range(V.shape[0]):
+                            fvtkout.write('\n {0: .5f} {1: .5f} {2: .5f}'.format(vectors[ll, 0], vectors[ll, 1], vectors[ll, 2]))
+                if len(vtkFields.normals) > 0:
+                    if not wrote_pd_hdr:
+                        fvtkout.write(('\nPOINT_DATA {0: d}').format(V.shape[0]))
+                        wrote_pd_hdr = True
+                    nf = len(vtkFields.normals)/2
+                    for k in range(nf):
+                        fvtkout.write('\nNORMALS '+ vtkFields.normals[2*k] +' float')
+                        vectors = vtkFields.normals[2*k+1]
+                        for ll in range(V.shape[0]):
+                            fvtkout.write('\n {0: .5f} {1: .5f} {2: .5f}'.format(vectors[ll, 0], vectors[ll, 1], vectors[ll, 2]))
+                if len(vtkFields.tensors) > 0:
+                    if not wrote_pd_hdr:
+                        fvtkout.write(('\nPOINT_DATA {0: d}').format(V.shape[0]))
+                        wrote_pd_hdr = True
+                    nf = len(vtkFields.tensors)/2
+                    for k in range(nf):
+                        fvtkout.write('\nTENSORS '+ vtkFields.tensors[2*k] +' float')
+                        tensors = vtkFields.tensors[2*k+1]
+                        for ll in range(V.shape[0]):
+                            for kk in range(2):
+                                fvtkout.write('\n {0: .5f} {1: .5f} {2: .5f}'.format(tensors[ll, kk, 0], tensors[ll, kk, 1], tensors[ll, kk, 2]))
+                fvtkout.write('\n')
 
 
     # Reads .vtk file

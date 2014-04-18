@@ -21,12 +21,15 @@ def compute(createSurfaces=True):
 
         #return fv1
 
-        s = 1.375
-        I1 = np.minimum(.05/s - (((x-.50)**2 + 0.5*y**2 + z**2)), np.minimum((2*(x-.50)**2 + 0.75*y**2 + 2*z**2)-0.03/s, 0.15/s-y))  
+        #s1 = 1.375
+        #s2 = 2
+        s1 = 1.1
+        s2 = 1.2
+        I1 = np.minimum(.06/s1 - (((x-.50)**2 + 0.5*y**2 + z**2)), np.minimum((s2*(x-.50)**2 + s2*0.5*y**2 + s2*z**2)-0.045/s1, 0.2/s1-y))  
         fv2 = Surface() ;
         fv2.Isosurface(I1, value = 0, target=1000, scales=[1, 1, 1], smooth=0.01)
         
-        fv2.vertices[:,1] += 20 - 15/s
+        fv2.vertices[:,1] += 20 - 15/s1
 
         fv1.saveVTK('/Users/younes/Development/Results/Fibers/fv1.vtk')
         fv2.saveVTK('/Users/younes/Development/Results/Fibers/fv2.vtk')
