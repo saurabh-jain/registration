@@ -22,10 +22,12 @@ class CurveMatchingParam(matchingParam.MatchingParam):
 					     sigmaError=sigmaError, errorType = errorType, typeKernel=typeKernel)
                                          
         if errorType == 'current':
+            print 'Running Current Matching'
             self.fun_obj0 = curves.currentNorm0
             self.fun_obj = curves.currentNormDef
             self.fun_objGrad = curves.currentNormGradient
         elif errorType=='measure':
+            print 'Running Measure Matching'
             self.fun_obj0 = curves.measureNorm0
             self.fun_obj = curves.measureNormDef
             self.fun_objGrad = curves.measureNormGradient
@@ -56,6 +58,7 @@ class Direction:
 class CurveMatching:
 
     def __init__(self, Template=None, Target=None, fileTempl=None, fileTarg=None, param=None, maxIter=1000, regWeight = 1.0, affineWeight = 1.0, verb=True,
+                 gradLB = 0.001, saveRate=10,
                  rotWeight = None, scaleWeight = None, transWeight = None, testGradient=False, saveFile = 'evolution', affine = 'none', outputDir = '.'):
         if Template==None:
             if fileTempl==None:
@@ -135,6 +138,8 @@ class CurveMatching:
         self.saveFile = saveFile
         self.fv0.saveVTK(self.outputDir+'/Template.vtk')
         self.fv1.saveVTK(self.outputDir+'/Target.vtk')
+        self.gradLB = gradLB
+        self.saveRate = saveRate 
 
     def dataTerm(self, _fvDef):
         obj = self.param.fun_obj(_fvDef, self.fv1, self.param.KparDist) / (self.param.sigmaError**2)
@@ -307,7 +312,7 @@ class CurveMatching:
         (obj1, self.xt, Jt) = self.objectiveFunDef(self.at, self.Afft, withTrajectory=True, withJacobian=True)
         self.iter += 1
 
-        if self.iter%10==0:
+        if self.saveRate > 0 and self.iter%self.saveRate==0:
             if self.dim==2:
                 A = self.affB.getTransforms(self.Afft)
                 (xt,yt) = evol.landmarkDirectEvolutionEuler(self.fv0.vertices, self.at, self.param.KparDiff, affine=A, withPointSet=self.gridxy)
@@ -323,17 +328,27 @@ class CurveMatching:
                 
 
     def endOptim(self):
-        if self.iter%10 > 0:
+        if self.saveRate==0 or self.iter%self.saveRate > 0:
+            if self.dim==2:
+                A = self.affB.getTransforms(self.Afft)
+                (xt,yt) = evol.landmarkDirectEvolutionEuler(self.fv0.vertices, self.at, self.param.KparDiff, affine=A, withPointSet=self.gridxy)
             for kk in range(self.Tsize+1):
-                self.fvDef.saveVTK(self.outputDir +'/'+ self.saveFile+str(kk)+'.vtk', scalars = Jt[kk, :], scal_name='Jacobian')
+                self.fvDef.updateVertices(np.squeeze(self.xt[kk, :, :]))
+                #self.fvDef.saveVTK(self.outputDir +'/'+ self.saveFile+str(kk)+'.vtk', scalars = Jt[kk, :], scal_name='Jacobian')
+                self.fvDef.saveVTK(self.outputDir +'/'+ self.saveFile+str(kk)+'.vtk')
+        self.defCost = self.obj - self.obj0 - self.dataTerm(self.fvDef)   
 
 
     def optimizeMatching(self):
         grd = self.getGradient(self.gradCoeff)
         [grd2] = self.dotProduct(grd, [grd])
 
-        self.gradEps = max(0.001, np.sqrt(grd2) / 10000)
-        print self.gradEps
+        self.gradEps = max(self.gradLB, np.sqrt(grd2) / 10000)
+        print 'Gradient bound:', self.gradEps
+        kk = 0
+        while os.path.isfile(self.outputDir +'/'+ self.saveFile+str(kk)+'.vtk'):
+            os.remove(self.outputDir +'/'+ self.saveFile+str(kk)+'.vtk')
+            kk += 1
         cg.cg(self, verb = self.verb, maxIter = self.maxIter, TestGradient=self.testGradient)
         #return self.at, self.xt
 
