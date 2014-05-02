@@ -312,8 +312,11 @@ class Surface:
         else:
             img = vtkImageData()
             img.SetDimensions(data.shape)
-            img.SetNumberOfScalarComponents(1)
             img.SetOrigin(0,0,0)
+            if vtkVersion.GetVTKMajorVersion() >= 6:
+                img.AllocateScalars(VTK_FLOAT,1)
+            else:
+                img.SetNumberOfScalarComponents(1)
             v = vtkDoubleArray()
             v.SetNumberOfValues(data.size)
             v.SetNumberOfComponents(1)
@@ -322,7 +325,10 @@ class Surface:
                 img.GetPointData().SetScalars(v)
                 
         cf = vtkContourFilter()
-        cf.SetInput(img)
+        if vtkVersion.GetVTKMajorVersion() >= 6:
+            cf.SetInputData(img)
+        else:
+            cf.SetInput(img)
         cf.SetValue(0,value)
         cf.SetNumberOfContours(1)
         cf.Update()
@@ -330,13 +336,19 @@ class Surface:
         connectivity = vtkPolyDataConnectivityFilter()
         connectivity.ScalarConnectivityOff()
         connectivity.SetExtractionModeToLargestRegion()
-        connectivity.SetInput(cf.GetOutput())
+        if vtkVersion.GetVTKMajorVersion() >= 6:
+            connectivity.SetInputData(cf.GetOutput())
+        else:
+            connectivity.SetInput(cf.GetOutput())
         connectivity.Update()
         g = connectivity.GetOutput()
 
         if smooth > 0:
             smoother= vtkWindowedSincPolyDataFilter()
-            smoother.SetInput(g)
+            if vtkVersion.GetVTKMajorVersion() >= 6:
+                smoother.SetInputData(g)
+            else:
+                smoother.SetInput(g)
             #     else:
             # smoother.SetInputConnection(contour.GetOutputPort())    
             smoother.SetNumberOfIterations(30)
@@ -360,13 +372,21 @@ class Surface:
         #dc.AttributeErrorMetricOn()
         #dc.SetDegree(10)
         #dc.SetSplitting(0)
-        dc.SetInput(g)
+        if vtkVersion.GetVTKMajorVersion() >= 6:
+            dc.SetInputData(g)
+        else:
+            dc.SetInput(g)
+            #dc.SetInput(g)
         #print dc
         dc.Update()
         g = dc.GetOutput()
         #print 'points:', g.GetNumberOfPoints()
         cp = vtkCleanPolyData()
-        cp.SetInput(dc.GetOutput())
+        if vtkVersion.GetVTKMajorVersion() >= 6:
+            cp.SetInputData(dc.GetOutput())
+        else:
+            cp.SetInput(dc.GetOutput())
+            #        cp.SetInput(dc.GetOutput())
         #cp.SetPointMerging(1)
         cp.ConvertPolysToLinesOn()
         cp.SetAbsoluteTolerance(1e-5)
