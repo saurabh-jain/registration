@@ -160,7 +160,7 @@ def eight(sim):
     sim.kvs = 1.5
     sim.khs = 0.5
     sim.kvo = 4
-    sim.kho = 4
+    sim.kho = 2
     logging.info("KV params: name=%s, sigma=%f, order=%f" \
                         % (sim.kvn,sim.kvs,sim.kvo))
     logging.info("KH params: name=%s, sigma=%f, order=%f" \
@@ -216,7 +216,7 @@ def eight_unit_cube(sim):
 
 def leaf200(sim):
     sim.dim = 2
-    sim.sigma = 6.
+    sim.sigma = .2
     sim.sfactor = 1./numpy.power(sim.sigma, 2)
     sim.num_points = (200,200)
     #sim.domain_max = (1., 1.)
@@ -257,7 +257,7 @@ def leaf200(sim):
 
 def leaf100(sim):
     sim.dim = 2
-    sim.sigma = 3.
+    sim.sigma = 0.2
     sim.sfactor = 1./numpy.power(sim.sigma, 2)
     sim.num_points = (100,100)
     #sim.domain_max = (1., 1.)
@@ -271,8 +271,8 @@ def leaf100(sim):
 
     sim.kvn = 'laplacian'
     sim.khn = 'laplacian'
-    sim.kvs = 2.
-    sim.khs = .2
+    sim.kvs = 1.5
+    sim.khs = .5
     sim.kvo = 4
     sim.kho = 4
     logging.info("KV params: name=%s, sigma=%f, order=%f" \
@@ -386,7 +386,7 @@ def inho(sim):
     sim.kvs = 10.
     sim.khs = .3
     sim.kvo = 4
-    sim.kho = 4
+    sim.kho = 2
     logging.info("KV params: name=%s, sigma=%f, order=%f" \
                         % (sim.kvn,sim.kvs,sim.kvo))
     logging.info("KH params: name=%s, sigma=%f, order=%f" \

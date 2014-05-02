@@ -13,6 +13,8 @@ parser = optparse.OptionParser()
 parser.add_option("-o", "--output_dir", dest="output_dir")
 parser.add_option("-c", "--config_name", dest="config_name")
 (options, args) = parser.parse_args()
+print output_directory_base, options.output_dir
+print options
 output_dir = output_directory_base + options.output_dir
 # remove any old results in the output directory
 if os.access(output_dir, os.F_OK):
