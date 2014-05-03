@@ -17,8 +17,8 @@ else:
 
 log_file_name = "metamorphosis.log"
 compute_output_dir = compute_path + "/"
-phantoms_image_dir = compute_path + "/input/meta_images/phantoms/"
-file_write_iter = 10
+phantoms_image_dir = os.environ["HOME"] + "/IMAGES/meta_images/phantoms/"
+file_write_iter = 1
 
 def configure(sim, config_name):
     sim.config_name = config_name
@@ -144,7 +144,7 @@ def d72_unit_cube(sim):
 
 def eight(sim):
     sim.dim = 2
-    sim.sigma = .2
+    sim.sigma = .25
     sim.sfactor = 1./numpy.power(sim.sigma, 2)
     sim.num_points = (40,40)
     #sim.domain_max = (1., 1.)
@@ -157,8 +157,8 @@ def eight(sim):
 
     sim.kvn = 'laplacian'
     sim.khn = 'laplacian'
-    sim.kvs = 1.5
-    sim.khs = 0.5
+    sim.kvs = 2.0
+    sim.khs = .5
     sim.kvo = 4
     sim.kho = 4
     logging.info("KV params: name=%s, sigma=%f, order=%f" \
@@ -216,7 +216,7 @@ def eight_unit_cube(sim):
 
 def leaf200(sim):
     sim.dim = 2
-    sim.sigma = 6.
+    sim.sigma = .2
     sim.sfactor = 1./numpy.power(sim.sigma, 2)
     sim.num_points = (200,200)
     #sim.domain_max = (1., 1.)
@@ -232,8 +232,8 @@ def leaf200(sim):
     sim.khn = 'laplacian'
     #sim.kvs = .03 / 2.0
     #sim.khs = .015 / 3.0 / 1.5
-    sim.kvs = 5. # 2.
-    sim.khs = .4
+    sim.kvs = 2. # 2.
+    sim.khs = .2
     sim.kvo = 4
     sim.kho = 4
     logging.info("KV params: name=%s, sigma=%f, order=%f" \
@@ -257,7 +257,7 @@ def leaf200(sim):
 
 def leaf100(sim):
     sim.dim = 2
-    sim.sigma = 3.
+    sim.sigma = .1
     sim.sfactor = 1./numpy.power(sim.sigma, 2)
     sim.num_points = (100,100)
     #sim.domain_max = (1., 1.)
@@ -271,8 +271,8 @@ def leaf100(sim):
 
     sim.kvn = 'laplacian'
     sim.khn = 'laplacian'
-    sim.kvs = 2.
-    sim.khs = .2
+    sim.kvs = 3.
+    sim.khs = .5
     sim.kvo = 4
     sim.kho = 4
     logging.info("KV params: name=%s, sigma=%f, order=%f" \
@@ -296,7 +296,7 @@ def leaf100(sim):
 
 def brains(sim):
     sim.dim = 2
-    sim.sigma = 3.
+    sim.sigma = .5
     sim.sfactor = 1./numpy.power(sim.sigma, 2)
     sim.num_points = (90,110)
     sim.domain_max = None
@@ -306,11 +306,11 @@ def brains(sim):
     sim.time_max = 1.
     sim.cg_init_eps = 1e-3
     sim.write_iter = file_write_iter
-    brain_image_dir = compute_path + "/meta_images/child/"
+    brain_image_dir =  os.environ["HOME"] +  "/IMAGES/meta_images/child/"
     sim.kvn = 'laplacian'
     sim.khn = 'laplacian'
     sim.kvs = 3.
-    sim.khs = .2
+    sim.khs = .1
     sim.kvo = 4
     sim.kho = 4
     logging.info("KV params: name=%s, sigma=%f, order=%f" \
@@ -322,15 +322,15 @@ def brains(sim):
     sim.sc = diffeomorphisms.gridScalars()
     sim.sc.loadAnalyze(brain_image_dir + "child_2d.hdr")
     #sim.template_in = sim.sc.data[45,...].reshape(num_nodes)
-    sim.template_in = sim.sc.data.reshape(num_nodes)
+    sim.target_in = sim.sc.data.reshape(num_nodes)
     sim.sc = diffeomorphisms.gridScalars()
     sim.sc.loadAnalyze(brain_image_dir + "adult_2d.hdr")
     #sim.target_in = sim.sc.data[45,...].reshape(num_nodes)
-    sim.target_in = sim.sc.data.reshape(num_nodes)
+    sim.template_in = sim.sc.data.reshape(num_nodes)
 
 def phantoms(sim):
     sim.dim = 2
-    sim.sigma = 3.
+    sim.sigma = .25
     sim.sfactor = 1./numpy.power(sim.sigma, 2)
     sim.num_points = (100,100)
     sim.domain_max = None
@@ -364,6 +364,41 @@ def phantoms(sim):
         for k in range(size[1]):
             tp[j,k] = ims[0].getpixel((j,k))
             tr[j,k] = ims[1].getpixel((j,k))
+    sim.template_in = tp.ravel(order='F')
+    sim.target_in = tr.ravel(order='F')
+
+def cell(sim):
+    sim.dim = 2
+    sim.sigma = .25
+    sim.sfactor = 1./numpy.power(sim.sigma, 2)
+    sim.num_points = (78,108)
+    sim.domain_max = None
+    sim.dx = (1.,1.)
+    sim.num_times = 11
+    sim.time_min = 0.
+    sim.time_max = 1.
+    sim.cg_init_eps = 1e-3
+    sim.write_iter = file_write_iter
+
+    sim.kvn = 'laplacian'
+    sim.khn = 'laplacian'
+    sim.kvs = 3.
+    sim.khs = .2
+    sim.kvo = 4
+    sim.kho = 4
+    logging.info("KV params: name=%s, sigma=%f, order=%f" \
+                        % (sim.kvn,sim.kvs,sim.kvo))
+    logging.info("KH params: name=%s, sigma=%f, order=%f" \
+                        % (sim.khn,sim.khs,sim.kho))
+
+    size = sim.num_points
+    im2 = Image.open(image_dir + "helasmall_rescaled.png").rotate(-90).resize(size)
+    #im2 = Image.open(phantoms_image_dir + "TranslatedBiasedPhantom.png").rotate(-90).resize(size)
+    tp = numpy.zeros(size)
+    tr = numpy.zeros(size)
+    for j in range(size[0]):
+        for k in range(size[1]):
+            tr[j,k] = im2.getpixel((j,k))
     sim.template_in = tp.ravel(order='F')
     sim.target_in = tr.ravel(order='F')
 
