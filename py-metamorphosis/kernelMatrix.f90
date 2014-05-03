@@ -29,7 +29,7 @@ subroutine kernelMatrixLaplacianPrecompute(x, sig, ord, num_nodes, &
        0.,0.,0., 1./105 /), (/4,4/))
   c2_ = reshape((/ 1.0/3, 1./15, 1./35,    0., 1./15, 1./35,   0.,0., 1./105 /), (/3,3/))
 
-  !$omp parallel do private(j,i,ut,lpt) shared (u,K,K_diff,K_diff2,c_,c1_,c_2)
+  !$omp parallel do private(j,i,ut,lpt) shared (u,K,K_diff,K_diff2,c_,c1_,c2_)
   do j = 1, num_nodes, 1
      do i = 1, num_nodes, 1
         ut = sqrt((x(i,1)-x(j,1))**2 + (x(i,2)-x(j,2))**2) / sig
@@ -191,7 +191,7 @@ subroutine shoot_NoJ(dt,sfactor,kvs,kvo,khs,kho,alpha,x0,m0,z0,&
 
   do t = 1, num_times-1, 1
      !$omp parallel do private(k,kv_ut,kh_ut,lpt,Kv,Kv_diff,Kh,Kh_diff, &
-     !$omp& zdz,x_diff,dx,dz,dm) shared (alpha,x,m,z,kvs,khs,kho,kho,c_,c1_)
+     !$omp& zdz,x_diff,dx,dz,dm) shared (alpha,x,m,z,kvs,khs,kvo,kho,c_,c1_)
      do k = 1, num_nodes, 1
         dx=0
         dz=0
