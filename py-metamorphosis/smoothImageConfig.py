@@ -274,7 +274,7 @@ def leaf100(sim):
     sim.kvs = 1.5
     sim.khs = .5
     sim.kvo = 4
-    sim.kho = 4
+    sim.kho = 2
     logging.info("KV params: name=%s, sigma=%f, order=%f" \
                         % (sim.kvn,sim.kvs,sim.kvo))
     logging.info("KH params: name=%s, sigma=%f, order=%f" \
