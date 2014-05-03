@@ -22,22 +22,31 @@ subroutine kernelMatrixLaplacianPrecompute(x, sig, ord, num_nodes, &
   real(8) :: ut
   real(8) :: lpt
   integer :: i,j
+  real(8) :: c_(5, 5), c1_(4, 4), c2_(3,3)
+  c_= reshape((/1.,1.,1.,1.,1.,    0.,1.,1.,1.,1.,    0.,0., 1./3, 0.4, 3./7,  &
+       0.,0.,0., 1./15, 2./21,   0.,0.,0.,0., 1./105 /), (/5,5/))
+  c1_ = reshape((/1., 1./3, 1./5, 1./7,    0., 1./3, 1./5, 1./7,    0.,0., 1./15, 2./35,&
+       0.,0.,0., 1./105 /), (/4,4/))
+  c2_ = reshape((/ 1.0/3, 1./15, 1./35,    0., 1./15, 1./35,   0.,0., 1./105 /), (/3,3/))
 
-  !$omp parallel do private(j,i,ut,lpt) shared (u,K,K_diff,K_diff2)
+  !$omp parallel do private(j,i,ut,lpt) shared (u,K,K_diff,K_diff2,c_,c1_,c_2)
   do j = 1, num_nodes, 1
      do i = 1, num_nodes, 1
         ut = sqrt((x(i,1)-x(j,1))**2 + (x(i,2)-x(j,2))**2) / sig
         u(i,j) = ut
         if (i==j) then
            K(i,j) = 1.0
-           K_diff(i,j) = -1.0/((2*ord-1)*2*sig*sig)
-           K_diff2(i,j) = 1.0/((35)*4*sig**4)
+           K_diff(i,j) = - c1_(ord,1)/(2*sig*sig)
+           K_diff2(i,j) = c2_(ord-1,1)/(4*sig**4)
         else
-           lpt = (105 + 105*ut + 45*ut**2 + 10*ut**3 + ut**4)/105
+           lpt = c_(ord+1, 1) + c_(ord+1,2)*ut + c_(ord+1,3)*ut**2 + c_(ord+1,4)*ut**3 + c_(ord+1,5)*ut**4
+           !lpt = (105 + 105*ut + 45*ut**2 + 10*ut**3 + ut**4)/105
            K(i,j) = lpt * exp(-1.0*ut)
-           lpt = (15 + 15*ut + 6*ut**2 + ut**3)/105
+           lpt = c1_(ord,1) + c1_(ord,2)*ut + c1_(ord,3)*ut**2 + c1_(ord,4)*ut**3 
+           !lpt = (15 + 15*ut + 6*ut**2 + ut**3)/105
            K_diff(i,j) = -lpt * exp(-1.0*ut)/(2*sig**2)
-           lpt = (3 + 3*ut + ut**2)/105
+           lpt = c2_(ord-1,1) + c2_(ord-1,2)*ut + c2_(ord-1,3)*ut**2 
+           !lpt = (3 + 3*ut + ut**2)/105
            K_diff2(i,j) = lpt * exp(-1.0*ut)/(4*sig**4)
         end if
      end do
@@ -64,8 +73,9 @@ subroutine shoot(dt,sfactor,kvs,kvo,khs,kho,alpha,x0,m0,z0,&
   real(8) :: kv_ut, kh_ut, Kv, Kv_diff, Kh, Kh_diff, lpt
   real(8) :: zdz, kvz
   real(8) :: x_diff(3)
-  integer :: t, k, l
+  integer :: t, k, l, ov, oh
   real(8) :: dx(3), dz(3), dm, dJ
+  real(8) :: c_(5, 5), c1_(4, 4)
 
   !f2py integer, intent(in) :: num_nodes, num_times, kvo, kho
   !f2py real(8), intent(in) :: sfactor, dt, kvs, khs
@@ -83,10 +93,14 @@ subroutine shoot(dt,sfactor,kvs,kvo,khs,kho,alpha,x0,m0,z0,&
   m(:,1) = m0
   z(:,:,1) = z0
   J(:,1) = 1.0
+  c_= reshape((/1.,1.,1.,1.,1.,    0.,1.,1.,1.,1.,    0.,0., 1./3, 0.4, 3./7,  &
+       0.,0.,0., 1./15, 2./21,   0.,0.,0.,0., 1./105 /), (/5,5/))
+  c1_ = reshape((/1., 1./3, 1./5, 1./7,    0., 1./3, 1./5, 1./7,    0.,0., 1./15, 2./35,&
+       0.,0.,0., 1./105 /), (/4,4/))
 
   do t = 1, num_times-1, 1
      !$omp parallel do private(k,kv_ut,kh_ut,lpt,Kv,Kv_diff,Kh,Kh_diff, &
-     !$omp& zdz,x_diff,kvz,dx,dz,dm,dJ) shared (alpha,x,m,z,J,kvs,khs,kvo,kho)
+     !$omp& zdz,x_diff,kvz,dx,dz,dm,dJ) shared (alpha,x,m,z,J,kvs,khs,kvo,kho,c_,c1_)
      do k = 1, num_nodes, 1
         dx=0
         dz=0
@@ -94,23 +108,22 @@ subroutine shoot(dt,sfactor,kvs,kvo,khs,kho,alpha,x0,m0,z0,&
         dJ=0
 
         do l=1, num_nodes, 1
-
            kv_ut = sqrt((x(k,1,t)-x(l,1,t))**2 + (x(k,2,t)-x(l,2,t))**2) / kvs 
            kh_ut = sqrt((x(k,1,t)-x(l,1,t))**2 + (x(k,2,t)-x(l,2,t))**2) / khs 
-
+           
            if (k==l) then
               Kv = 1.0
-              Kv_diff = -1.0/((2*kvo-1)*2*kvs*kvs)
+              Kv_diff = - c1_(kvo,1)/(2*kvs*kvs)
               Kh = 1.0
-              Kh_diff = -1.0/((2*kho-1)*2*khs*khs)
+              Kh_diff = - c1_(kho,1)/(2*khs*khs)
            else
-              lpt = (105 + 105*kv_ut + 45*kv_ut**2 + 10*kv_ut**3 + kv_ut**4)/105
+              lpt = c_(kvo+1, 1) + c_(kvo+1,2)*kv_ut + c_(kvo+1,3)*kv_ut**2 + c_(kvo+1,4)*kv_ut**3 + c_(kvo+1,5)*kv_ut**4
               Kv = lpt * exp(-1.0*kv_ut)
-              lpt = (105 + 105*kh_ut + 45*kh_ut**2 + 10*kh_ut**3 + kh_ut**4)/105
+              lpt = c_(kho+1, 1) + c_(kho+1,2)*kh_ut + c_(kho+1,3)*kh_ut**2 + c_(kho+1,4)*kh_ut**3 + c_(kho+1,5)*kh_ut**4
               Kh = lpt * exp(-1.0*kh_ut)
-              lpt = (15 + 15*kv_ut + 6*kv_ut**2 + kv_ut**3)/105
+              lpt = c1_(kvo,1) + c1_(kvo,2)*kv_ut + c1_(kvo,3)*kv_ut**2 + c1_(kvo,4)*kv_ut**3 
               Kv_diff = -lpt * exp(-1.0*kv_ut)/(2*kvs**2)
-              lpt = (15 + 15*kh_ut + 6*kh_ut**2 + kh_ut**3)/105
+              lpt = c1_(kho,1) + c1_(kho,2)*kh_ut + c1_(kho,3)*kh_ut**2 + c1_(kho,4)*kh_ut**3 
               Kh_diff = -lpt * exp(-1.0*kh_ut)/(2*khs**2)
            end if
 
@@ -122,13 +135,12 @@ subroutine shoot(dt,sfactor,kvs,kvo,khs,kho,alpha,x0,m0,z0,&
            dm = dm + 0*sfactor*Kv*alpha(l)*zdz + Kh*alpha(l)
            kvz = dot_product(x_diff,z(l,:,t))
            dJ = dJ + sfactor*J(k,t)*alpha(l)*Kv_diff*2*kvz
-
-	end do !l
-	x(k,:,t+1) = x(k,:,t) + dt*dx
-	v(k,:,t) = dx
-	m(k,t+1) = m(k,t) + dt*dm
-	z(k,:,t+1) = z(k,:,t) + dt*dz
-	J(k,t+1) = J(k,t) + dt*dJ
+        end do !l
+        x(k,:,t+1) = x(k,:,t) + dt*dx
+        v(k,:,t) = dx
+        m(k,t+1) = m(k,t) + dt*dm
+        z(k,:,t+1) = z(k,:,t) + dt*dz
+        J(k,t+1) = J(k,t) + dt*dJ
      end do !k
      !$omp end parallel do
 
@@ -154,8 +166,9 @@ subroutine shoot_NoJ(dt,sfactor,kvs,kvo,khs,kho,alpha,x0,m0,z0,&
   real(8) :: kv_ut, kh_ut, Kv, Kv_diff, Kh, Kh_diff, lpt
   real(8) :: zdz
   real(8) :: x_diff(3)
-  integer :: t, k, l
+  integer :: t, k, l, ov, oh
   real(8) :: dx(3), dz(3), dm
+  real(8) :: c_(5, 5), c1_(4, 4), c2_(3,3)
 
   !f2py integer, intent(in) :: num_nodes, num_times, kvo, kho
   !f2py real(8), intent(in) :: sfactor, dt, kvs, khs
@@ -171,10 +184,14 @@ subroutine shoot_NoJ(dt,sfactor,kvs,kvo,khs,kho,alpha,x0,m0,z0,&
   x(:,:,1) = x0
   m(:,1) = m0
   z(:,:,1) = z0
+  c_= reshape((/1.,1.,1.,1.,1.,    0.,1.,1.,1.,1.,    0.,0., 1./3, 0.4, 3./7,  &
+       0.,0.,0., 1./15, 2./21,   0.,0.,0.,0., 1./105 /), (/5,5/))
+  c1_ = reshape((/1., 1./3, 1./5, 1./7,    0., 1./3, 1./5, 1./7,    0.,0., 1./15, 2./35,&
+       0.,0.,0., 1./105 /), (/4,4/))
 
   do t = 1, num_times-1, 1
      !$omp parallel do private(k,kv_ut,kh_ut,lpt,Kv,Kv_diff,Kh,Kh_diff, &
-     !$omp& zdz,x_diff,dx,dz,dm) shared (alpha,x,m,z,kvs,khs,kvo,kho)
+     !$omp& zdz,x_diff,dx,dz,dm) shared (alpha,x,m,z,kvs,khs,kho,kho,c_,c1_)
      do k = 1, num_nodes, 1
         dx=0
         dz=0
@@ -187,19 +204,20 @@ subroutine shoot_NoJ(dt,sfactor,kvs,kvo,khs,kho,alpha,x0,m0,z0,&
 
            if (k==l) then
               Kv = 1.0
-              Kv_diff = -1.0/((2*kvo-1)*2*kvs*kvs)
+              Kv_diff = - c1_(kvo,1)/(2*kvs*kvs)
               Kh = 1.0
-              Kh_diff = -1.0/((2*kho-1)*2*khs*khs)
+              Kh_diff = - c1_(kho,1)/(2*khs*khs)
            else
-              lpt = (105 + 105*kv_ut + 45*kv_ut**2 + 10*kv_ut**3 + kv_ut**4)/105
+              lpt = c_(kvo+1, 1) + c_(kvo+1,2)*kv_ut + c_(kvo+1,3)*kv_ut**2 + c_(kvo+1,4)*kv_ut**3 + c_(kvo+1,5)*kv_ut**4
               Kv = lpt * exp(-1.0*kv_ut)
-              lpt = (105 + 105*kh_ut + 45*kh_ut**2 + 10*kh_ut**3 + kh_ut**4)/105
+              lpt = c_(kho+1, 1) + c_(kho+1,2)*kh_ut + c_(kho+1,3)*kh_ut**2 + c_(kho+1,4)*kh_ut**3 + c_(kho+1,5)*kh_ut**4
               Kh = lpt * exp(-1.0*kh_ut)
-              lpt = (15 + 15*kv_ut + 6*kv_ut**2 + kv_ut**3)/105
+              lpt = c1_(kvo,1) + c1_(kvo,2)*kv_ut + c1_(kvo,3)*kv_ut**2 + c1_(kvo,4)*kv_ut**3 
               Kv_diff = -lpt * exp(-1.0*kv_ut)/(2*kvs**2)
-              lpt = (15 + 15*kh_ut + 6*kh_ut**2 + kh_ut**3)/105
+              lpt = c1_(kho,1) + c1_(kho,2)*kh_ut + c1_(kho,3)*kh_ut**2 + c1_(kho,4)*kh_ut**3 
               Kh_diff = -lpt * exp(-1.0*kh_ut)/(2*khs**2)
            end if
+
 
            dx = dx + sfactor*Kv*alpha(l)*z(l,:,t)
            zdz = dot_product(z(k,:,t),z(l,:,t))
@@ -243,6 +261,7 @@ subroutine shoot_unconstrained(dt,sfactor,kvs,kvo,khs,kho,alpha,x0,m0,z0,&
   real(8) :: x_diff(3)
   integer :: t, k, l
   real(8) :: dx(3), dz(3), dm
+  real(8) :: c_(5, 5), c1_(4, 4)
 
   !f2py integer, intent(in) :: num_nodes, num_times, kvo, kho
   !f2py real(8), intent(in) :: sfactor, dt, kvs, khs
@@ -258,10 +277,14 @@ subroutine shoot_unconstrained(dt,sfactor,kvs,kvo,khs,kho,alpha,x0,m0,z0,&
   x(:,:,1) = x0
   m(:,1) = m0
   z(:,:,1) = z0
+  c_= reshape((/1.,1.,1.,1.,1.,    0.,1.,1.,1.,1.,    0.,0., 1./3, 0.4, 3./7,  &
+       0.,0.,0., 1./15, 2./21,   0.,0.,0.,0., 1./105 /), (/5,5/))
+  c1_ = reshape((/1., 1./3, 1./5, 1./7,    0., 1./3, 1./5, 1./7,    0.,0., 1./15, 2./35,&
+       0.,0.,0., 1./105 /), (/4,4/))
 
   do t = 1, num_times-1, 1
      !$omp parallel do private(k,kv_ut,kh_ut,lpt,Kv,Kv_diff,Kh,Kh_diff, &
-     !$omp& zdz,x_diff,dx,dz,dm) shared (alpha,x,m,z,kvs,khs,kvo,kho)
+     !$omp& zdz,x_diff,dx,dz,dm) shared (alpha,x,m,z,kvs,khs,kvo,kho,c_,c1_)
      do k = 1, num_nodes, 1
         dx=0
         dz=0
@@ -274,17 +297,17 @@ subroutine shoot_unconstrained(dt,sfactor,kvs,kvo,khs,kho,alpha,x0,m0,z0,&
 
            if (k==l) then
               Kv = 1.0
-              Kv_diff = -1.0/((2*kvo-1)*2*kvs*kvs)
+              Kv_diff = - c1_(kvo,1)/(2*kvs*kvs)
               Kh = 1.0
-              Kh_diff = -1.0/((2*kho-1)*2*khs*khs)
+              Kh_diff = - c1_(kho,1)/(2*khs*khs)
            else
-              lpt = (105 + 105*kv_ut + 45*kv_ut**2 + 10*kv_ut**3 + kv_ut**4)/105
+              lpt = c_(kvo+1, 1) + c_(kvo+1,2)*kv_ut + c_(kvo+1,3)*kv_ut**2 + c_(kvo+1,4)*kv_ut**3 + c_(kvo+1,5)*kv_ut**4
               Kv = lpt * exp(-1.0*kv_ut)
-              lpt = (105 + 105*kh_ut + 45*kh_ut**2 + 10*kh_ut**3 + kh_ut**4)/105
+              lpt = c_(kho+1, 1) + c_(kho+1,2)*kh_ut + c_(kho+1,3)*kh_ut**2 + c_(kho+1,4)*kh_ut**3 + c_(kho+1,5)*kh_ut**4
               Kh = lpt * exp(-1.0*kh_ut)
-              lpt = (15 + 15*kv_ut + 6*kv_ut**2 + kv_ut**3)/105
+              lpt = c1_(kvo,1) + c1_(kvo,2)*kv_ut + c1_(kvo,3)*kv_ut**2 + c1_(kvo,4)*kv_ut**3 
               Kv_diff = -lpt * exp(-1.0*kv_ut)/(2*kvs**2)
-              lpt = (15 + 15*kh_ut + 6*kh_ut**2 + kh_ut**3)/105
+              lpt = c1_(kho,1) + c1_(kho,2)*kh_ut + c1_(kho,3)*kh_ut**2 + c1_(kho,4)*kh_ut**3 
               Kh_diff = -lpt * exp(-1.0*kh_ut)/(2*khs**2)
            end if
 
@@ -332,6 +355,7 @@ subroutine adjointSystem(dt,sfactor,kvs,kvo,khs,kho,alpha,x,m,z,J,&
   real(8) :: x_diff(3), zdz
   integer :: t, k, l
   real(8) :: dex(3), dez(3), deJ, dea
+  real(8) :: c_(5, 5), c1_(4, 4), c2_(3,3)
 
   !f2py integer, intent(in) :: num_nodes, num_times, kvo, kho
   !f2py real(8), intent(in) :: sfactor, dt, kvs, khs
@@ -348,12 +372,17 @@ subroutine adjointSystem(dt,sfactor,kvs,kvo,khs,kho,alpha,x,m,z,J,&
   eJ(:,num_times) = dJ
   ealpha = 0
   ez(:,:,num_times) = 0
+  c_= reshape((/1.,1.,1.,1.,1.,    0.,1.,1.,1.,1.,    0.,0., 1./3, 0.4, 3./7,  &
+       0.,0.,0., 1./15, 2./21,   0.,0.,0.,0., 1./105 /), (/5,5/))
+  c1_ = reshape((/1., 1./3, 1./5, 1./7,    0., 1./3, 1./5, 1./7,    0.,0., 1./15, 2./35,&
+       0.,0.,0., 1./105 /), (/4,4/))
+  c2_ = reshape((/ 1.0/3, 1./15, 1./35,    0., 1./15, 1./35,   0.,0., 1./105 /), (/3,3/))
 
   do t=num_times,2,-1
      !$omp parallel do private(k,kv_ut,kh_ut,lpt,Kv,Kv_diff,Kh,Kh_diff, &
      !$omp& Kv_diff2,Kh_diff2,dex,dez,dea,deJ, & 
      !$omp& zdz,x_diff) shared (dt,alpha,x,m,z,J,ex,ez,em,eJ,ealpha, &
-     !$omp& kvs,khs,kvo,kho)
+     !$omp& kvs,khs,kvo,kho,c_,c1_,c2_)
      do k=1,num_nodes,1
         dex = 0
         dez = 0
@@ -368,23 +397,23 @@ subroutine adjointSystem(dt,sfactor,kvs,kvo,khs,kho,alpha,x,m,z,J,&
 
            if (k==l) then
               Kv = 1.0
-              Kv_diff = -1.0/((2*kvo-1)*2*kvs*kvs)
+              Kv_diff = - c1_(kvo,1)/(2*kvs*kvs)
               Kh = 1.0
-              Kh_diff = -1.0/((2*kho-1)*2*khs*khs)
-              Kv_diff2 = 1.0/((35)*4*kvs**4)
-              Kh_diff2 = 1.0/((35)*4*khs**4)
+              Kh_diff = - c1_(kho,1)/(2*khs*khs)
+              Kv_diff2 = c2_(kvo-1,1)/(4*kvs**4)
+              Kh_diff2 = c2_(kho-1,1)/(4*khs**4)
            else
-              lpt = (105 + 105*kv_ut + 45*kv_ut**2 + 10*kv_ut**3 + kv_ut**4)/105
+              lpt = c_(kvo+1, 1) + c_(kvo+1,2)*kv_ut + c_(kvo+1,3)*kv_ut**2 + c_(kvo+1,4)*kv_ut**3 + c_(kvo+1,5)*kv_ut**4
               Kv = lpt * exp(-1.0*kv_ut)
-              lpt = (105 + 105*kh_ut + 45*kh_ut**2 + 10*kh_ut**3 + kh_ut**4)/105
+              lpt = c_(kho+1, 1) + c_(kho+1,2)*kh_ut + c_(kho+1,3)*kh_ut**2 + c_(kho+1,4)*kh_ut**3 + c_(kho+1,5)*kh_ut**4
               Kh = lpt * exp(-1.0*kh_ut)
-              lpt = (15 + 15*kv_ut + 6*kv_ut**2 + kv_ut**3)/105
+              lpt = c1_(kvo,1) + c1_(kvo,2)*kv_ut + c1_(kvo,3)*kv_ut**2 + c1_(kvo,4)*kv_ut**3 
               Kv_diff = -lpt * exp(-1.0*kv_ut)/(2*kvs**2)
-              lpt = (15 + 15*kh_ut + 6*kh_ut**2 + kh_ut**3)/105
+              lpt = c1_(kho,1) + c1_(kho,2)*kh_ut + c1_(kho,3)*kh_ut**2 + c1_(kho,4)*kh_ut**3 
               Kh_diff = -lpt * exp(-1.0*kh_ut)/(2*khs**2)
-              lpt = (3 + 3*kv_ut + kv_ut**2)/105
+              lpt = c2_(kvo-1,1) + c2_(kvo-1,2)*kv_ut + c2_(kvo-1,3)*kv_ut**2 
               Kv_diff2 = lpt * exp(-1.0*kv_ut)/(4*kvs**4)
-              lpt = (3 + 3*kh_ut + kh_ut**2)/105
+              lpt = c2_(kho-1,1) + c2_(kho-1,2)*kh_ut + c2_(kho-1,3)*kh_ut**2 
               Kh_diff2 = lpt * exp(-1.0*kh_ut)/(4*khs**4)
            end if
 
@@ -436,7 +465,7 @@ subroutine adjointSystem(dt,sfactor,kvs,kvo,khs,kho,alpha,x,m,z,J,&
   ! !$omp parallel do private(k,kv_ut,kh_ut,lpt,Kv,Kv_diff,Kh,Kh_diff, &
   ! !$omp& Kv_diff2,Kh_diff2,dex,dez,dea,deJ, & 
   ! !$omp& zdz,x_diff) shared (dt,alpha,x,m,z,J,ex,ez,em,eJ,ealpha, &
-  ! !$omp& kvs,khs,kvo,kho)
+  ! !$omp& kvs,khs,kvo,kho,c_,c1_,c2_)
   ! do k=1,num_nodes,1
   !    dex = 0
   !    dez = 0
@@ -497,8 +526,13 @@ subroutine computeHamiltonian(sfactor,kvs,kvo,khs,kho, alpha, x, z, ex, ez, em, 
   real(8) :: x_diff(3), zdz
   integer :: t, k, l
   real(8) :: dex(3), dez(3), dea
+  real(8) :: c_(5, 5), c1_(4, 4)
 
   H = 0
+  c_= reshape((/1.,1.,1.,1.,1.,    0.,1.,1.,1.,1.,    0.,0., 1./3, 0.4, 3./7,  &
+       0.,0.,0., 1./15, 2./21,   0.,0.,0.,0., 1./105 /), (/5,5/))
+  c1_ = reshape((/1., 1./3, 1./5, 1./7,    0., 1./3, 1./5, 1./7,    0.,0., 1./15, 2./35,&
+       0.,0.,0., 1./105 /), (/4,4/))
   do k = 1, num_nodes, 1
      dx=0
      dz=0
@@ -511,17 +545,17 @@ subroutine computeHamiltonian(sfactor,kvs,kvo,khs,kho, alpha, x, z, ex, ez, em, 
 
         if (k==l) then
            Kv = 1.0
-           Kv_diff = -1.0/((2*kvo-1)*2*kvs*kvs)
+           Kv_diff = - c1_(kvo,1)/(2*kvs*kvs)
            Kh = 1.0
-           Kh_diff = -1.0/((2*kho-1)*2*khs*khs)
+           Kh_diff = - c1_(kho,1)/(2*khs*khs)
         else
-           lpt = (105 + 105*kv_ut + 45*kv_ut**2 + 10*kv_ut**3 + kv_ut**4)/105
+           lpt = c_(kvo+1, 1) + c_(kvo+1,2)*kv_ut + c_(kvo+1,3)*kv_ut**2 + c_(kvo+1,4)*kv_ut**3 + c_(kvo+1,5)*kv_ut**4
            Kv = lpt * exp(-1.0*kv_ut)
-           lpt = (105 + 105*kh_ut + 45*kh_ut**2 + 10*kh_ut**3 + kh_ut**4)/105
+           lpt = c_(kho+1, 1) + c_(kho+1,2)*kh_ut + c_(kho+1,3)*kh_ut**2 + c_(kho+1,4)*kh_ut**3 + c_(kho+1,5)*kh_ut**4
            Kh = lpt * exp(-1.0*kh_ut)
-           lpt = (15 + 15*kv_ut + 6*kv_ut**2 + kv_ut**3)/105
+           lpt = c1_(kvo,1) + c1_(kvo,2)*kv_ut + c1_(kvo,3)*kv_ut**2 + c1_(kvo,4)*kv_ut**3 
            Kv_diff = -lpt * exp(-1.0*kv_ut)/(2*kvs**2)
-           lpt = (15 + 15*kh_ut + 6*kh_ut**2 + kh_ut**3)/105
+           lpt = c1_(kho,1) + c1_(kho,2)*kh_ut + c1_(kho,3)*kh_ut**2 + c1_(kho,4)*kh_ut**3 
            Kh_diff = -lpt * exp(-1.0*kh_ut)/(2*khs**2)
         end if
 
@@ -600,7 +634,12 @@ subroutine computeHamiltonian_u(sfactor,kvs,kvo,khs,kho, alpha, x, z, ex, ez, em
   real(8) :: x_diff(3), zdz
   integer :: t, k, l
   real(8) :: dex(3), dez(3), dea
+  real(8) :: c_(5, 5), c1_(4, 4)
 
+  c_= reshape((/1.,1.,1.,1.,1.,    0.,1.,1.,1.,1.,    0.,0., 1./3, 0.4, 3./7,  &
+       0.,0.,0., 1./15, 2./21,   0.,0.,0.,0., 1./105 /), (/5,5/))
+  c1_ = reshape((/1., 1./3, 1./5, 1./7,    0., 1./3, 1./5, 1./7,    0.,0., 1./15, 2./35,&
+       0.,0.,0., 1./105 /), (/4,4/))
   H = 0
   do k = 1, num_nodes, 1
      dx=0
@@ -614,17 +653,17 @@ subroutine computeHamiltonian_u(sfactor,kvs,kvo,khs,kho, alpha, x, z, ex, ez, em
 
         if (k==l) then
            Kv = 1.0
-           Kv_diff = -1.0/((2*kvo-1)*2*kvs*kvs)
+           Kv_diff = - c1_(kvo,1)/(2*kvs*kvs)
            Kh = 1.0
-           Kh_diff = -1.0/((2*kho-1)*2*khs*khs)
+           Kh_diff = - c1_(kho,1)/(2*khs*khs)
         else
-           lpt = (105 + 105*kv_ut + 45*kv_ut**2 + 10*kv_ut**3 + kv_ut**4)/105
+           lpt = c_(kvo+1, 1) + c_(kvo+1,2)*kv_ut + c_(kvo+1,3)*kv_ut**2 + c_(kvo+1,4)*kv_ut**3 + c_(kvo+1,5)*kv_ut**4
            Kv = lpt * exp(-1.0*kv_ut)
-           lpt = (105 + 105*kh_ut + 45*kh_ut**2 + 10*kh_ut**3 + kh_ut**4)/105
+           lpt = c_(kho+1, 1) + c_(kho+1,2)*kh_ut + c_(kho+1,3)*kh_ut**2 + c_(kho+1,4)*kh_ut**3 + c_(kho+1,5)*kh_ut**4
            Kh = lpt * exp(-1.0*kh_ut)
-           lpt = (15 + 15*kv_ut + 6*kv_ut**2 + kv_ut**3)/105
+           lpt = c1_(kvo,1) + c1_(kvo,2)*kv_ut + c1_(kvo,3)*kv_ut**2 + c1_(kvo,4)*kv_ut**3 
            Kv_diff = -lpt * exp(-1.0*kv_ut)/(2*kvs**2)
-           lpt = (15 + 15*kh_ut + 6*kh_ut**2 + kh_ut**3)/105
+           lpt = c1_(kho,1) + c1_(kho,2)*kh_ut + c1_(kho,3)*kh_ut**2 + c1_(kho,4)*kh_ut**3 
            Kh_diff = -lpt * exp(-1.0*kh_ut)/(2*khs**2)
         end if
 
@@ -709,6 +748,7 @@ subroutine adjointSystem_NoJ(dt,sfactor,kvs,kvo,khs,kho,alpha,x,m,z,&
   real(8) :: x_diff(3), zdz
   integer :: t, k, l
   real(8) :: dex(num_nodes, 3), dez(num_nodes, 3), dea(num_nodes)
+  real(8) :: c_(5, 5), c1_(4, 4), c2_(3,3)
 
   !f2py integer, intent(in) :: num_nodes, num_times, kvo, kho
   !f2py real(8), intent(in) :: sfactor, dt, kvs, khs
@@ -723,13 +763,18 @@ subroutine adjointSystem_NoJ(dt,sfactor,kvs,kvo,khs,kho,alpha,x,m,z,&
   em(:,num_times) = dm
   ealpha = 0
   ez(:,:,num_times) = 0
+  c_= reshape((/1.,1.,1.,1.,1.,    0.,1.,1.,1.,1.,    0.,0., 1./3, 0.4, 3./7,  &
+       0.,0.,0., 1./15, 2./21,   0.,0.,0.,0., 1./105 /), (/5,5/))
+  c1_ = reshape((/1., 1./3, 1./5, 1./7,    0., 1./3, 1./5, 1./7,    0.,0., 1./15, 2./35,&
+       0.,0.,0., 1./105 /), (/4,4/))
+  c2_ = reshape((/ 1.0/3, 1./15, 1./35,    0., 1./15, 1./35,   0.,0., 1./105 /), (/3,3/))
   
 
   do t=num_times,2,-1
      !$omp parallel do private(k,kv_ut,kh_ut,lpt,Kv,Kv_diff,Kh,Kh_diff, &
-     !$omp& Kv_diff2,Kh_diff2,dex,dez,dea, & 
+     !$omp& Kv_diff2,Kh_diff2, & 
      !$omp& zdz,x_diff) shared (dt,alpha,x,m,z,ex,ez,em,ealpha, &
-     !$omp& kvs,khs,kvo,kho)
+     !$omp& dex,dez,dea,kvs,khs,kvo,kho,c_,c1_,c2_)
      do k=1,num_nodes,1
         dex(k,:) = 0
         dez(k,:) = 0
@@ -741,25 +786,26 @@ subroutine adjointSystem_NoJ(dt,sfactor,kvs,kvo,khs,kho,alpha,x,m,z,&
 
            if (k==l) then
               Kv = 1.0
-              Kv_diff = -1.0/((2*kvo-1)*2*kvs*kvs)
+              Kv_diff = - c1_(kvo,1)/(2*kvs*kvs)
               Kh = 1.0
-              Kh_diff = -1.0/((2*kho-1)*2*khs*khs)
-              Kv_diff2 = 1.0/((35)*4*kvs**4)
-              Kh_diff2 = 1.0/((35)*4*khs**4)
+              Kh_diff = - c1_(kho,1)/(2*khs*khs)
+              Kv_diff2 = c2_(kvo-1,1)/(4*kvs**4)
+              Kh_diff2 = c2_(kho-1,1)/(4*khs**4)
            else
-              lpt = (105 + 105*kv_ut + 45*kv_ut**2 + 10*kv_ut**3 + kv_ut**4)/105
+              lpt = c_(kvo+1, 1) + c_(kvo+1,2)*kv_ut + c_(kvo+1,3)*kv_ut**2 + c_(kvo+1,4)*kv_ut**3 + c_(kvo+1,5)*kv_ut**4
               Kv = lpt * exp(-1.0*kv_ut)
-              lpt = (105 + 105*kh_ut + 45*kh_ut**2 + 10*kh_ut**3 + kh_ut**4)/105
+              lpt = c_(kho+1, 1) + c_(kho+1,2)*kh_ut + c_(kho+1,3)*kh_ut**2 + c_(kho+1,4)*kh_ut**3 + c_(kho+1,5)*kh_ut**4
               Kh = lpt * exp(-1.0*kh_ut)
-              lpt = (15 + 15*kv_ut + 6*kv_ut**2 + kv_ut**3)/105
+              lpt = c1_(kvo,1) + c1_(kvo,2)*kv_ut + c1_(kvo,3)*kv_ut**2 + c1_(kvo,4)*kv_ut**3 
               Kv_diff = -lpt * exp(-1.0*kv_ut)/(2*kvs**2)
-              lpt = (15 + 15*kh_ut + 6*kh_ut**2 + kh_ut**3)/105
+              lpt = c1_(kho,1) + c1_(kho,2)*kh_ut + c1_(kho,3)*kh_ut**2 + c1_(kho,4)*kh_ut**3 
               Kh_diff = -lpt * exp(-1.0*kh_ut)/(2*khs**2)
-              lpt = (3 + 3*kv_ut + kv_ut**2)/105
+              lpt = c2_(kvo-1,1) + c2_(kvo-1,2)*kv_ut + c2_(kvo-1,3)*kv_ut**2 
               Kv_diff2 = lpt * exp(-1.0*kv_ut)/(4*kvs**4)
-              lpt = (3 + 3*kh_ut + kh_ut**2)/105
+              lpt = c2_(kho-1,1) + c2_(kho-1,2)*kh_ut + c2_(kho-1,3)*kh_ut**2 
               Kh_diff2 = lpt * exp(-1.0*kh_ut)/(4*khs**4)
            end if
+
 
            x_diff = x(k,:,t-1)-x(l,:,t-1)
            zdz = dot_product(z(k,:,t-1),z(l,:,t-1))
@@ -858,6 +904,7 @@ subroutine adjointSystem_unconstrained(dt,sfactor,kvs,kvo,khs,kho,alpha,x,m,z,&
   real(8) :: x_diff(3), zdz
   integer :: t, k, l
   real(8) :: dex(num_nodes, 3), dez(num_nodes, 3), dea(num_nodes)
+  real(8) :: c_(5, 5), c1_(4, 4), c2_(3,3)
 
   !f2py integer, intent(in) :: num_nodes, num_times, kvo, kho
   !f2py real(8), intent(in) :: sfactor, dt, kvs, khs
@@ -873,13 +920,18 @@ subroutine adjointSystem_unconstrained(dt,sfactor,kvs,kvo,khs,kho,alpha,x,m,z,&
   em(:,num_times) = dm
   ealpha = 0
   ez(:,:,num_times) = 0
-  
+  c_= reshape((/1.,1.,1.,1.,1.,    0.,1.,1.,1.,1.,    0.,0., 1./3, 0.4, 3./7,  &
+       0.,0.,0., 1./15, 2./21,   0.,0.,0.,0., 1./105 /), (/5,5/))
+  c1_ = reshape((/1., 1./3, 1./5, 1./7,    0., 1./3, 1./5, 1./7,    0.,0., 1./15, 2./35,&
+       0.,0.,0., 1./105 /), (/4,4/))
+  c2_ = reshape((/ 1.0/3, 1./15, 1./35,    0., 1./15, 1./35,   0.,0., 1./105 /), (/3,3/))
+  !print *, c_(kho+1,:)
 
   do t=num_times,2,-1
      !$omp parallel do private(k,kv_ut,kh_ut,lpt,Kv,Kv_diff,Kh,Kh_diff, &
      !$omp& Kv_diff2,Kh_diff2, & 
      !$omp& zdz,x_diff) shared (dt,alpha,x,m,z,ex,ez,em,ealpha, &
-     !$omp& kvs,khs,kvo,kho,dex,dez,dea)
+     !$omp& kvs,khs,kvo,kho,dex,dez,dea,c_,c1_,c2_)
      do k=1,num_nodes,1
         dex(k,:) = 0
         dez(k,:) = 0
@@ -894,23 +946,23 @@ subroutine adjointSystem_unconstrained(dt,sfactor,kvs,kvo,khs,kho,alpha,x,m,z,&
 
            if (k==l) then
               Kv = 1.0
-              Kv_diff = -1.0/((2*kvo-1)*2*kvs*kvs)
+              Kv_diff = - c1_(kvo,1)/(2*kvs*kvs)
               Kh = 1.0
-              Kh_diff = -1.0/((2*kho-1)*2*khs*khs)
-              Kv_diff2 = 1.0/((35)*4*kvs**4)
-              Kh_diff2 = 1.0/((35)*4*khs**4)
+              Kh_diff = - c1_(kho,1)/(2*khs*khs)
+              Kv_diff2 = c2_(kvo-1,1)/(4*kvs**4)
+              Kh_diff2 = c2_(kho-1,1)/(4*khs**4)
            else
-              lpt = (105 + 105*kv_ut + 45*kv_ut**2 + 10*kv_ut**3 + kv_ut**4)/105
+              lpt = c_(kvo+1, 1) + c_(kvo+1,2)*kv_ut + c_(kvo+1,3)*kv_ut**2 + c_(kvo+1,4)*kv_ut**3 + c_(kvo+1,5)*kv_ut**4
               Kv = lpt * exp(-1.0*kv_ut)
-              lpt = (105 + 105*kh_ut + 45*kh_ut**2 + 10*kh_ut**3 + kh_ut**4)/105
+              lpt = c_(kho+1, 1) + c_(kho+1,2)*kh_ut + c_(kho+1,3)*kh_ut**2 + c_(kho+1,4)*kh_ut**3 + c_(kho+1,5)*kh_ut**4
               Kh = lpt * exp(-1.0*kh_ut)
-              lpt = (15 + 15*kv_ut + 6*kv_ut**2 + kv_ut**3)/105
+              lpt = c1_(kvo,1) + c1_(kvo,2)*kv_ut + c1_(kvo,3)*kv_ut**2 + c1_(kvo,4)*kv_ut**3 
               Kv_diff = -lpt * exp(-1.0*kv_ut)/(2*kvs**2)
-              lpt = (15 + 15*kh_ut + 6*kh_ut**2 + kh_ut**3)/105
+              lpt = c1_(kho,1) + c1_(kho,2)*kh_ut + c1_(kho,3)*kh_ut**2 + c1_(kho,4)*kh_ut**3 
               Kh_diff = -lpt * exp(-1.0*kh_ut)/(2*khs**2)
-              lpt = (3 + 3*kv_ut + kv_ut**2)/105
+              lpt = c2_(kvo-1,1) + c2_(kvo-1,2)*kv_ut + c2_(kvo-1,3)*kv_ut**2 
               Kv_diff2 = lpt * exp(-1.0*kv_ut)/(4*kvs**4)
-              lpt = (3 + 3*kh_ut + kh_ut**2)/105
+              lpt = c2_(kho-1,1) + c2_(kho-1,2)*kh_ut + c2_(kho-1,3)*kh_ut**2 
               Kh_diff2 = lpt * exp(-1.0*kh_ut)/(4*khs**4)
            end if
 
@@ -1007,9 +1059,12 @@ subroutine applyK(x, y, beta, sig, ord, num_nodes, f)
   real(8) :: lpt
   integer :: k,l 
   real(8) :: df
+  real(8) :: c_(5, 5)
+  c_= reshape((/1.,1.,1.,1.,1.,    0.,1.,1.,1.,1.,    0.,0., 1./3, 0.4, 3./7,  &
+       0.,0.,0., 1./15, 2./21,   0.,0.,0.,0., 1./105 /), (/5,5/))
 
   !$omp parallel do private(k,l,ut,lpt,Kh,df) shared &
-  !$omp& (num_nodes, f, sig, ord, beta)
+  !$omp& (num_nodes, f, sig, ord, beta, c_)
   do k = 1, num_nodes, 1
      df = 0
      do l = 1, num_nodes, 1
@@ -1017,7 +1072,7 @@ subroutine applyK(x, y, beta, sig, ord, num_nodes, f)
         if (ut < 1e-8) then
            Kh = 1.0
         else
-           lpt = (105 + 105*ut + 45*ut**2 + 10*ut**3 + ut**4)/105
+           lpt = c_(ord+1, 1) + c_(ord+1,2)*ut + c_(ord+1,3)*ut**2 + c_(ord+1,4)*ut**3 + c_(ord+1,5)*ut**4
            Kh = lpt * exp(-1.0*ut)
         end if
         df = df + Kh * beta(l)
@@ -1052,9 +1107,14 @@ subroutine applyK_and_Diff(x, y, beta, sig, ord, num_nodes, f, f2)
   real(8) :: lpt
   integer :: k,l 
   real(8) :: df, df2(3)
+  real(8) :: c_(5, 5), c1_(4, 4)
+  c_= reshape((/1.,1.,1.,1.,1.,    0.,1.,1.,1.,1.,    0.,0., 1./3, 0.4, 3./7,  &
+       0.,0.,0., 1./15, 2./21,   0.,0.,0.,0., 1./105 /), (/5,5/))
+  c1_ = reshape((/1., 1./3, 1./5, 1./7,    0., 1./3, 1./5, 1./7,    0.,0., 1./15, 2./35,&
+       0.,0.,0., 1./105 /), (/4,4/))
 
   !$omp parallel do private(k,l,ut,lpt,Kh,Kh_diff,df,df2) shared &
-  !$omp& (num_nodes, f, f2, sig, ord, beta)
+  !$omp& (num_nodes, f, f2, sig, ord, beta, c_, c1_)
   do k = 1, num_nodes, 1
      df = 0
      df2 = 0
@@ -1062,11 +1122,11 @@ subroutine applyK_and_Diff(x, y, beta, sig, ord, num_nodes, f, f2)
         ut = sqrt((x(k,1)-y(l,1))**2 + (x(k,2)-y(l,2))**2) / sig
         if (ut < 1e-8) then
            Kh = 1.0
-           Kh_diff = -1.0/((2*ord-1)*2*sig*sig)
+           Kh_diff = - c1_(ord,1)/(2*sig*sig)
         else
-           lpt = (105 + 105*ut + 45*ut**2 + 10*ut**3 + ut**4)/105
+           lpt = c_(ord+1, 1) + c_(ord+1,2)*ut + c_(ord+1,3)*ut**2 + c_(ord+1,4)*ut**3 + c_(ord+1,5)*ut**4
            Kh = lpt * exp(-1.0*ut)
-           lpt = (15 + 15*ut + 6*ut**2 + ut**3)/105
+           lpt = c1_(ord,1) + c1_(ord,2)*ut + c1_(ord,3)*ut**2 + c1_(ord,4)*ut**3 
            Kh_diff = -lpt * exp(-1.0*ut)/(2*sig**2)
         end if
         df = df + Kh * beta(l)

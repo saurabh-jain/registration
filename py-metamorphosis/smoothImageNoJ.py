@@ -325,7 +325,7 @@ class SmoothImageMeta(object):
             rg.add_vtk_point_data(ealpha0, "ealpha")
             rg.vtk_write(0, "get_grad_test", output_dir=self.output_dir)
         if self.unconstrained:
-            #ez0 = ez0 / (1e-6 + (self.D_template**2).sum(axis=1)[..., numpy.newaxis])
+            ez0 = ez0 * (.01 + (self.D_template**2).sum(axis=1)[..., numpy.newaxis])
             return (coeff * ealpha0, coeff*ez0)
         else:
             return coeff * ealpha0
@@ -345,8 +345,7 @@ class SmoothImageMeta(object):
         if self.unconstrained:
             for ll,g in enumerate(g2):
                 res[ll] += (g1[0]*g[0]).sum() 
-                #res[ll] += (g1[1]*g[1]*(1e-6 + (self.D_template**2).sum(axis=1)[..., numpy.newaxis])).sum()
-                res[ll] += (g1[1]*g[1]).sum()
+                res[ll] += (g1[1]*g[1]/(.01 + (self.D_template**2).sum(axis=1)[..., numpy.newaxis])).sum()
         else:
             for ll,g in enumerate(g2):
                 res[ll] += numpy.dot(g1, g)

@@ -77,7 +77,6 @@ class Curve:
         a = np.divide(a,n)
         return a
 
-         
 
             
     # Computes isocontours using vtk               
@@ -394,6 +393,60 @@ class Curve:
         xDef3 = self.vertices[self.faces[:, 2], :]
         self.computeCentersLengths()
 
+
+
+def mergeCurves(curves, tol=0.01):
+    N = 0
+    M = 0
+    dim = curves[0].vertices.shape[1]
+    for c in curves:
+        N += c.vertices.shape[0]
+        M += c.faces.shape[0]
+
+    vertices = np.zeros([N,dim])
+    faces = np.zeros([M,dim], dtype=int)
+    N = 0
+    M = 0
+    for c in curves:
+        N1 = c.vertices.shape[0]
+        M1 = c.faces.shape[0]
+        vertices[N:N+N1,:] = c.vertices
+        faces[M:M+M1, :] = c.faces + N
+        N += N1
+        M += M1
+        #print N,M
+    dist = np.sqrt(((vertices[:, np.newaxis, :]-vertices[np.newaxis,:,:])**2).sum(axis=2))
+    j=0
+    openV = np.ones(N)
+    refIndex = -np.ones(N)
+    for k in range(N):
+        if openV[k]:
+            #vertices[j,:] = np.copy(vertices[k,:])
+            J = np.nonzero((dist[k,:] < tol) * openV==1)
+            J = J[0]
+            openV[J] = 0
+            refIndex[J] = j
+            j=j+1
+    vert2 = np.zeros([j, dim])
+    for k in range(j):
+        J = np.nonzero(refIndex==k)
+        J = J[0]
+        #print vertices[J]
+        vert2[k,:] = vertices[J].sum(axis=0)/len(J)
+        #print J, len(J), J.shape
+    #vertices = vertices[0:j, :]
+    #print faces
+    faces = refIndex[faces]
+    faces2 = np.copy(faces)
+    j = 0
+    for k in range(faces.shape[0]):
+        if faces[k,1] != faces[k,0]:
+            faces2[j,:] = faces[k,:]
+            j += 1
+            #print k,j
+    faces2 = faces2[range(j)]
+    return Curve(FV=(faces2,vert2))
+
 # Reads several .byu files
 def readMultipleCurves(regexp, Nmax = 0):
     files = glob.glob(regexp)
@@ -483,6 +536,11 @@ def currentNormGradient(fvDef, fv1, KparDist):
 
 
     return 2*px
+
+
+
+
+
 
 # Measure norm of fv1
 def measureNorm0(fv1, KparDist):
