@@ -45,7 +45,7 @@ def letter(sim):
     sim.kvs = 1.5
     sim.khs = .5
     sim.kvo = 4
-    sim.kho = 1
+    sim.kho = 2
     logging.info("KV params: name=%s, sigma=%f, order=%f" \
                         % (sim.kvn,sim.kvs,sim.kvo))
     logging.info("KH params: name=%s, sigma=%f, order=%f" \
@@ -66,9 +66,9 @@ def letter(sim):
 
 def d72(sim):
     sim.dim = 2
-    sim.sigma = 3.0
+    sim.sigma = 0.5
     sim.sfactor = 1./numpy.power(sim.sigma, 2)
-    down_factor = 3
+    down_factor = 1
     assert 72 % down_factor == 0, "down_factor does not divide 72."
     sim.num_points = (72 / down_factor, 72/down_factor)
     sim.domain_max = (36., 36.)
@@ -83,7 +83,7 @@ def d72(sim):
     sim.kvs = 3.
     sim.khs = .6
     sim.kvo = 4
-    sim.kho = 4
+    sim.kho = 2
     logging.info("KV params: name=%s, sigma=%f, order=%f" \
                         % (sim.kvn,sim.kvs,sim.kvo))
     logging.info("KH params: name=%s, sigma=%f, order=%f" \
@@ -257,7 +257,7 @@ def leaf200(sim):
 
 def leaf100(sim):
     sim.dim = 2
-    sim.sigma = 0.2
+    sim.sigma = 0.1
     sim.sfactor = 1./numpy.power(sim.sigma, 2)
     sim.num_points = (100,100)
     #sim.domain_max = (1., 1.)
