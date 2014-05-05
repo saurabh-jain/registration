@@ -257,7 +257,7 @@ def leaf200(sim):
 
 def leaf100(sim):
     sim.dim = 2
-    sim.sigma = 0.2
+    sim.sigma = 0.1
     sim.sfactor = 1./numpy.power(sim.sigma, 2)
     sim.num_points = (100,100)
     #sim.domain_max = (1., 1.)
