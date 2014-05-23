@@ -56,7 +56,7 @@ public:
     epsMin = 1e-7; 
     epsSmall = 1e-10;
     param.copy(par) ;
-    cout << "load file" << endl ;
+    // cout << "load file" << endl ;
     Load() ;
     Template.computeGradient(param.spaceRes,param.gradientThreshold);
   }
@@ -67,10 +67,10 @@ public:
     epsSmall = 1e-10;
     param.read(file) ;
     param.read(argc, argv) ;
-    cout << "load file" << endl ;
+    //cout << "load file" << endl ;
     Load() ;
     Template.computeGradient(param.spaceRes,param.gradientThreshold);
-    cout << "loaded" << endl ;
+    //cout << "loaded" << endl ;
   }
   ImageMatching(char *file, int k){init(file, k);}
   void init(char *file, int k){
@@ -90,7 +90,7 @@ public:
   //  void convImage(const deformableImage & in, deformableImage& out) {convImage(in.img(), out.img(), param.sigmaGauss, param.sizeGauss);}
   void convImage(const deformableImage & in, deformableImage& out) {convImage(in.img(), out.img());}
   void revertIntensities(deformableImage &tmp){tmp.revertIntensities();}
-  void crop1(deformableImage &src, deformableImage & dest) {cout << "Running crop1" << endl ; src.crop(param.cropD1, dest) ;}
+  void crop1(deformableImage &src, deformableImage & dest) {src.crop(param.cropD1, dest) ;}
   void crop2(deformableImage &src, deformableImage & dest) {src.crop(param.cropD2, dest) ;}
   void expandBoundary(deformableImage &img){
     if (param.expand_value > -0.000000001)
@@ -125,7 +125,7 @@ public:
   void binarize(deformableImage &tmp){ tmp.binarize(param.binThreshold, 100) ;}
   void flip(deformableImage &tmp, int dm){tmp.flip(dm) ;}
 
-  void get_template(deformableImage &tmp) {tmp.get_image(param.fileTemp, param.dim.size()); tmp.domain().putM(imageDim) ; cout << "get_t " << tmp.img().maxAbs() << endl ;}
+  void get_template(deformableImage &tmp) {tmp.get_image(param.fileTemp, param.dim.size()); tmp.domain().putM(imageDim) ; }
   void get_binaryTemplate(deformableImage &tmp) {tmp.img().read(param.fileTemp);tmp.domain().putM(imageDim) ;}
   void get_target(deformableImage &tmp) {tmp.get_image(param.fileTarg, param.dim.size());}
   void get_binaryTarget(deformableImage &tmp) {tmp.img().read(param.fileTarg);}
@@ -202,7 +202,6 @@ public:
 
   void convImage(const Vector &in, Vector &out) {
     // padding the in image ;
-    cout << "CI1 " << in.min() << endl ;
     if (param.sigmaGauss <0) {
       //    cout << "Not smoothing image" << endl ;
       out.copy(in) ;
@@ -226,168 +225,9 @@ public:
       
       out += mm ;
       out -= out.min();
-      /* bool check = false ; */
-      /* if (check) { */
-      /* 	Vector tmp, diff ; */
-      /* 	convImageNofft(in, tmp) ; */
-      /* 	diff.copy(tmp) ; */
-      /* 	diff -= out ; */
-      /* 	double chk = diff.norm2() ; */
-      /* 	cout << "Check " << chk << endl ; */
-      /* 	if (chk > 1e-5) */
-      /* 	  out.copy(tmp) ; */
-      /* } */
-    cout << "CI2 " << mm << " " <<  out.max() << " " << _imageKern.kern.sum() << endl ;
     }
-
   }
 
-
-  /* void convImage(const Vector &in, Vector &out, _real sig, int sz) { */
-  /*   // padding the in image ; */
-  
-  /*   int *_n ; */
-  /*   Vector paddedI, kern ; */
-  /*   fftw_plan _ptoI, _pfromI ; */
-  /*   _real *_inI, *_outI ; */
-  /*   fftw_complex *_inIc, *_outIc ; */
-  /*   fftw_complex *_fIKernel ; */
-  /*   Ivector imDim, MIN, MAX ; */
-
-  /*   in.d.putM(MAX) ; */
-  /*   in.d.putm(MIN) ; */
-  /*   imDim.copy(MAX) ; */
-  /*   imDim -= MIN ; */
-
-  /*   //  cout << "imge:" << sz << endl << endl ; */
-
-  /*   unsigned int TYPEINIT = FFTW_ESTIMATE ; */
-  /*   Diffeomorphisms::init_fft(imDim, param_matching::GAUSSKERNEL, sig, sz, 0, kern, paddedI, &_n, & _inI, &_outI,  */
-  /* 			      & _inIc, &_outIc, &_fIKernel, _ptoI, _pfromI, TYPEINIT) ; */
-
-  /*   Vector in2 ; */
-  /*   _real mm = 0 ; */
-  /*   in2.copy(in) ; */
-  /*   in2.domain().shiftMinus(MIN) ; */
-    
-  /*   mm = in2.avgBoundary() ; */
-  /*   in2 -= mm ; */
-
-  /*   _real nnn =  paddedI.length() ; */
-  /*   paddedI.zero() ; */
-  /*   paddedI.subCopy(in2) ; */
-  /*   for(unsigned int i=0; i<paddedI.length(); i++) { */
-  /*     _inI[i] = paddedI[i] ; */
-  /*   } */
-  /*   fftw_execute(_ptoI) ; */
-  /*   for(unsigned int i=0; i<paddedI.length(); i++) { */
-  /*     _inIc[i][0] = (_outIc[i][0] * _fIKernel[i][0] - _outIc[i][1] * _fIKernel[i][1]) ; */
-  /*     _inIc[i][1] = (_outIc[i][0] * _fIKernel[i][1] + _outIc[i][1] * _fIKernel[i][0]) ; */
-  /*   } */
-  /*   fftw_execute(_pfromI) ; */
-  /*   for(unsigned int i=0; i<paddedI.length(); i++) */
-  /*     paddedI[i] = _outI[i]  / nnn ; */
-
-  /*   Ivector MIN2, MAX2 ; */
-  /*   in2.d.putm(MIN2) ; */
-  /*   in2.d.putM(MAX2) ; */
-  /*   out.al(in2.d) ; */
-  /*   paddedI.extract(out, MIN2, MAX2) ; */
-  /*   out += mm ; */
-
-  /*   out.domain().shiftPlus(MIN) ; */
-  /*   out /= kern.sum() ; */
-  
-  /*   fftw_destroy_plan(_pfromI) ; */
-  /*   fftw_destroy_plan(_ptoI) ; */
-  /*   fftw_free((void *) _inI)  ; */
-  /*   fftw_free((void *) _outI)  ; */
-  /*   fftw_free((void *) _inIc)  ; */
-  /*   fftw_free((void *) _outIc)  ; */
-  /*   fftw_free((void *) _fIKernel)  ; */
-  /*   delete [] _n ; */
-  /* } */
-
-
-  /* void convImageNofft(const Vector &in, Vector &out) { */
-  /*   // padding the in image ; */
-
-  /*     Vector in2 ; */
-  /*     _real mm = 0 ; */
-  /*     in2.copy(in) ; */
-
-  /*     mm = in.avgBoundary() ; */
-  /*     in2 -= mm ; */
-
-  /*     Vector pI ; */
-  /*   //    paddedImage.zero() ; */
-  /*   Vector kern; */
-  /*   makeKernelGauss(kern, param.sigmaGauss, param.dim.size(), param.sizeGauss) ; */
-  /*   Ivector minD, maxD ; */
-  /*   minD.resize(in.d.n) ; */
-  /*   maxD.resize(in.d.n) ; */
-  /*   in.d.putm(minD) ; */
-  /*   in.d.putM(maxD) ; */
-  /*   for(unsigned int k=0; k<in.d.n; k++) { */
-  /*     minD[k] -= param.sizeGauss ; */
-  /*     maxD[k] += param.sizeGauss ; */
-  /*   } */
-  /*   Domain d(minD, maxD) ; */
-  /*   pI.zeros(d) ; */
-
-  /*   pI.subCopy(in2) ; */
-    
-  /*   /\*  char path[256] ; */
-  /* sprintf(path, "%s/PI", param.outDir) ; */
-  /* pI.write_image(path) ; */
-  /*   *\/ */
-  /*   out.al(in.d) ; */
-  /*   Ivector I, J, K ; */
-  /*   I.resize(in.d.n) ; */
-  /*   J.resize(in.d.n) ; */
-  /*   K.resize(in.d.n) ; */
-  /*   out.d.putm(I) ; */
-  /*   //cout << "loop conv nofft" << endl ; */
-  /*   //cout << in.d << endl ; */
-  /*   //cout << kern.d << endl ; */
-  /*   //cout << pI.d << endl ; */
-  /*   for(unsigned int i=0; i<out.length(); i++) { */
-  /*     //cout << "i " << flush ; */
-  /*     out[i] = 0 ; */
-  /*     //cout << "1" << flush ; */
-  /*     kern.d.putm(J) ; */
-  /*     //cout << "2" << flush ; */
-  /*     //_real test = 0 ; */
-  /*     for (unsigned int j=0; j<kern.length(); j++) { */
-  /* 	for (unsigned int k=0; k < I.size(); k++){  */
-  /* 	  K[k] = I[k] - J[k];  */
-  /* 	  //	  cout << ":" << K[k] << ": " << flush ;  */
-  /* 	} */
-  /* 	//      cout << "3 " << pI.d.position(K) << " " << flush ; */
-  /* 	_real u = pI[pI.d.position(K)] ; */
-  /* 	//cout << "4" << flush ; */
-  /* 	//	test += u ; */
-  /* 	out[i] += kern[j] * u ; */
-  /* 	//cout << "5" << flush ; */
-  /* 	kern.d.inc(J) ; */
-  /* 	//cout << "6" << flush ; */
-  /*     } */
-  /*     out.d.inc(I) ; */
-  /*   } */
-  /*   //cout << "end conv nofft " << " " << in2.sum() << " " << out.sum() << endl ; */
-  /*   out += mm ; */
-  /*   out /= kern.sum() ; */
-  /*   /\* */
-  /* sprintf(path, "%s/in", param.outDir) ; */
-  /* in.write_image(path) ; */
-  /* sprintf(path, "%s/in2", param.outDir) ; */
-  /* in2.write_image(path) ; */
-  /* sprintf(path, "%s/out", param.outDir) ; */
-  /* out.write_image(path) ; */
-  /* sprintf(path, "%s/kernIm", param.outDir) ; */
-  /* kern.write_image(path) ; */
-  /*   *\/ */
-  /* } */
 
 
   /**
@@ -449,7 +289,8 @@ public:
 
   template <class AE>
   void affineReg(AE & enerAff) {
-    cout << "affine registration" << endl ;
+    if (param.verb)
+      cout << "affine registration" << endl ;
     int N = param.dim.size() ;
     gamma.zeros(N+1, N+1) ;
 
@@ -474,7 +315,8 @@ public:
 
     if (!param.applyAffineToTemplate) {
       affTrans.copy(AT[T]) ;
-      cout << affTrans << endl ;
+      if (param.verb)
+	cout << affTrans << endl ;
       double x ;
       for (int k=0; k<N; k++) {
 	x = MIN[k] ;
@@ -547,7 +389,8 @@ public:
       
       if (energy > (1 + param.tolGrad) * energy0 + 1e-10) {
 	step = step * 0.5 ;
-	cout << "step reduction (gradient): " << step << " " << energy0 << " " << energy << endl ;
+	if (param.verb)
+	  cout << "step reduction (gradient): " << step << " " << energy0 << " " << energy << endl ;
       }
     }
     step *= 2 ;

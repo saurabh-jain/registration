@@ -198,6 +198,7 @@ class LandmarkMatching: public LandmarkMatchingBase<KERNEL, LandmarkObjective>
 public:
   using PointSetEvolution<KERNEL>::Template ;
   using PointSetEvolution<KERNEL>::Target ;
+  using PointSetEvolution<KERNEL>::geodesicPointSetEvolution ;
   //using Diffeomorphisms::param;
   using LandmarkMatchingBase<KERNEL, LandmarkObjective>::param ;
   //  using PointSetEvolution<KERNEL>::param ;
