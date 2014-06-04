@@ -107,7 +107,7 @@ public:
       c0 = vI.maxNorm() ;
       //      vI /= _sh->nbFreeVar ;
       _sh->DualVarGeodesicDiffeoEvolutionDiscrete(LvI, b, grad) ;
-      cout << "grad: " << b.norm2() << " " << grad.norm2() << endl ;
+      // cout << "grad: " << b.norm2() << " " << grad.norm2() << endl ;
       grad += vI ;
       _sh->Template.normal().scalProd(grad, foog) ;
       foog *=-1 ;
@@ -132,7 +132,7 @@ public:
     }
 
     double endOfIteration(Tangent &Z) {
-      cout << "obj fun: " << objectiveFun(Z) << endl ;
+      // cout << "obj fun: " << objectiveFun(Z) << endl ;
       _sh->Z0.copy(Z) ;
       _sh->Print() ;
       return -1 ;
@@ -483,6 +483,7 @@ public:
     }
 
     double endOfIteration(Tangent &Z) {
+      cout << "end of iter" << endl ;
       _sh->Z0.copy(Z) ;
       _sh->Print() ;
       return -1 ;

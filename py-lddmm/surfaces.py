@@ -5,6 +5,7 @@ import os
 import glob
 from vtk import *
 import kernelFunctions as kfun
+import pointEvolution_fort as evol_omp
 
 class vtkFields:
     def __init__(self):
@@ -1078,14 +1079,16 @@ def measureNorm0(fv1, KparDist):
 def measureNormDef(fvDef, fv1, KparDist):
     c1 = fvDef.centers
     cr1 = fvDef.surfel
-    cr1 = np.mat(np.sqrt((cr1**2).sum(axis=1)+1e-10))
+    cr1 = np.sqrt((cr1**2).sum(axis=1)+1e-10)[:,np.newaxis]
     c2 = fv1.centers
     cr2 = fv1.surfel
-    cr2 = np.mat(np.sqrt((cr2**2).sum(axis=1)+1e-10))
-    g11 = kfun.kernelMatrix(KparDist, c1)
-    g12 = kfun.kernelMatrix(KparDist, c2, c1)
+    cr2 = np.sqrt((cr2**2).sum(axis=1)+1e-10)[:,np.newaxis]
+    obj = (np.multiply(cr1, KparDist.applyK(c1, cr1)).sum()
+        - 2*np.multiply(cr1, KparDist.applyK(c2, cr2, firstVar=c1)).sum())
+    #g11 = kfun.kernelMatrix(KparDist, c1)
+    #g12 = kfun.kernelMatrix(KparDist, c2, c1)
     #obj = (np.multiply(cr1*cr1.T, g11).sum() - 2*np.multiply(cr1*(cr2.T), g12).sum())
-    obj = (cr1 * g11 * cr1.T).sum() - 2* (cr1 * g12 *cr2.T).sum()
+    #obj = (cr1 * g11 * cr1.T).sum() - 2* (cr1 * g12 *cr2.T).sum()
     return obj
 
 # Returns |fvDef - fv1|^2 for measure norm

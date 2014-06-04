@@ -10,11 +10,15 @@ def compute(createSurfaces=True):
 
     if createSurfaces:
         [x,y,z] = np.mgrid[0:200, 0:200, 0:200]/100.
-        y = y-1
-        z = z-1
+        ay = np.fabs(y-1)
+        az = np.fabs(z-1)
+        ax = np.fabs(x-0.5)
         s2 = np.sqrt(2)
+        c1 = np.sqrt(0.06)
+        c2 = np.sqrt(0.045)
+        c3 = 0.1
 
-        I1 = np.minimum(.06 - ((x-.50)**2 + 0.5*y**2 + z**2), np.minimum(((x-.50)**2 + 0.5*y**2 + z**2)-0.045, 0.2-y)) 
+        I1 = np.minimum(c1**2 - (ax**2 + 0.5*ay**2 + az**2), np.minimum((ax**2 + 0.5*ay**2 + az**2)-c2**2, 1+c3-y)) 
         fv1 = Surface() ;
         fv1.Isosurface(I1, value = 0, target=1000, scales=[1, 1, 1], smooth=0.01)
 
@@ -25,7 +29,8 @@ def compute(createSurfaces=True):
         #s2 = 2
         s1 = 1.1
         s2 = 1.2
-        I1 = np.minimum(.06/s1 - (((x-.50)**2 + 0.5*y**2 + z**2)), np.minimum((s2*(x-.50)**2 + s2*0.5*y**2 + s2*z**2)-0.045/s1, 0.2/s1-y))  
+        p = 1.75
+        I1 = np.minimum(c1**p/s1 - ((ax**p + 0.5*ay**p + az**p)), np.minimum((s2*ax**p + s2*0.5*ay**p + s2*az**p)-c2**p/s1, 1+c3/s1-y))  
         fv2 = Surface() ;
         fv2.Isosurface(I1, value = 0, target=1000, scales=[1, 1, 1], smooth=0.01)
         
@@ -33,7 +38,7 @@ def compute(createSurfaces=True):
 
         s1 *= 1.1
         s2 *= 1.2
-        I1 = np.minimum(.06/s1 - (((x-.50)**2 + 0.5*y**2 + z**2)), np.minimum((s2*(x-.50)**2 + s2*0.5*y**2 + s2*z**2)-0.045/s1, 0.2/s1-y))  
+        I1 = np.minimum(c1**p/s1 - ((ax**p + 0.5*ay**p + az**p)), np.minimum((s2*ax**p + s2*0.5*ay**p + s2*az**p)-c2**p/s1, 1+c3/s1-y))  
         fv3 = Surface() ;
         fv3.Isosurface(I1, value = 0, target=1000, scales=[1, 1, 1], smooth=0.01)
         
@@ -89,7 +94,7 @@ def compute(createSurfaces=True):
     nz2[:,2] = N1[:,2]*N1[:,1]
     nz = nz / (1e-5 + np.sqrt((nz**2).sum(axis=1)[:,np.newaxis]))
     nz2 = nz2 / (1e-5 + np.sqrt((nz2**2).sum(axis=1)[:,np.newaxis]))
-    theta = np.pi/6
+    theta = 2*np.pi/3
     psi = 0 #np.pi/12
     c = np.cos(theta)
     s = np.sin(theta)

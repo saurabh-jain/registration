@@ -762,7 +762,7 @@ class Morphing:public ImageMatching
     for (unsigned int t=0; t<w.size(); t++) {
       opt.setImages(&(J[t]), &(J[t+1])) ;
       //cout << "Starting cg" << endl ;
-      cg(opt, scp, w[t], ww, 3, step[t], param.epsMax, param.minVarEn, param.gs, 0) ;
+      cg(opt, scp, w[t], ww, 5, step[t], param.epsMax, param.minVarEn, param.gs, 0) ;
       w[t].copy(ww) ;
       step[t] = cg.getStep() ;
     }

@@ -4,6 +4,7 @@ import scipy as sp
 import surfaces
 import kernelFunctions as kfun
 import pointEvolution as evol
+import pointEvolution_fort as evol_omp
 import conjugateGradient as cg
 import surfaceMatching
 from affineBasis import *
@@ -257,8 +258,13 @@ class SurfaceMatching(surfaceMatching.SurfaceMatching):
                 x = np.squeeze(xt[k][t, :, :])
                 nu = np.squeeze(nut[k][t, :, :])
                 npt1 = npt + self.npt[k]
-                r = self.param.KparDiff.applyK(x, a) + np.dot(x, A.T) + b
-                r2 = self.param.KparDiffOut.applyK(zB, aB, firstVar=x)
+                print 'OMP?'
+                r = evol_omp.applyK(x, x, a, self.param.KparDiff.sigma, self.param.KparDiff.order,
+                                    x.shape[0], x.shape[0], x.shape[1]) + np.dot(x, A.T) + b
+                r2 = evol_omp.applyK(x, zB, a, self.param.KparDiffOut.sigma, self.param.KparDiffOut.order,
+                                    x.shape[0], zB.shape[0], zB.shape[1]) + np.dot(x, A.T) + b
+                #r = self.param.KparDiff.applyK(x, a) + np.dot(x, A.T) + b
+                #r2 = self.param.KparDiffOut.applyK(zB, aB, firstVar=x)
                 #print nu.shape, r.shape, r2.shape, cval[t,npt:npt1].shape, npt, npt1
                 cval[t,npt:npt1] = np.squeeze(np.multiply(nu, r-r2).sum(axis=1))
                 npt = npt1

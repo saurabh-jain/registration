@@ -485,7 +485,7 @@ class ImageEvolution: public ImageMatching
     r -= AZ ;
     
     if (r.maxAbs() < 0.001){
-      if (param.verb)
+      if (param.verb > 1)
 	cout << "CG: nothing to do" << endl ;
       return ;
     }
@@ -534,16 +534,16 @@ class ImageEvolution: public ImageMatching
       //  cout << "iter tangent CG " << i2 << " ener = " << ener << " " << ener2/old_ener << endl  ;
       if (ener2 < 1e-4 || ener2 < 0.0001 * old_ener) 
 	{
-	  if (param.verb)
+	  if (param.verb > 1)
 	    cout << "iter tangent CG " << i2 << " ener = " << ener2 << " " << old_ener << endl  ;
 	  Z *= normZ ;
 	  return ;
 	}
-    if (param.verb)
+    if (param.verb > 1)
       cout << "iter tangent CG " << i2 << " ener = " << ener2 << " " << old_ener << endl  ;
     }
 
-    if (param.verb)
+    if (param.verb > 1)
       cout << "iter tangent CG (max iter) " << K << " ener = " << ener2 << " " << old_ener << endl  ;
     Z *= normZ ;
   }
@@ -595,7 +595,7 @@ class ImageEvolution: public ImageMatching
     It.getMomentum(Mt, Lwt) ;
     kernel(Lvt, vt) ;
     kernel(Lwt, wt) ;
-    if (param.verb) {
+    if (param.verb > 1) {
       cout << "norm momentum = " << Lwt.scalProd(wt) << endl ; 
       cout << "norm Lv = " << Lvt.scalProd(vt) << endl ; 
     }
@@ -639,7 +639,7 @@ class ImageEvolution: public ImageMatching
       vt.copy(vt2) ;
       _real Coup_vwc =Lwc.scalProd(vt),   Mag_wc  = Lwc.scalProd(wc) ;
       _real alfa, be ;
-      if (param.verb) {
+      if (param.verb > 1) {
 	cout << "Mag_v = " << Mag_v << endl ; 
 	cout << "Mag_wc = " << Mag_wc << " " << Mag_wc/Mag_w << endl ;
 	cout << "Coup_vwc = " << Coup_vwc << " " << Coup_vwc/Coup_vw << endl ;
@@ -647,7 +647,7 @@ class ImageEvolution: public ImageMatching
       }
       be = sqrt((Mag_v*Mag_w-Coup_vw*Coup_vw)/(Mag_v*Mag_wc-Coup_vwc* Coup_vwc));
       alfa = Coup_vw/Mag_v-(Coup_vwc/Mag_v) * be ;
-      if (param.verb)
+      if (param.verb > 1)
 	cout << "Alpha[" << k << "] = " << alfa << " ; " << "Beta[" << k << "] = " << be << endl  ;
 
 
@@ -659,7 +659,7 @@ class ImageEvolution: public ImageMatching
       Mt += Zv2 ;
       It.getMomentum(Mt, Lwt) ;
       kernel(Lwt, wt) ;
-      if (param.verb)
+      if (param.verb > 1)
 	cout << "norm momentum = " << Lwt.scalProd(wt) << " " << Mt.maxAbs() <<  " " << M0.maxAbs() << endl << endl ; 
       //    geodesicImageEvolutionFromVelocity(It, Lwt, I2, Lvt2, 1.0) ;
       //    I2.write_image("currentTarget") ;
@@ -711,7 +711,7 @@ class ImageEvolution: public ImageMatching
     _real Mag_v = Lvt.scalProd(vt), Mag_w = Lwt.scalProd(wt) ;
     _real Coup_vw = Lwt.scalProd(vt) ;
 
-    if (param.verb)
+    if (param.verb > 1)
       cout << "T = " << 0 << " " << Mag_v << " " << Mag_w << " " << Coup_vw << endl ;
     
     if (Mag_v < 1e-10)
@@ -775,14 +775,14 @@ class ImageEvolution: public ImageMatching
       _real   Mag_wt  = Lwt.scalProd(wt) ;
     
       _real alfa, be ;
-      if (param.verb) {
+      if (param.verb > 1) {
 	cout << "T = " << (t+1)*dt << " ; Mag_v = " << Mag_vt << endl ; 
 	cout << "Mag_wc = " << Mag_wt << " " << Mag_wt/Mag_w << endl ;
 	cout << "Coup_vwc = " << Coup_vwt << " " << Coup_vwt/Coup_vw << endl ;
       }
       be = sqrt((Mag_v*Mag_w-Coup_vw*Coup_vw)/(Mag_v*Mag_wt-Coup_vwt* Coup_vwt));
       alfa = Coup_vw/Mag_v-(Coup_vwt/Mag_v) * be ;
-      if (param.verb)
+      if (param.verb > 1)
 	cout << "Alpha[" << t << "] = " << alfa << " ; " << "Beta[" << t << "] = " << be << endl ;
       
     
