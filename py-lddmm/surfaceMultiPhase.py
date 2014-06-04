@@ -830,7 +830,7 @@ class SurfaceMatching(surfaceMatching.SurfaceMatching):
             ll = 0
             for gr in g2:
                 ggOld = np.squeeze(gr[self.nsurf].diff[t, :, :]) 
-                res[ll]  +=  np.multiply(ggOld,u).sum()
+                res[ll]  +=  np.multiply(ggOld,u).sum() / self.coeffZ
                 ll = ll + 1
 
         return res
