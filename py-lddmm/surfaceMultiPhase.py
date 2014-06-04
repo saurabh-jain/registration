@@ -905,7 +905,7 @@ class SurfaceMatching(surfaceMatching.SurfaceMatching):
             nn += n1
 
     def optimizeMatching(self):
-	self.coeffZ = 1.
+	self.coeffZ = 10.
 	grd = self.getGradient(self.gradCoeff)
 	[grd2] = self.dotProduct(grd, [grd])
 

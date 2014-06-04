@@ -102,7 +102,7 @@ class SmoothImageMeta(object):
         self.output_dir = output_dir
         self.spline_interp = False
         self.noJ = True
-        self.unconstrained = True
+        self.unconstrained = False
         # used only for letter examples
         self.letter_match = letter_match
 
@@ -726,7 +726,7 @@ class SmoothImageMeta(object):
         return ge
 
     def computeMatching(self):
-        conjugateGradient.cg(self, True, maxIter=1000, TestGradient=False, \
+        conjugateGradient.cg(self, True, maxIter=2000, TestGradient=False, \
                             epsInit=self.cg_init_eps)
         return self
 

@@ -22,7 +22,7 @@ if os.access(output_dir, os.F_OK):
 os.mkdir(output_dir)
 loggingUtils.setup_default_logging(output_dir, smoothImageConfig)
 logging.info(options)
-letter_match = (11,18,0)
+letter_match = (11,18,30) #targets: 0, 1, 25
 sim = smoothImageNoJ.SmoothImageMeta(output_dir, options.config_name, letter_match)
 sim.computeMatching()
 

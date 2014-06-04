@@ -30,7 +30,7 @@ def configure(sim, config_name):
 
 def letter(sim):
     sim.dim = 2
-    sim.sigma = .5
+    sim.sigma = .1
     sim.sfactor = 1./numpy.power(sim.sigma, 2)
     sim.num_points = (24,24)
     #sim.domain_max = (36., 36.)
@@ -42,7 +42,7 @@ def letter(sim):
     sim.write_iter = file_write_iter
     sim.kvn = 'laplacian'
     sim.khn = 'laplacian'
-    sim.kvs = 1.5
+    sim.kvs = 3.
     sim.khs = .5
     sim.kvo = 4
     sim.kho = 2
@@ -66,7 +66,7 @@ def letter(sim):
 
 def d72(sim):
     sim.dim = 2
-    sim.sigma = 0.5
+    sim.sigma = 0.2
     sim.sfactor = 1./numpy.power(sim.sigma, 2)
     down_factor = 1
     assert 72 % down_factor == 0, "down_factor does not divide 72."
@@ -80,8 +80,8 @@ def d72(sim):
     sim.write_iter = file_write_iter
     sim.kvn = 'laplacian'
     sim.khn = 'laplacian'
-    sim.kvs = 3.
-    sim.khs = .6
+    sim.kvs = 1.5
+    sim.khs = .5
     sim.kvo = 4
     sim.kho = 2
     logging.info("KV params: name=%s, sigma=%f, order=%f" \
@@ -257,7 +257,7 @@ def leaf200(sim):
 
 def leaf100(sim):
     sim.dim = 2
-    sim.sigma = 0.1
+    sim.sigma = 0.2
     sim.sfactor = 1./numpy.power(sim.sigma, 2)
     sim.num_points = (100,100)
     #sim.domain_max = (1., 1.)
@@ -271,7 +271,7 @@ def leaf100(sim):
 
     sim.kvn = 'laplacian'
     sim.khn = 'laplacian'
-    sim.kvs = 1.5
+    sim.kvs = 3.
     sim.khs = .5
     sim.kvo = 4
     sim.kho = 2
