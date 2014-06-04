@@ -62,7 +62,12 @@ class Vector: public _Vector<_real>
     }
     else if (dim==2) {
       Magick::Image img0;
-      img0.read(file) ;
+      try{
+	img0.read(file) ;
+      }
+      catch(Magick::WarningCoder &warning) {
+	cerr << "Coder Warning: " << warning.what() << endl;
+      }
       int nbl = img0.rows(), nbc = img0.columns() ;
       Magick::PixelPacket *pixels = img0.getPixels(0, 0, nbc, nbl);
       Ivector MIN, MAX ;

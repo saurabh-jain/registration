@@ -6,6 +6,7 @@ from surfaceMultiPhase import *
 
 def compute():
 
+    Tg = 750
     ## Build Two colliding ellipses
     [x,y,z] = np.mgrid[0:200, 0:200, 0:200]/100.
     y = y-1
@@ -14,11 +15,11 @@ def compute():
 
     I1 = .06 - ((x-.30)**2 + 0.5*y**2 + z**2)  
     fv1 = Surface() ;
-    fv1.Isosurface(I1, value = 0, target=750, scales=[1, 1, 1])
+    fv1.Isosurface(I1, value = 0, target=Tg, scales=[1, 1, 1])
 
     I1 = .06 - ((x-1.70)**2 + 0.5*y**2 + z**2) 
     fv2 = Surface() ;
-    fv2.Isosurface(I1, value=0, target=750, scales=[1, 1, 1])
+    fv2.Isosurface(I1, value=0, target=Tg, scales=[1, 1, 1])
 
     u = (z + y)/s2
     v = (z - y)/s2
@@ -38,8 +39,8 @@ def compute():
     K2 = Kernel(name='gauss', sigma = 10.0)
 
     sm = SurfaceMatchingParam(timeStep=0.1, KparDiff=K1, KparDiffOut=K2, sigmaDist=20., sigmaError=10., errorType='measure')
-    f = (SurfaceMatching(Template=(fv1,fv2), Target=(fv3,fv4), outputDir='/Users/younes/Development/Results/tight_Sliding_rigid2_10',param=sm, mu=1.,regWeightOut=1., testGradient=True,
-                         typeConstraint='slidingV2', maxIter_cg=1000, maxIter_al=100, affine='none', rotWeight=0.1))
+    f = (SurfaceMatching(Template=(fv1,fv2), Target=(fv3,fv4), outputDir='/Users/younes/Development/Results/tight_stitched_rigid2_10',param=sm, mu=1.,regWeightOut=1., testGradient=True,
+                         typeConstraint='stitched', maxIter_cg=1000, maxIter_al=100, affine='none', rotWeight=0.1))
     f.optimizeMatching()
 
 

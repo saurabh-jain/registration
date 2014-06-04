@@ -198,7 +198,7 @@ public:
   void read(std::vector<string> &input) ;
   int type_group ;
   int kernel_type ;
-  bool verb ;
+  unsigned char verb ;
   int printFiles ;
   bool cont ;
   bool gs ;
@@ -429,7 +429,7 @@ public:
 		APPLYAFFINETOTEMPLATE, FLIPTARGET, GRADIENT_THRESHOLD,
 		PARALLELTIMEDISC, INITIALMOMENTUM, BINARIZE, EXPANDTOMAXSIZE,USEVECTORMOMENTUM,
                 REVERTINTENSITIES, MATCHDENSITIES,NB_THREADS, CONTINUE,SAVEMOVIE,PERIODIC,QUIET,
-		NORMALIZEKERNEL
+		DEBUG, NORMALIZEKERNEL
   } ;
   map<string, int> paramMap ;
 } ;

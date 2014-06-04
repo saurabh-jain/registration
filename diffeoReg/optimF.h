@@ -320,6 +320,7 @@ template<class OBJECT_TYPE, class TAN_TYPE, class _scalProd, class _optimFun> cl
       if (opt.stopProcedure())
 	break ;
       //    cout << "endloop" << endl; 
+      opt.endOfIteration(x) ;
     }
 
     opt.endOfProcedure(x) ;

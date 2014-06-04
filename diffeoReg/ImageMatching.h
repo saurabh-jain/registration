@@ -110,7 +110,7 @@ public:
     Domain D(imageDim) ;
     src.rescale(D, dest) ;
     //    cout << imageDim << endl ;
-    if (param.verb)
+    if (param.verb > 1)
       cout << "New dimensions: " << param.dim.size() << endl << dest.domain() << endl ;
   }
 
@@ -118,7 +118,7 @@ public:
     Domain D(imageDim) ;
     //    cout << imageDim << endl ;
     src.rescale(D, dest) ;
-    if (param.verb)
+    if (param.verb > 1)
       cout << "New dimensions: " << endl << dest.domain() << endl;
   }
   
@@ -289,7 +289,7 @@ public:
 
   template <class AE>
   void affineReg(AE & enerAff) {
-    if (param.verb)
+    if (param.verb > 1)
       cout << "affine registration" << endl ;
     int N = param.dim.size() ;
     gamma.zeros(N+1, N+1) ;
@@ -315,7 +315,7 @@ public:
 
     if (!param.applyAffineToTemplate) {
       affTrans.copy(AT[T]) ;
-      if (param.verb)
+      if (param.verb > 1)
 	cout << affTrans << endl ;
       double x ;
       for (int k=0; k<N; k++) {
@@ -351,7 +351,7 @@ public:
       Template.computeGradient(param.spaceRes,param.gradientThreshold);
     }
 
-    if (param.verb) {
+    if (param.verb > 1) {
       cout << "Estimated matrix: " << endl; 
       affTrans.Print() ;
     }
@@ -389,7 +389,7 @@ public:
       
       if (energy > (1 + param.tolGrad) * energy0 + 1e-10) {
 	step = step * 0.5 ;
-	if (param.verb)
+	if (param.verb >1)
 	  cout << "step reduction (gradient): " << step << " " << energy0 << " " << energy << endl ;
       }
     }
@@ -469,7 +469,7 @@ public:
 	imat[i][j] = allAT[T](i, j) ;
       }
 
-    if (param.verb){
+    if (param.verb > 1){
       cout << endl << "Current matrix" << endl ;
       allAT[T].Print() ;
     }
@@ -564,7 +564,7 @@ public:
 	  grad(i, j) = 0 ;
     }
     
-    if (param.verb) {
+    if (param.verb > 1) {
       cout << endl << "Gradient: " << endl ;
       grad.Print() ;
     }

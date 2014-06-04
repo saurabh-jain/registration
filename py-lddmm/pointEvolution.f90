@@ -54,7 +54,7 @@ subroutine kernelMatrixLaplacianPrecompute(x, sig, ord, num_nodes, &
   !$omp end parallel do
 end subroutine kernelMatrixLaplacianPrecompute
 
-subroutine shoot1order_lap(dt,kvs,kvo,alpha,x0,&
+subroutine shoot1order(dt,kvs,kvo,alpha,x0,&
      num_times,num_nodes,dim,x,v)
   implicit none
   integer :: num_nodes, num_times, dim, kvo
@@ -72,7 +72,7 @@ subroutine shoot1order_lap(dt,kvs,kvo,alpha,x0,&
   real(8) :: dx(dim)
   real(8) :: c_(5, 5), c1_(4, 4)
 
-  !f2py integer, intent(in) :: num_nodes, num_times, kvo
+  !f2py integer, intent(in) :: num_nodes, num_times, dim, kvo
   !f2py real(8), intent(in) :: dt, kvs
   !f2py real(8), intent(in), dimension(num_nodes, dim) :: x0
   !f2py real(8), intent(in), dimension(num_nodes, dim, num_times) :: alpha
@@ -90,15 +90,22 @@ subroutine shoot1order_lap(dt,kvs,kvo,alpha,x0,&
      !$omp& x_diff,dx) shared (alpha,x,kvs,kvo,c_,c1_)
      do k = 1, num_nodes, 1
         dx=0
-
         do l=1, num_nodes, 1
-           kv_ut = sqrt((x(k,1,t)-x(l,1,t))**2 + (x(k,2,t)-x(l,2,t))**2) / kvs 
-           
-           if (k==l) then
-              Kv = 1.0
-           else
-              lpt = c_(kvo+1, 1) + c_(kvo+1,2)*kv_ut + c_(kvo+1,3)*kv_ut**2 + c_(kvo+1,4)*kv_ut**3 + c_(kvo+1,5)*kv_ut**4
-              Kv = lpt * exp(-1.0*kv_ut)
+           kv_ut = norm2(x(k,:,t)-x(l,:,t)) / kvs 
+           if (kvo > 4) then
+              kv_ut = kv_ut * kv_ut
+              if (k==l) then
+                 Kv = 1.0
+              else
+                 Kv = exp(-1.0*kv_ut)
+              end if
+           else           
+              if (k==l) then
+                 Kv = 1.0
+              else
+                 lpt = c_(kvo+1, 1) + c_(kvo+1,2)*kv_ut + c_(kvo+1,3)*kv_ut**2 + c_(kvo+1,4)*kv_ut**3 + c_(kvo+1,5)*kv_ut**4
+                 Kv = lpt * exp(-1.0*kv_ut)
+              end if
            end if
 
            dx = dx + Kv*alpha(l,:,t)
@@ -109,10 +116,10 @@ subroutine shoot1order_lap(dt,kvs,kvo,alpha,x0,&
      !$omp end parallel do
   end do !t
 
-end subroutine shoot1order_lap
+end subroutine shoot1order
 
-subroutine adjoint1order_lap(dt,kvs,kvo,alpha,x0,&
-     da,dx,num_times,num_nodes,dim,x,ex)
+subroutine adjoint1order(dt,kvs,kvo,alpha,x0,&
+     da,dx,num_times,num_nodes,dim,x,ex,ea)
   implicit none
   integer :: num_nodes, num_times, dim, kvo
   real(8) :: dt
@@ -123,22 +130,24 @@ subroutine adjoint1order_lap(dt,kvs,kvo,alpha,x0,&
   real(8) :: da(num_nodes,dim)
   real(8) :: x(num_nodes,dim,num_times)
   real(8) :: ex(num_nodes,dim,num_times)
+  real(8) :: ea(num_nodes,dim,num_times)
 
   real(8) :: kv_ut, Kv, Kv_diff, lpt
   real(8) :: ada
   real(8) :: x_diff(dim)
   integer :: t, k, l, ov
-  real(8) :: dx(dim)
+  real(8) :: dex(num_nodes, dim)
   real(8) :: c_(5, 5), c1_(4, 4)
+  real(8) :: v(num_nodes,dim,num_times)
 
-  !f2py integer, intent(in) :: num_nodes, num_times, kvo
+  !f2py integer, intent(in) :: num_nodes, num_times, dim, kvo
   !f2py real(8), intent(in) :: dt, kvs
-  !f2py real(8), intent(in), dimension(num_nodes, dim) :: x0
-  !f2py real(8), intent(in), dimension(num_nodes, dim) :: alpha0 
+  !f2py real(8), intent(in), dimension(num_nodes, dim) :: x0, dx, da
+  !f2py real(8), intent(in), dimension(num_nodes, dim, num_times) :: alpha 
   !f2py real(8), intent(out), dimension(num_nodes, dim, num_times) :: x
-  !f2py real(8), intent(out), dimension(num_nodes, dim, num_times) :: alpha
-  !f2py real(8), intent(out), dimension(num_nodes, dim, num_times) :: v
+  !f2py real(8), intent(out), dimension(num_nodes, dim, num_times) :: ex,ea 
 
+  call shoot1order(dt,kvs,kvo,alpha,x0,num_times,num_nodes,dim,x,v)
   ex(:,:,num_times) = dx
   ea(:,:,num_times) = da
   c_= reshape((/1.,1.,1.,1.,1.,    0.,1.,1.,1.,1.,    0.,0., 1./3, 0.4, 3./7,  &
@@ -147,29 +156,36 @@ subroutine adjoint1order_lap(dt,kvs,kvo,alpha,x0,&
        0.,0.,0., 1./105 /), (/4,4/))
 
   do t=num_times,2,-1
-     !$omp parallel do private(k,kv_ut,kh_ut,lpt,Kv,Kv_diff,Kh,Kh_diff, &
-     !$omp& Kv_diff2,Kh_diff2, & 
-     !$omp& zdz,x_diff) shared (dt,alpha,x,m,z,ex,ez,em,ealpha, &
-     !$omp& kvs,khs,kvo,kho,dex,dez,dea,c_,c1_,c2_)
+     !$omp parallel do private(k,kv_ut,lpt,Kv,Kv_diff, &
+     !$omp& ada,x_diff) shared (dt,alpha,x,ex,ea, &
+     !$omp& kvs,kvo,dex,c_,c1_)
      do k=1,num_nodes,1
         dex(k,:) = 0
-        dea(k,:) = 0
         do l=1,num_nodes,1
 
            x_diff = x(k,:,t-1)-x(l,:,t-1)
            ada = dot_product(alpha(k,:,t-1),alpha(l,:,t-1))
-           kv_ut = norm2(x_diff) 
-           kh_ut = kv_ut / khs 
-           kv_ut = kv_ut / kvs 
+           kv_ut = norm2(x_diff)  / kvs 
 
-           if (k==l) then
-              Kv = 1.0
-              Kv_diff = - c1_(kvo,1)/(2*kvs*kvs)
-           else
-              lpt = c_(kvo+1, 1) + c_(kvo+1,2)*kv_ut + c_(kvo+1,3)*kv_ut**2 + c_(kvo+1,4)*kv_ut**3 + c_(kvo+1,5)*kv_ut**4
-              Kv = lpt * exp(-1.0*kv_ut)
-              lpt = c1_(kvo,1) + c1_(kvo,2)*kv_ut + c1_(kvo,3)*kv_ut**2 + c1_(kvo,4)*kv_ut**3 
-              Kv_diff = -lpt * exp(-1.0*kv_ut)/(2*kvs**2)
+           if (kvo > 4) then
+              kv_ut = kv_ut * kv_ut
+              if (k==l) then
+                 Kv = 1.0
+                 Kv_diff = -1/(2*kvs*kvs)
+              else
+                 Kv = exp(-1.0*kv_ut)
+                 Kv_ut = (-1.0)*exp(-1.0*kv_ut)/(2*kvs*kvs)
+              end if
+           else           
+              if (k==l) then
+                 Kv = 1.0
+                 Kv_diff = - c1_(kvo,1)/(2*kvs*kvs)
+              else
+                 lpt = c_(kvo+1, 1) + c_(kvo+1,2)*kv_ut + c_(kvo+1,3)*kv_ut**2 + c_(kvo+1,4)*kv_ut**3 + c_(kvo+1,5)*kv_ut**4
+                 Kv = lpt * exp(-1.0*kv_ut)
+                 lpt = c1_(kvo,1) + c1_(kvo,2)*kv_ut + c1_(kvo,3)*kv_ut**2 + c1_(kvo,4)*kv_ut**3 
+                 Kv_diff = -lpt * exp(-1.0*kv_ut)/(2*kvs**2)
+              end if
            end if
 
            dex(k,:) = dex(k,:) + (-1)*( &
@@ -182,44 +198,10 @@ subroutine adjoint1order_lap(dt,kvs,kvo,alpha,x0,&
      end do ! k
      !$omp end parallel do
   end do ! t
-end subroutine adjoint1order_lap
+end subroutine adjoint1order
 
-  do t = 1, num_times-1, 1
-     !$omp parallel do private(k,kv_ut,kh_ut,lpt,Kv,Kv_diff,Kh,Kh_diff, &
-     !$omp& zdz,x_diff,kvz,dx,dz,dm,dJ) shared (alpha,x,m,z,J,kvs,khs,kvo,kho,c_,c1_)
-     do k = 1, num_nodes, 1
-        dx=0
-        da=0
 
-        do l=1, num_nodes, 1
-           kv_ut = sqrt((x(k,1,t)-x(l,1,t))**2 + (x(k,2,t)-x(l,2,t))**2) / kvs 
-           
-           if (k==l) then
-              Kv = 1.0
-              Kv_diff = - c1_(kvo,1)/(2*kvs*kvs)
-           else
-              lpt = c_(kvo+1, 1) + c_(kvo+1,2)*kv_ut + c_(kvo+1,3)*kv_ut**2 + c_(kvo+1,4)*kv_ut**3 + c_(kvo+1,5)*kv_ut**4
-              Kv = lpt * exp(-1.0*kv_ut)
-              lpt = c1_(kvo,1) + c1_(kvo,2)*kv_ut + c1_(kvo,3)*kv_ut**2 + c1_(kvo,4)*kv_ut**3 
-              Kv_diff = -lpt * exp(-1.0*kv_ut)/(2*kvs**2)
-           end if
-
-           dx = dx + Kv*alpha(l,:,t)
-           ada = alpha(l,1,t)*alpha(k,1,t) + alpha(l,2,t)*alpha(k,2,t) + alpha(l,3,t)*alpha(k,3,t)
-           x_diff = x(k,:,t)-x(l,:,t)
-           da = da - Kv_diff*ada*2* &
-                x_diff
-        end do !l
-        x(k,:,t+1) = x(k,:,t) + dt*dx
-        v(k,:,t) = dx
-        alpha(k,:,t+1) = alpha(k,:,t) + dt*da
-     end do !k
-     !$omp end parallel do
-  end do !t
-
-end subroutine shoot2order_lap
-
-subroutine shoot2order_lap(dt,kvs,kvo,alpha0,x0,&
+subroutine shoot2order(dt,kvs,kvo,alpha0,x0,&
      num_times,num_nodes,dim,x,alpha,v)
   implicit none
   integer :: num_nodes, num_times, dim, kvo
@@ -235,10 +217,10 @@ subroutine shoot2order_lap(dt,kvs,kvo,alpha0,x0,&
   real(8) :: ada
   real(8) :: x_diff(dim)
   integer :: t, k, l, ov
-  real(8) :: dx(dim)
+  real(8) :: dx(dim),da(dim)
   real(8) :: c_(5, 5), c1_(4, 4)
 
-  !f2py integer, intent(in) :: num_nodes, num_times, kvo
+  !f2py integer, intent(in) :: num_nodes, num_times, dim, kvo
   !f2py real(8), intent(in) :: dt, kvs
   !f2py real(8), intent(in), dimension(num_nodes, dim) :: x0
   !f2py real(8), intent(in), dimension(num_nodes, dim) :: alpha0 
@@ -254,30 +236,40 @@ subroutine shoot2order_lap(dt,kvs,kvo,alpha0,x0,&
        0.,0.,0., 1./105 /), (/4,4/))
 
   do t = 1, num_times-1, 1
-     !$omp parallel do private(k,kv_ut,kh_ut,lpt,Kv,Kv_diff,Kh,Kh_diff, &
-     !$omp& zdz,x_diff,kvz,dx,dz,dm,dJ) shared (alpha,x,m,z,J,kvs,khs,kvo,kho,c_,c1_)
+     !$omp parallel do private(k,kv_ut,lpt,Kv,Kv_diff, &
+     !$omp& ada,x_diff,dx,da) shared (alpha,x,kvs,kvo,c_,c1_)
      do k = 1, num_nodes, 1
         dx=0
         da=0
 
         do l=1, num_nodes, 1
-           kv_ut = sqrt((x(k,1,t)-x(l,1,t))**2 + (x(k,2,t)-x(l,2,t))**2) / kvs 
+           kv_ut = norm2(x(k,:,t)-x(l,:,t)) 
            
-           if (k==l) then
-              Kv = 1.0
-              Kv_diff = - c1_(kvo,1)/(2*kvs*kvs)
-           else
-              lpt = c_(kvo+1, 1) + c_(kvo+1,2)*kv_ut + c_(kvo+1,3)*kv_ut**2 + c_(kvo+1,4)*kv_ut**3 + c_(kvo+1,5)*kv_ut**4
-              Kv = lpt * exp(-1.0*kv_ut)
-              lpt = c1_(kvo,1) + c1_(kvo,2)*kv_ut + c1_(kvo,3)*kv_ut**2 + c1_(kvo,4)*kv_ut**3 
-              Kv_diff = -lpt * exp(-1.0*kv_ut)/(2*kvs**2)
+           if (kvo > 4) then
+              kv_ut = kv_ut * kv_ut
+              if (k==l) then
+                 Kv = 1.0
+                 Kv_diff = - 1.0/(2*kvs*kvs)
+              else
+                 Kv = exp(-1.0*kv_ut)
+                 Kv_ut = -1.0*exp(-1.0*kv_ut)/(2*kvs*kvs)
+              end if
+           else           
+              if (k==l) then
+                 Kv = 1.0
+                 Kv_diff = - c1_(kvo,1)/(2*kvs*kvs)
+              else
+                 lpt = c_(kvo+1, 1) + c_(kvo+1,2)*kv_ut + c_(kvo+1,3)*kv_ut**2 + c_(kvo+1,4)*kv_ut**3 + c_(kvo+1,5)*kv_ut**4
+                 Kv = lpt * exp(-1.0*kv_ut)
+                 lpt = c1_(kvo,1) + c1_(kvo,2)*kv_ut + c1_(kvo,3)*kv_ut**2 + c1_(kvo,4)*kv_ut**3 
+                 Kv_diff = -lpt * exp(-1.0*kv_ut)/(2*kvs**2)
+              end if
            end if
 
            dx = dx + Kv*alpha(l,:,t)
-           ada = alpha(l,1,t)*alpha(k,1,t) + alpha(l,2,t)*alpha(k,2,t) + alpha(l,3,t)*alpha(k,3,t)
+           ada = dot_product(alpha(l,:,t), alpha(k,:,t))
            x_diff = x(k,:,t)-x(l,:,t)
-           da = da - Kv_diff*ada*2* &
-                x_diff
+           da = da - Kv_diff*ada*2* x_diff
         end do !l
         x(k,:,t+1) = x(k,:,t) + dt*dx
         v(k,:,t) = dx
@@ -286,7 +278,7 @@ subroutine shoot2order_lap(dt,kvs,kvo,alpha0,x0,&
      !$omp end parallel do
   end do !t
 
-end subroutine shoot2order_lap
+end subroutine shoot2order
 
 
 
@@ -400,10 +392,10 @@ end subroutine testHamiltonian_u
 
 
 
-subroutine adjoint2order_lap(dt,kvs,kvo,alpha,x,&
+subroutine adjoint2order(dt,kvs,kvo,alpha,x,&
      da,dx,num_times,num_nodes,dim,ea,ex)
   implicit none
-  integer :: num_nodes, num_times, kvo, kho
+  integer :: num_nodes, num_times, dim, kvo
   real(8) :: dt
   real(8) :: kvs
   real(8) :: x(num_nodes, dim, num_times)
@@ -417,11 +409,12 @@ subroutine adjoint2order_lap(dt,kvs,kvo,alpha,x,&
   real(8) :: Kv_diff2
   real(8) :: x_diff(dim), ada
   integer :: t, k, l
-  real(8) :: dex(num_nodes, dim), dez(num_nodes, dim)
+  real(8) :: dex(num_nodes, dim), dea(num_nodes, dim)
   real(8) :: c_(5, 5), c1_(4, 4), c2_(3,3)
 
   !f2py integer, intent(in) :: num_nodes, num_times, dim, kvo
   !f2py real(8), intent(in) :: dt, kvs
+  !f2py real(8), intent(in), dimension(num_nodes, dim) :: dx,da 
   !f2py real(8), intent(in), dimension(num_nodes, dim, num_times) :: alpha 
   !f2py real(8), intent(in), dimension(num_nodes, dim, num_times) :: x
   !f2py real(8), intent(out), dimension(num_nodes, dim, num_times) :: ex 
@@ -438,10 +431,10 @@ subroutine adjoint2order_lap(dt,kvs,kvo,alpha,x,&
   !print *, c_(kho+1,:)
 
   do t=num_times,2,-1
-     !$omp parallel do private(k,kv_ut,kh_ut,lpt,Kv,Kv_diff,Kh,Kh_diff, &
-     !$omp& Kv_diff2,Kh_diff2, & 
-     !$omp& zdz,x_diff) shared (dt,alpha,x,m,z,ex,ez,em,ealpha, &
-     !$omp& kvs,khs,kvo,kho,dex,dez,dea,c_,c1_,c2_)
+     !$omp parallel do private(k,l,kv_ut,lpt,Kv,Kv_diff, &
+     !$omp& Kv_diff2, & 
+     !$omp& ada,x_diff) shared (dt,alpha,x,ex,ea, &
+     !$omp& kvs,kvo,dex,dea,c_,c1_,c2_)
      do k=1,num_nodes,1
         dex(k,:) = 0
         dea(k,:) = 0
@@ -449,21 +442,32 @@ subroutine adjoint2order_lap(dt,kvs,kvo,alpha,x,&
 
            x_diff = x(k,:,t-1)-x(l,:,t-1)
            ada = dot_product(alpha(k,:,t-1),alpha(l,:,t-1))
-           kv_ut = norm2(x_diff) 
-           kh_ut = kv_ut / khs 
-           kv_ut = kv_ut / kvs 
+           kv_ut = norm2(x_diff) / kvs 
 
-           if (k==l) then
-              Kv = 1.0
-              Kv_diff = - c1_(kvo,1)/(2*kvs*kvs)
-              Kv_diff2 = c2_(kvo-1,1)/(4*kvs**4)
-           else
-              lpt = c_(kvo+1, 1) + c_(kvo+1,2)*kv_ut + c_(kvo+1,3)*kv_ut**2 + c_(kvo+1,4)*kv_ut**3 + c_(kvo+1,5)*kv_ut**4
-              Kv = lpt * exp(-1.0*kv_ut)
-              lpt = c1_(kvo,1) + c1_(kvo,2)*kv_ut + c1_(kvo,3)*kv_ut**2 + c1_(kvo,4)*kv_ut**3 
-              Kv_diff = -lpt * exp(-1.0*kv_ut)/(2*kvs**2)
-              lpt = c2_(kvo-1,1) + c2_(kvo-1,2)*kv_ut + c2_(kvo-1,3)*kv_ut**2 
-              Kv_diff2 = lpt * exp(-1.0*kv_ut)/(4*kvs**4)
+           if (kvo > 4) then
+              kv_ut = kv_ut * kv_ut
+              if (k==l) then
+                 Kv = 1.0
+                 Kv_diff = -1.0/(2*kvs*kvs)
+                 Kv_diff2 = 1/(4*kvs**4)
+              else
+                 Kv = exp(-1.0*kv_ut)
+                 Kv_diff = -1.0* exp(-1.0*kv_ut)/(2*kvs*kvs)
+                 Kv_diff2 = exp(-1.0*kv_ut)/(4*kvs**4)
+              end if
+           else           
+              if (k==l) then
+                 Kv = 1.0
+                 Kv_diff = - c1_(kvo,1)/(2*kvs*kvs)
+                 Kv_diff2 = c2_(kvo-1,1)/(4*kvs**4)
+              else
+                 lpt = c_(kvo+1, 1) + c_(kvo+1,2)*kv_ut + c_(kvo+1,3)*kv_ut**2 + c_(kvo+1,4)*kv_ut**3 + c_(kvo+1,5)*kv_ut**4
+                 Kv = lpt * exp(-1.0*kv_ut)
+                 lpt = c1_(kvo,1) + c1_(kvo,2)*kv_ut + c1_(kvo,3)*kv_ut**2 + c1_(kvo,4)*kv_ut**3 
+                 Kv_diff = -lpt * exp(-1.0*kv_ut)/(2*kvs**2)
+                 lpt = c2_(kvo-1,1) + c2_(kvo-1,2)*kv_ut + c2_(kvo-1,3)*kv_ut**2 
+                 Kv_diff2 = lpt * exp(-1.0*kv_ut)/(4*kvs**4)
+              end if
            end if
 
            dex(k,:) = dex(k,:) + (-1)*( &
@@ -486,107 +490,5 @@ subroutine adjoint2order_lap(dt,kvs,kvo,alpha,x,&
      !      dez, dea, num_nodes)
      !$omp end parallel do
   end do ! t
-end subroutine adjoint2order_lap
+end subroutine adjoint2order
 
-subroutine applyK_lap(x, y, beta, sig, ord, num_nodes, dim, f)
-  implicit none
-  integer :: num_nodes, dim
-  real(8) :: x(num_nodes, dim)
-  real(8) :: y(num_nodes, dim)
-  real(8) :: sig
-  integer :: ord
-  real(8) :: f(num_nodes)
-  real(8) :: beta(num_nodes)
-  real(8) :: Kh
-
-  !f2py integer, intent(in) :: num_nodes, dim
-  !f2py real(8), intent(in), dimension(num_nodes, dim) :: x 
-  !f2py real(8), intent(in), dimension(num_nodes, dim) :: y 
-  !f2py real(8), intent(in), dimension(num_nodes) :: beta 
-  !f2py real(8), intent(in) :: sig
-  !f2py integer, intent(in) :: ord
-  !f2py real(8), intent(out), dimension(num_nodes) :: f
-
-  real(8) :: ut
-  real(8) :: lpt
-  integer :: k,l 
-  real(8) :: df
-  real(8) :: c_(5, 5)
-  c_= reshape((/1.,1.,1.,1.,1.,    0.,1.,1.,1.,1.,    0.,0., 1./3, 0.4, 3./7,  &
-       0.,0.,0., 1./15, 2./21,   0.,0.,0.,0., 1./105 /), (/5,5/))
-
-  !$omp parallel do private(k,l,ut,lpt,Kh,df) shared &
-  !$omp& (num_nodes, f, sig, ord, beta, c_)
-  do k = 1, num_nodes, 1
-     df = 0
-     do l = 1, num_nodes, 1
-        ut = norm(x(k,:) - y(l,:)) / sig
-        if (ut < 1e-8) then
-           Kh = 1.0
-        else
-           lpt = c_(ord+1, 1) + c_(ord+1,2)*ut + c_(ord+1,3)*ut**2 + c_(ord+1,4)*ut**3 + c_(ord+1,5)*ut**4
-           Kh = lpt * exp(-1.0*ut)
-        end if
-        df = df + Kh * beta(l)
-     end do
-     f(k) = df
-  end do
-  !$omp end parallel do
-end subroutine applyK
-
-subroutine applyK_and_Diff(x, y, beta, sig, ord, num_nodes, dim, f, f2)
-  implicit none
-  integer :: num_nodes, dim
-  real(8) :: x(num_nodes, dim)
-  real(8) :: y(num_nodes, dim)
-  real(8) :: sig
-  integer :: ord
-  real(8) :: f(num_nodes)
-  real(8) :: f2(num_nodes,dim)
-  real(8) :: beta(num_nodes)
-
-  real(8) :: Kh, Kh_diff
-
-  !f2py integer, intent(in) :: num_nodes, dim
-  !f2py real(8), intent(in), dimension(num_nodes, dim) :: x 
-  !f2py real(8), intent(in), dimension(num_nodes, dim) :: y 
-  !f2py real(8), intent(in), dimension(num_nodes) :: beta 
-  !f2py real(8), intent(in) :: sig
-  !f2py integer, intent(in) :: ord
-  !f2py real(8), intent(out), dimension(num_nodes) :: f
-  !f2py real(8), intent(out), dimension(num_nodes,dim) :: f2
-
-  real(8) :: ut
-  real(8) :: lpt
-  integer :: k,l 
-  real(8) :: df, df2(dim)
-  real(8) :: c_(5, 5), c1_(4, 4)
-  c_= reshape((/1.,1.,1.,1.,1.,    0.,1.,1.,1.,1.,    0.,0., 1./3, 0.4, 3./7,  &
-       0.,0.,0., 1./15, 2./21,   0.,0.,0.,0., 1./105 /), (/5,5/))
-  c1_ = reshape((/1., 1./3, 1./5, 1./7,    0., 1./3, 1./5, 1./7,    0.,0., 1./15, 2./35,&
-       0.,0.,0., 1./105 /), (/4,4/))
-
-  !$omp parallel do private(k,l,ut,lpt,Kh,Kh_diff,df,df2) shared &
-  !$omp& (num_nodes, f, f2, sig, ord, beta, c_, c1_)
-  do k = 1, num_nodes, 1
-     df = 0
-     df2 = 0
-     do l = 1, num_nodes, 1
-        ut = norm(x(k,:) - y(l,:)) / sig
-        if (ut < 1e-8) then
-           Kh = 1.0
-           Kh_diff = - c1_(ord,1)/(2*sig*sig)
-        else
-           lpt = c_(ord+1, 1) + c_(ord+1,2)*ut + c_(ord+1,3)*ut**2 + c_(ord+1,4)*ut**3 + c_(ord+1,5)*ut**4
-           Kh = lpt * exp(-1.0*ut)
-           lpt = c1_(ord,1) + c1_(ord,2)*ut + c1_(ord,3)*ut**2 + c1_(ord,4)*ut**3 
-           Kh_diff = -lpt * exp(-1.0*ut)/(2*sig**2)
-        end if
-        df = df + Kh * beta(l)
-        df2 = df2 + Kh_diff * 2*(x(k,:)-y(l,:))* beta(l)
-     end do
-     f(k) = f(k) + df
-     f2(k,:) = f2(k,:) + df2
-  end do
-  !$omp end parallel do
-end subroutine applyK_and_Diff

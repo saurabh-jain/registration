@@ -75,6 +75,7 @@ param_matching::param_matching() {
   paramMap[(string) "continue:"] = CONTINUE ;
   paramMap[(string) "saveMovie:"] = SAVEMOVIE ;
   paramMap[(string) "periodic:"] = PERIODIC ;
+  paramMap[(string) "debug:"] = DEBUG ;
   paramMap[(string) "quiet:"] = QUIET ;
   paramMap[(string) "normalizeKernel:"] = NORMALIZEKERNEL ;
 
@@ -142,7 +143,7 @@ param_matching::param_matching() {
   nb_iterAff = 1000 ;
   affine_time_disc = 20 ;
   tolGrad = 0 ;
-  verb=true;
+  verb=1;
   printFiles = 1 ;
   nb_semi = 3 ;
   minVarEn = 0.001 ;
@@ -158,7 +159,7 @@ param_matching::param_matching() {
   Tmax = 10 ; 
   parallelTimeDisc = 20 ;
   kernelNormalization = 1 ;
-  normalizeKernel = true ; 
+  normalizeKernel = false ; 
   doDefor = true ;
   periodic = 0 ;
 }
@@ -323,8 +324,11 @@ void param_matching::read(std::vector<string> &input)
       case PERIODIC:
 	periodic = true ;
 	break ;
+      case DEBUG:
+	verb = 2;
+	break ;
       case QUIET:
-	verb = false ;
+	verb = 0 ;
 	break ;
       case CONTINUE:
 	cont = true ;
@@ -501,6 +505,9 @@ void param_matching::read(std::vector<string> &input)
 	break;
       case SAVEMOVIE:
 	saveMovie = true ;
+	break ;
+      case NORMALIZEKERNEL:
+	normalizeKernel = true ;
 	break ;
       default:
 	cerr << "Error in parameter syntax " << endl ;
