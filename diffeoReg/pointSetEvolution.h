@@ -466,7 +466,7 @@ class PointSetEvolution: public PointSetMatching
   struct dualVarLandmarkUpdate {
     PointSetEvolution *_pse ;
     std::vector<double> _x ;
-    std::vector<PointSet> _p, ;
+    std::vector<PointSet> _p ;
     std::vector<Tangent> _a ;
     void interpolateForwardEvolution(double x, PointSet &p, Tangent &a) {
       double z = ((x-_x[0])/(_x[_x.size()-1]-_x[0])) * _a.size() ;

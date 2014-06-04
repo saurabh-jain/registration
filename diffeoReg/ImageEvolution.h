@@ -490,7 +490,7 @@ class ImageEvolution: public ImageMatching
       return ;
     }
     
-    //cout << "Starting iterations " << endl ;
+    //cout << "Starting iterations " << param.verb << endl ;
     _real mu=0, muold, alfa, be, ener2  ;
     for (unsigned int i2 =0; i2<K; i2++) {
       if (i2 == 0) {

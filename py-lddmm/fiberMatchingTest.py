@@ -29,17 +29,29 @@ def compute(createSurfaces=True):
         fv2 = Surface() ;
         fv2.Isosurface(I1, value = 0, target=1000, scales=[1, 1, 1], smooth=0.01)
         
-        fv2.vertices[:,1] += 20 - 15/s1
+        fv2.vertices[:,1] += 15 - 15/s1
 
+        s1 *= 1.1
+        s2 *= 1.2
+        I1 = np.minimum(.06/s1 - (((x-.50)**2 + 0.5*y**2 + z**2)), np.minimum((s2*(x-.50)**2 + s2*0.5*y**2 + s2*z**2)-0.045/s1, 0.2/s1-y))  
+        fv3 = Surface() ;
+        fv3.Isosurface(I1, value = 0, target=1000, scales=[1, 1, 1], smooth=0.01)
+        
+        fv3.vertices[:,1] += 15 - 15/s1
+
+        
         fv1.saveVTK('/Users/younes/Development/Results/Fibers/fv1.vtk')
         fv2.saveVTK('/Users/younes/Development/Results/Fibers/fv2.vtk')
+        fv3.saveVTK('/Users/younes/Development/Results/Fibers/fv3.vtk')
     else:
         fv1 = Surface(filename='/Users/younes/Development/Results/Fibers/fv1.vtk')
         fv2  = Surface(filename='/Users/younes/Development/Results/Fibers/fv2.vtk')
+        fv3  = Surface(filename='/Users/younes/Development/Results/Fibers/fv3.vtk')
 
-    ## Object kernel
+    ## Long axis is 0y
     V1 = fv1.vertices/100 - [0,1,1]
     N1 = fv1.computeVertexNormals()
+    
     sel0 = V1[:,1] < 0.95*V1[:,1].max()
     I0 = np.nonzero(sel0)
     I0 = I0[0]
@@ -50,6 +62,8 @@ def compute(createSurfaces=True):
     QNN = (N1[:,0]-0.5)**2 + 0.5*N1[:,1]**2 + N1[:,2]**2
     QVV = (V1[:,0]-0.5)**2 + 0.5*V1[:,1]**2 + V1[:,2]**2
     QNV = (N1[:,0]-0.5)*(V1[:,0]-0.5) + 0.5*N1[:,1]*V1[:,1] + N1[:,2]*V1[:,2]
+
+    #exterior wall
     sel1 = np.logical_and(np.fabs(QVV-0.06) < 0.01, (np.fabs(N1[:,1]) < 0.8))
     I1 = np.nonzero(sel1)
     I1= I1[0]
@@ -60,11 +74,13 @@ def compute(createSurfaces=True):
     a = (-QNV[I1] - np.sqrt(QNV[I1]**2 - QNN[I1]*(QVV[I1]-0.0525)))/QNN[I1]
     N = V1.shape[0]
     M = V1.shape[0] + len(I1)
+    #M = M1 + len(I1)
     y0 = np.zeros([M,3])
     v0 = np.zeros([M,3])
     nz = np.zeros([N, 3])
     nz2 = np.zeros([N, 3])
     y0[0:N, :] = V1 
+    #y0[N:M1, :] = V11 + 0.5*a[:,np.newaxis]*N11
     y0[N:M, :] = V11 + a[:,np.newaxis]*N11
     nz[:, 0] = -N1[:, 2]
     nz[:, 2] = N1[:, 0]
@@ -83,14 +99,15 @@ def compute(createSurfaces=True):
     v0[I1,:] *= -1
     #v0[I1, :] += 2*s*nz2[I1,:]
     v0[N:M, :] = nz[I1, :]
+    #v0[M1:M, :] = -c*nz[I1,:] + s*nz2[I1,:]
     v0[0:N,:] = c0*v0[0:N, :] - s0*N1
      
-    K1 = Kernel(name='laplacian', sigma = 2.0)
+    K1 = Kernel(name='laplacian', sigma = 10.0)
     y0 = 100*(y0+[0,1,1])
     pointSets.savePoints('/Users/younes/Development/Results/Fibers/Ellipses/fibers.vtk', y0, vector=v0)
 
     sm = SurfaceMatchingParam(timeStep=0.1, KparDiff=K1, sigmaDist=5, sigmaError=1., errorType='measure')
-    f = SurfaceMatching(Template=fv1, Target=fv2, Fiber=(y0,v0), outputDir='/Users/younes/Development/Results/Fibers/Ellipses',param=sm, testGradient=False,
+    f = SurfaceMatching(Template=fv1, Target=[fv2,fv3], Fiber=(y0,v0), outputDir='/Users/younes/Development/Results/Fibers/Ellipses',param=sm, testGradient=False,
                         #subsampleTargetSize = 500,
                          maxIter=1000)
 
@@ -104,4 +121,4 @@ def compute(createSurfaces=True):
     f.optimizeMatching()
 
 
-    return f
+    return f, f23

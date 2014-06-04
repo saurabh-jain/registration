@@ -173,13 +173,13 @@ class Morphing:public ImageMatching
     for (unsigned int t=0; t<T; t++) {
       semi.copy(vt) ;
       semi *= dt ;
-      for (unsigned int jj = 0; jj <0; jj++) {
-	foo.copy(semi) ;
-	foo /= -2 ;
-	foo += id ;
-	foo.multilinInterp(vt, semi) ;
-	semi *= dt ;
-      }
+      // for (unsigned int jj = 0; jj <0; jj++) {
+      // 	foo.copy(semi) ;
+      // 	foo /= -2 ;
+      // 	foo += id ;
+      // 	foo.multilinInterp(vt, semi) ;
+      // 	semi *= dt ;
+      // }
 	
       divergence(vt, foov, param.spaceRes) ;
       foov *= -dt ;
@@ -821,11 +821,12 @@ class Morphing:public ImageMatching
     int it = 1 ;
       
     while (test <  1 && it < param.nb_iter) {
-      cout << "iteration " << it << endl ;
+      cout << "iteration " << it << flush ;
 	
       for (int cnt=0; cnt < 1; cnt++) {
 	gradientStepC() ;
-	cout << endl ;
+	if (param.verb)
+	  cout << endl ;
       } 
 	
       if (param.verb)
@@ -840,7 +841,7 @@ class Morphing:public ImageMatching
 	
       en = enerw() ;
 	
-      cout << "energy before and after iteration: " <<  enOld << " " << en << endl ; ; 
+      cout << "   energy: " << en << endl ; ; 
       if (enOld-en < 0.00001*en)
 	test = test + 0.25 ;
       else

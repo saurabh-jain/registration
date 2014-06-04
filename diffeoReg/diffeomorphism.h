@@ -16,7 +16,7 @@
     along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
 #ifndef _DIFFEO_
-#define _DIIFEO_
+#define _DIFFEO_
 #include "vectorKernels.h"
 //#include <fftw3.h>
 //#include "Vector.h"
