@@ -404,18 +404,23 @@ class Kernel(KernelSpec):
 
     # Computes array A(i) = sum_k sum_(j) nabla_1[a1(k,i). K(x(i), x(j))a2(k,j)]
     def applyDiffKT(self, x, a1, a2, firstVar=None):
-        zpx = np.zeros(x.shape)
-        a = np.dot(a1[0], a2[0].T)
-        for k in range(1,len(a1)):
-            a += np.dot(a1[k], a2[k].T)
+        # zpx = np.zeros(x.shape)
+        # a = np.dot(a1[0], a2[0].T)
+        # for k in range(1,len(a1)):
+        #     a += np.dot(a1[k], a2[k].T)
         if not (self.kernelMatrix == None):
-            r = self.precompute(x, diff=True, firstVar=firstVar)
-            g1 =  r*a
-            #print a.shape, r.shape, g1.shape
+            #print a1.shape
             if firstVar==None:
-                zpx = 2*(x*g1.sum(axis=1)[:, np.newaxis] - np.dot(g1,x))
+                zpx = kff.applykdifft(x,x,a1,a2,self.sigma, self.order, x.shape[0], x.shape[0], x.shape[1], a1.shape[2], a1.shape[0])
             else:
-                zpx = 2*(firstVar*g1.sum(axis=1)[:, np.newaxis] - np.dot(g1,x))
+                zpx = kff.applykdifft(firstVar,x,a1,a2,self.sigma, self.order, firstVar.shape[0], x.shape[0], x.shape[1], a1.shape[2], a1.shape[0])
+            # r = self.precompute(x, diff=True, firstVar=firstVar)
+            # g1 =  r*a
+            # #print a.shape, r.shape, g1.shape
+            # if firstVar==None:
+            #     zpx = 2*(x*g1.sum(axis=1)[:, np.newaxis] - np.dot(g1,x))
+            # else:
+            #     zpx = 2*(firstVar*g1.sum(axis=1)[:, np.newaxis] - np.dot(g1,x))
         if self.affine == 'affine':
             xx = x-self.center
             # if firstVar==None:

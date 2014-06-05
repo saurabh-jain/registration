@@ -1104,10 +1104,10 @@ def measureNormGradient(fvDef, fv1, KparDist):
     c2 = fv1.centers
     cr2 = fv1.surfel
     dim = c1.shape[1]
-    a1 = np.mat(np.sqrt((cr1**2).sum(axis=1)+1e-10))
-    a2 = np.mat(np.sqrt((cr2**2).sum(axis=1)+1e-10))
-    cr1 = np.divide(cr1, a1.T)
-    cr2 = np.divide(cr2, a2.T)
+    a1 = np.sqrt((cr1**2).sum(axis=1)+1e-10)
+    a2 = np.sqrt((cr2**2).sum(axis=1)+1e-10)
+    cr1 = cr1 / a1[:, np.newaxis]
+    cr2 = cr2 / a2[:, np.newaxis]
 
     g11 = kfun.kernelMatrix(KparDist, c1)
     KparDist.hold()
@@ -1119,15 +1119,20 @@ def measureNormGradient(fvDef, fv1, KparDist):
     dg12 = kfun.kernelMatrix(KparDist, c2, c1, diff=True)
     KparDist.release()
 
-
-    z1 = g11*a1.T - g12 * a2.T
+    z1 = KparDist.applyK(c1, a1[:, np.newaxis]) - KparDist.applyK(c2, a2[:, np.newaxis], firstVar=c1)
     z1 = np.multiply(z1, cr1)
-    dg1 = np.multiply(dg11, a1.T)
-    dg11 = np.multiply(dg1, a1)
-    dg1 = np.multiply(dg12, a1.T)
-    dg12 = np.multiply(dg1, a2)
+    #print a1.shape, c1.shape
+    dz1 = (1./3.) * (KparDist.applyDiffKT(c1, a1[np.newaxis,:,np.newaxis], a1[np.newaxis,:,np.newaxis]) -
+                     KparDist.applyDiffKT(c2, a1[np.newaxis,:,np.newaxis], a2[np.newaxis,:,np.newaxis], firstVar=c1))
+                        
+    # z1 = g11*a1.T - g12 * a2.T
+    # z1 = np.multiply(z1, cr1)
+    # dg1 = np.multiply(dg11, a1.T)
+    # dg11 = np.multiply(dg1, a1)
+    # dg1 = np.multiply(dg12, a1.T)
+    # dg12 = np.multiply(dg1, a2)
 
-    dz1 = (2./3.) * (np.multiply(dg11.sum(axis=1), c1) - dg11*c1 - np.multiply(dg12.sum(axis=1), c1) + dg12*c2)
+    # dz1 = (2./3.) * (np.multiply(dg11.sum(axis=1), c1) - dg11*c1 - np.multiply(dg12.sum(axis=1), c1) + dg12*c2)
 
     xDef1 = xDef[fvDef.faces[:, 0], :]
     xDef2 = xDef[fvDef.faces[:, 1], :]

@@ -58,7 +58,7 @@ def landmarkDirectEvolutionEuler(x0, at, KparDiff, affine = None, withJacobian=F
 
         if not (withNormals==None):
             zn = np.squeeze(nt[k, :, :])        
-            nt[k+1, :, :] = zn - timeStep * KparDiff.applyDiffKT(z, [zn], [a]) 
+            nt[k+1, :, :] = zn - timeStep * KparDiff.applyDiffKT(z, zn[np.newaxis,...], a[np.newaxis,...]) 
             if not (affine == None):
                 nt[k+1, :, :] += timeStep * np.dot(zn, A[k])
     if simpleOutput:
