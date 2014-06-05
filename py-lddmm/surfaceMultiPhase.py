@@ -713,8 +713,9 @@ class SurfaceMatching(surfaceMatching.SurfaceMatching):
                 z = np.squeeze(xt[k][M-t-1, :, :])
                 a = np.squeeze(at[k][M-t-1, :, :])
                 zpx = np.copy(dxcval[k][M-t-1])
-                a1 = [px, a, -2*self.regweight*a]
-                a2 = [a, px, a]
+                a1 = np.concatenate((px[np.newaxis,...], a[np.newaxis,...], -2*self.regweight*a[np.newaxis,...]))
+                a2 = np.concatenate((a[np.newaxis,...], px[np.newaxis,...], a[np.newaxis,...]))
+                #a2 = np.array([a, px, a])
                 zpx += self.param.KparDiff.applyDiffKT(z, a1, a2)
                 if self.affineDim > 0:
                     zpx += np.dot(px, A[k][0][M-t-1])
@@ -732,8 +733,10 @@ class SurfaceMatching(surfaceMatching.SurfaceMatching):
             z = np.squeeze(xt[self.nsurf][M-t-1, :, :])
             a = np.squeeze(at[self.nsurf][M-t-1, :, :])
             zpx = np.copy(dxcval[self.nsurf][M-t-1])
-            a1 = [px, a, -2*self.regweightOut*a]
-            a2 = [a, px, a]
+            a1 = np.concatenate((px[np.newaxis,...], a[np.newaxis,...], -2*self.regweightOut*a[np.newaxis,...]))
+            a2 = np.concatenate((a[np.newaxis,...], px[np.newaxis,...], a[np.newaxis,...]))
+            #a1 = [px, a, -2*self.regweightOut*a]
+            #a2 = [a, px, a]
             zpx += self.param.KparDiffOut.applyDiffKT(z, a1, a2)
             pxt[self.nsurf][M-t-2, :, :] = np.squeeze(pxt[self.nsurf][M-t-1, :, :]) + timeStep * zpx
             

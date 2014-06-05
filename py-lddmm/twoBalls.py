@@ -7,8 +7,9 @@ from surfaceMultiPhase import *
 def compute():
 
     Tg = 750
+    npt = 50.0
     ## Build Two colliding ellipses
-    [x,y,z] = np.mgrid[0:200, 0:200, 0:200]/100.
+    [x,y,z] = np.mgrid[0:2*npt, 0:2*npt, 0:2*npt]/npt
     y = y-1
     z = z-1
     s2 = np.sqrt(2)
