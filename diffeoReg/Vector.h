@@ -61,8 +61,15 @@ class Vector: public _Vector<_real>
       ifs.close() ;
     }
     else if (dim==2) {
-      Magick::Image img0(file);
-      int nbl = img0.rows(), nbc = img0.columns() ;    
+      Magick::Image img0;
+      try{
+	img0.read(file) ;
+      }
+      catch(Magick::WarningCoder &warning) {
+	cerr << "Coder Warning: " << warning.what() << endl;
+      }
+      int nbl = img0.rows(), nbc = img0.columns() ;
+      Magick::PixelPacket *pixels = img0.getPixels(0, 0, nbc, nbl);
       Ivector MIN, MAX ;
       unsigned int i ;
       MIN.resize(2) ;
@@ -75,9 +82,10 @@ class Vector: public _Vector<_real>
       i = 0 ;
       for(int ii = 0 ; ii<nbl; ii++) 
 	for (int jj=0; jj<nbc; jj++) {
-	  Magick::Color u = img0.pixelColor(jj,ii) ;
+	  Magick::Color u = pixels[nbc * ii + jj] ; //img0.pixelColor(jj,ii) ;
 	  (*this)[i++] = (_real) 255.0*(u.redQuantum()+u.greenQuantum()+u.blueQuantum())/(3.0*MaxRGB) ;
 	}
+      // cout << max() << " " << min() << endl ;
     }
     else if (dim == 3) {
       loadAnalyze(file) ;

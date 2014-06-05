@@ -16,7 +16,7 @@
     along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
 #ifndef _DIFFEO_
-#define _DIIFEO_
+#define _DIFFEO_
 #include "vectorKernels.h"
 //#include <fftw3.h>
 //#include "Vector.h"
@@ -330,7 +330,7 @@ Integration of a time dependent vector field
     id.idMesh(Lv.d) ;
     //   Integrate along the path                                                 
     dt = delta/T ;
-    if (param.verb)
+    if (param.verb > 1)
       cout << "Evolution; T =  " << T << " " << norm << endl ; 
     
     for (unsigned int t=0; t<T; t++) {
@@ -395,7 +395,7 @@ Integration of a time dependent vector field
     id.idMesh(Lv.d) ;
     //   Integrate along the path                                                 
     dt = 1.0/T ;
-    if (param.verb)
+    if (param.verb > 1)
       cout << "Evolution; T =  " << T << " " << norm << endl ; 
     phi.resize(nStep+1) ;
     psi.resize(nStep+1) ;
@@ -464,7 +464,7 @@ Integration of a time dependent vector field
     if (T > (unsigned int) param.Tmax)
       T = param.Tmax ;
 
-    if (param.verb)
+    if (param.verb > 1)
       cout << "DualVarGeodesicDiffeoEvolution: T = " << T << " M = " << M << endl ;
   
     id.idMesh(Lv.d) ;
@@ -583,10 +583,10 @@ Integration of a time dependent vector field
     if (T > param.Tmax)
       T = param.Tmax ;
     dt = delta/T  ; 
-    if (param.verb)
+    if (param.verb > 1)
       cout << "ParallelTranslation " << T << endl ;
 
-    if (param.verb)
+    if (param.verb > 1)
       cout << "T = " << 0 << " " << vt.scalProd(Lvt) << " " << w.scalProd(Lw) << " " << vt.scalProd(Lw) << endl ;
     for (unsigned int t=0; t<T; t++) {
       semi.copy(vt) ;
@@ -627,7 +627,7 @@ Integration of a time dependent vector field
       big_adjointStar(Lv, _psi, Lvt) ;
       kernel(Lvt, vt) ;
       
-      if (param.verb)
+      if (param.verb > 1)
 	cout << "T = " << (t+1)*dt << " " << vt.scalProd(Lvt) << " " << w.scalProd(Lw) << " " << vt.scalProd(Lw) << endl ;
       
     }
@@ -773,12 +773,12 @@ Inverts the kernel with conjugate gradient
 	K=i2 ;
 	break ;
       }
-      if (param.verb)
+      if (param.verb > 1)
 	cout << "iter " << i2 << ": ener = " << ener2 << " " << ener2/(enerInit + 0.00000000000001) << " " << alfa0 << endl ;
     }
     if (nv > 0.0000001)
       X *= nv ;
-    if (param.verb && K == 100)
+    if (param.verb > 1 && K == 100)
       cout << "iter " << K << ": ener = " << ener << " " << ener2/(enerInit + 0.00000000000001) << " " << alfa0 << endl ;
     res0.copy(X) ;
   }

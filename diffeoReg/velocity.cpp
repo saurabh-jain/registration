@@ -102,7 +102,7 @@ void Velocity::Print(char* path)
     v0.scalProd(Template.normal(), Z) ;
     Z *= -1 ;
     //    Template.infinitesimalAction(v0, Z) ;
-    cout << "projection " << Z.d.length << endl ;
+    // cout << "projection " << Z.d.length << endl ;
     imageTangentProjection(Template, Z, Z0) ;
     sprintf(file, "%s/initialScalarMomentum", path) ;
     if (param.verb)

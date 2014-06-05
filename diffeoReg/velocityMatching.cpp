@@ -29,11 +29,11 @@ int main(int argc, char** argv)
   Velocity mo(argv[1], argc, argv) ;
   //  mo.param.read(argc, argv) ;
 
-  mo.param.verb= 1 ;
+  // mo.param.verb= 1 ;
 
   mo.initialPrint() ; 
 
-  cout << "starting matching" << endl ;
+  // cout << "starting matching" << endl ;
   mo.matching() ;
   //  mo.gradientImageMatching(mo.Z0) ;
 

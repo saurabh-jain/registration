@@ -4,6 +4,7 @@ import scipy as sp
 import surfaces
 import kernelFunctions as kfun
 import pointEvolution as evol
+import pointEvolution_fort as evol_omp
 import conjugateGradient as cg
 import surfaceMatching
 from affineBasis import *
@@ -257,8 +258,13 @@ class SurfaceMatching(surfaceMatching.SurfaceMatching):
                 x = np.squeeze(xt[k][t, :, :])
                 nu = np.squeeze(nut[k][t, :, :])
                 npt1 = npt + self.npt[k]
-                r = self.param.KparDiff.applyK(x, a) + np.dot(x, A.T) + b
-                r2 = self.param.KparDiffOut.applyK(zB, aB, firstVar=x)
+                print 'OMP?'
+                r = evol_omp.applyK(x, x, a, self.param.KparDiff.sigma, self.param.KparDiff.order,
+                                    x.shape[0], x.shape[0], x.shape[1]) + np.dot(x, A.T) + b
+                r2 = evol_omp.applyK(x, zB, a, self.param.KparDiffOut.sigma, self.param.KparDiffOut.order,
+                                    x.shape[0], zB.shape[0], zB.shape[1]) + np.dot(x, A.T) + b
+                #r = self.param.KparDiff.applyK(x, a) + np.dot(x, A.T) + b
+                #r2 = self.param.KparDiffOut.applyK(zB, aB, firstVar=x)
                 #print nu.shape, r.shape, r2.shape, cval[t,npt:npt1].shape, npt, npt1
                 cval[t,npt:npt1] = np.squeeze(np.multiply(nu, r-r2).sum(axis=1))
                 npt = npt1
@@ -400,10 +406,10 @@ class SurfaceMatching(surfaceMatching.SurfaceMatching):
                 #lnu = np.multiply(nu, np.mat(lmb[t, npt:npt1]).T)
                 lnu = np.multiply(nu, lmb[t, npt:npt1].reshape([self.npt[k], 1]))
                 #print lnu.shape
-                dxcval[k][t] = self.param.KparDiff.applyDiffKT(z, [a], [lnu], firstVar=x)
-                dxcval[self.nsurf][t][npt:npt1, :] += (self.param.KparDiff.applyDiffKT(x, [lnu], [a], firstVar=z)
-                                         - self.param.KparDiffOut.applyDiffKT(zB, [lnu], [aB], firstVar=z))
-                dxcval[self.nsurf][t] -= self.param.KparDiffOut.applyDiffKT(z, [aB], [lnu], firstVar=zB)
+                dxcval[k][t] = self.param.KparDiff.applyDiffKT(z, a[np.newaxis,...], lnu[np.newaxis,...], firstVar=x)
+                dxcval[self.nsurf][t][npt:npt1, :] += (self.param.KparDiff.applyDiffKT(x, lnu[np.newaxis,...], a[np.newaxis,...], firstVar=z)
+                                         - self.param.KparDiffOut.applyDiffKT(zB, lnu[np.newaxis,...], aB[np.newaxis,...], firstVar=z))
+                dxcval[self.nsurf][t] -= self.param.KparDiffOut.applyDiffKT(z, aB[np.newaxis,...], lnu[np.newaxis,...], firstVar=zB)
                 dxcval[self.nsurf][t][npt:npt1, :] += np.dot(lnu, A)
                 dacval[k][t] = self.param.KparDiff.applyK(z, lnu, firstVar=x)
                 if self.affineDim > 0:
@@ -707,8 +713,9 @@ class SurfaceMatching(surfaceMatching.SurfaceMatching):
                 z = np.squeeze(xt[k][M-t-1, :, :])
                 a = np.squeeze(at[k][M-t-1, :, :])
                 zpx = np.copy(dxcval[k][M-t-1])
-                a1 = [px, a, -2*self.regweight*a]
-                a2 = [a, px, a]
+                a1 = np.concatenate((px[np.newaxis,...], a[np.newaxis,...], -2*self.regweight*a[np.newaxis,...]))
+                a2 = np.concatenate((a[np.newaxis,...], px[np.newaxis,...], a[np.newaxis,...]))
+                #a2 = np.array([a, px, a])
                 zpx += self.param.KparDiff.applyDiffKT(z, a1, a2)
                 if self.affineDim > 0:
                     zpx += np.dot(px, A[k][0][M-t-1])
@@ -726,8 +733,10 @@ class SurfaceMatching(surfaceMatching.SurfaceMatching):
             z = np.squeeze(xt[self.nsurf][M-t-1, :, :])
             a = np.squeeze(at[self.nsurf][M-t-1, :, :])
             zpx = np.copy(dxcval[self.nsurf][M-t-1])
-            a1 = [px, a, -2*self.regweightOut*a]
-            a2 = [a, px, a]
+            a1 = np.concatenate((px[np.newaxis,...], a[np.newaxis,...], -2*self.regweightOut*a[np.newaxis,...]))
+            a2 = np.concatenate((a[np.newaxis,...], px[np.newaxis,...], a[np.newaxis,...]))
+            #a1 = [px, a, -2*self.regweightOut*a]
+            #a2 = [a, px, a]
             zpx += self.param.KparDiffOut.applyDiffKT(z, a1, a2)
             pxt[self.nsurf][M-t-2, :, :] = np.squeeze(pxt[self.nsurf][M-t-1, :, :]) + timeStep * zpx
             
@@ -830,7 +839,7 @@ class SurfaceMatching(surfaceMatching.SurfaceMatching):
             ll = 0
             for gr in g2:
                 ggOld = np.squeeze(gr[self.nsurf].diff[t, :, :]) 
-                res[ll]  +=  np.multiply(ggOld,u).sum()
+                res[ll]  +=  np.multiply(ggOld,u).sum() / self.coeffZ
                 ll = ll + 1
 
         return res
@@ -905,7 +914,7 @@ class SurfaceMatching(surfaceMatching.SurfaceMatching):
             nn += n1
 
     def optimizeMatching(self):
-	self.coeffZ = 1.
+	self.coeffZ = 10.
 	grd = self.getGradient(self.gradCoeff)
 	[grd2] = self.dotProduct(grd, [grd])
 

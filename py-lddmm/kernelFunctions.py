@@ -1,4 +1,5 @@
 import numpy as np
+import kernelFunctions_fort as kff
 from scipy.spatial import distance as dfun
 
 #import kernelMatrix_fort
@@ -235,7 +236,7 @@ def  kernelMatrix(Kpar, x, firstVar=None, grid=None, diff = False, diff2=False, 
 # w1: weight for linear part; w2: weight for translation part; center: origin
 # dim: dimension
 class KernelSpec:
-    def __init__(self, name='gauss', affine = 'none', sigma = 6.5, order = 3, w1 = 1.0, w2 = 1.0, dim = 3, center = [0,0,0], weight = 1.0):
+    def __init__(self, name='gauss', affine = 'none', sigma = 6.5, order = 10, w1 = 1.0, w2 = 1.0, dim = 3, center = [0,0,0], weight = 1.0):
         self.name = name
         self.sigma = sigma
         self.order = order
@@ -254,9 +255,12 @@ class KernelSpec:
         self.affine = affine
         if name == 'laplacian':
             self.kernelMatrix = kernelMatrixLaplacian
+            if self.order > 4:
+                self.order = 3
             self.par = [sigma, order]
         elif name == 'gauss':
             self.kernelMatrix = kernelMatrixGauss
+            self.order = 10 
             self.par = [sigma]
         else:
             self.name = 'none'
@@ -305,8 +309,19 @@ class Kernel(KernelSpec):
     # Computes K(x,x)a or K(x,y)a
     def applyK(self, x, a, firstVar = None, grid=None):
         if not (self.kernelMatrix == None):
-            r = self.precompute(x, firstVar=firstVar, grid=grid, diff=False)
-            z = np.dot(r, a)
+            #r = self.precompute(x, firstVar=firstVar, grid=grid, diff=False)
+            #z = np.dot(r, a)
+            #print 'OMP!'
+            if firstVar == None:
+                #z = np.zeros([x.shape[0],a.shape[1]])
+                z = kff.applyk(x, x, a, self.sigma, self.order, x.shape[0], x.shape[0], x.shape[1], a.shape[1])
+                # for k in range(a.shape[1]):
+                #     z[:,k] = kff.applyk(x, x, a[:,k], self.sigma, self.order, x.shape[0], x.shape[0], x.shape[1])
+            else:
+                z = kff.applyk(firstVar, x, a, self.sigma, self.order, firstVar.shape[0], x.shape[0], x.shape[1], a.shape[1])
+                # z = np.zeros([firstVar.shape[0],a.shape[1]])
+                # for k in range(a.shape[1]):
+                #     z[:,k] = kff.applyk(firstVar, x, a[:,k], self.sigma, self.order, firstVar.shape[0], x.shape[0], x.shape[1])
             #print r.sum(), a.sum()
         else:
             z = np.zeros([x.shape[0],a.shape[1]])
@@ -389,18 +404,23 @@ class Kernel(KernelSpec):
 
     # Computes array A(i) = sum_k sum_(j) nabla_1[a1(k,i). K(x(i), x(j))a2(k,j)]
     def applyDiffKT(self, x, a1, a2, firstVar=None):
-        zpx = np.zeros(x.shape)
-        a = np.dot(a1[0], a2[0].T)
-        for k in range(1,len(a1)):
-            a += np.dot(a1[k], a2[k].T)
+        # zpx = np.zeros(x.shape)
+        # a = np.dot(a1[0], a2[0].T)
+        # for k in range(1,len(a1)):
+        #     a += np.dot(a1[k], a2[k].T)
         if not (self.kernelMatrix == None):
-            r = self.precompute(x, diff=True, firstVar=firstVar)
-            g1 =  r*a
-            #print a.shape, r.shape, g1.shape
+            #print a1.shape
             if firstVar==None:
-                zpx = 2*(x*g1.sum(axis=1)[:, np.newaxis] - np.dot(g1,x))
+                zpx = kff.applykdifft(x,x,a1,a2,self.sigma, self.order, x.shape[0], x.shape[0], x.shape[1], a1.shape[2], a1.shape[0])
             else:
-                zpx = 2*(firstVar*g1.sum(axis=1)[:, np.newaxis] - np.dot(g1,x))
+                zpx = kff.applykdifft(firstVar,x,a1,a2,self.sigma, self.order, firstVar.shape[0], x.shape[0], x.shape[1], a1.shape[2], a1.shape[0])
+            # r = self.precompute(x, diff=True, firstVar=firstVar)
+            # g1 =  r*a
+            # #print a.shape, r.shape, g1.shape
+            # if firstVar==None:
+            #     zpx = 2*(x*g1.sum(axis=1)[:, np.newaxis] - np.dot(g1,x))
+            # else:
+            #     zpx = 2*(firstVar*g1.sum(axis=1)[:, np.newaxis] - np.dot(g1,x))
         if self.affine == 'affine':
             xx = x-self.center
             # if firstVar==None:

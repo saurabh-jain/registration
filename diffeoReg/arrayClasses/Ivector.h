@@ -122,7 +122,7 @@ public:
   }
 
   int inc(const Ivector &min, const Ivector &max) {
-    unsigned int i, j ;
+    int i, j ;
     if ((*this) == max)
       return -1 ;
 

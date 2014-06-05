@@ -66,7 +66,8 @@ class Direction:
 #        maxIter: max iterations in conjugate gradient
 class SurfaceMatching:
 
-    def __init__(self, Template=None, Target=None, Fiber=None, fileTempl=None, fileTarg=None, fileFiber=None, param=None, maxIter=1000, regWeight = 1.0, verb=True,
+    def __init__(self, Template=None, Target=None, Fiber=None, fileTempl=None, fileTarg=None, fileFiber=None, param=None, initialMomentum=None,
+                 maxIter=1000, regWeight = 1.0, verb=True,
                  subsampleTargetSize=-1, testGradient=True, saveFile = 'evolution', outputDir = '.'):
         if Template==None:
             if fileTempl==None:
@@ -78,12 +79,16 @@ class SurfaceMatching:
             self.fv0 = surfaces.Surface(surf=Template)
         if Target==None:
             if fileTarg==None:
-                print 'Please provide a target surface'
+                print 'Please provide a list of target surfaces'
                 return
             else:
-                self.fv1 = surfaces.Surface(filename=fileTarg)
+                self.fv1 = [] ;
+                for f in fileTarg:
+                    self.fv1.append(surfaces.Surface(filename=f))
         else:
-            self.fv1 = surfaces.Surface(surf=Target)
+            self.fv1 = [] ;
+            for s in Target:
+                self.fv1.append(surfaces.Surface(surf=s))
 
         if Fiber==None:
             if fileFiber==None:
@@ -97,6 +102,7 @@ class SurfaceMatching:
 
             #print np.fabs(self.fv1.surfel-self.fv0.surfel).max()
 
+        self.nTarg = len(self.fv1)
         self.saveRate = 10
         self.iter = 0
         self.outputDir = outputDir
@@ -121,28 +127,37 @@ class SurfaceMatching:
         if (subsampleTargetSize > 0):
             self.fv0.Simplify(subsampleTargetSize)
             v0 = self.fv0.surfVolume()
-            v1 = self.fv1.surfVolume()
-            if (v0*v1 < 0):
-                self.fv1.flipFaces()
+            for s in self.fv1:
+                v1 = s.surfVolume()
+                if (v0*v1 < 0):
+                    s.flipFaces()
             print 'simplified template', self.fv0.vertices.shape[0]
         self.x0 = self.fv0.vertices
-        self.fvDef = surfaces.Surface(surf=self.fv0)
+        self.fvDef = []
+        for k in range(self.nTarg):
+            self.fvDef.append(surfaces.Surface(surf=self.fv0))
         self.npt = self.y0.shape[0]
-        self.a0 = np.zeros([self.y0.shape[0], self.x0.shape[1]])
-
-        self.Tsize = int(round(1.0/self.param.timeStep))
+        self.Tsize1 = int(round(1.0/self.param.timeStep))
+        self.Tsize = self.nTarg*self.Tsize1
         self.rhot = np.zeros([self.Tsize, self.y0.shape[0]])
         self.rhotTry = np.zeros([self.Tsize, self.y0.shape[0]])
-        self.xt = np.tile(self.x0, [self.Tsize+1, 1, 1])
-        self.at = np.tile(self.a0, [self.Tsize+1, 1, 1])
-        self.yt = np.tile(self.y0, [self.Tsize+1, 1, 1])
-        self.vt = np.tile(self.v0, [self.Tsize+1, 1, 1])
+        if initialMomentum==None:
+            self.xt = np.tile(self.x0, [self.Tsize+1, 1, 1])
+            self.a0 = np.zeros([self.y0.shape[0], self.x0.shape[1]])
+            self.at = np.tile(self.a0, [self.Tsize+1, 1, 1])
+            self.yt = np.tile(self.y0, [self.Tsize+1, 1, 1])
+            self.vt = np.tile(self.v0, [self.Tsize+1, 1, 1])
+        else:
+            self.a0 = initialMomentum
+            (self.xt, self.at, self.yt, self.vt)  = evol.secondOrderFiberEvolution(self.x0, self.a0, self.y0, self.v0, self.rhot, self.param.KparDiff)
+
         self.obj = None
         self.objTry = None
         self.gradCoeff = self.fv0.vertices.shape[0]
         self.saveFile = saveFile
         self.fv0.saveVTK(self.outputDir+'/Template.vtk')
-        self.fv1.saveVTK(self.outputDir+'/Target.vtk')
+        for k,s in enumerate(self.fv1):
+            s.saveVTK(self.outputDir+'/Target'+str(k)+'.vtk')
 
     def setOutputDir(self, outputDir):
         self.outputDir = outputDir
@@ -155,7 +170,9 @@ class SurfaceMatching:
 
 
     def dataTerm(self, _fvDef):
-        obj = self.param.fun_obj(_fvDef, self.fv1, self.param.KparDist) / (self.param.sigmaError**2)
+        obj = 0
+        for k,s in enumerate(_fvDef):
+            obj += self.param.fun_obj(s, self.fv1[k], self.param.KparDist) / (self.param.sigmaError**2)
         return obj
 
     def  objectiveFunDef(self, rhot, withTrajectory = False, withJacobian=False, Init = None):
@@ -196,7 +213,8 @@ class SurfaceMatching:
 
     def  _objectiveFun(self, rhot, withTrajectory = False):
         (obj, xt, at, yt, vt) = self.objectiveFunDef(rhot, withTrajectory=True)
-        self.fvDef.updateVertices(np.squeeze(xt[-1, :, :]))
+        for k in range(self.nTarg):
+            self.fvDef[k].updateVertices(np.squeeze(xt[(k+1)*self.Tsize1, :, :]))
         obj0 = self.dataTerm(self.fvDef)
 
         if withTrajectory:
@@ -206,14 +224,15 @@ class SurfaceMatching:
 
     def objectiveFun(self):
         if self.obj == None:
-            self.obj0 = self.param.fun_obj0(self.fv1, self.param.KparDist) / (self.param.sigmaError**2)
             (self.obj, self.xt, self.at, self.yt, self.vt) = self.objectiveFunDef(self.rhot, withTrajectory=True)
-            foo = surfaces.Surface(surf=self.fvDef)
-            self.fvDef.updateVertices(np.squeeze(self.xt[-1, :, :]))
-            foo.computeCentersAreas()
+            self.obj0 = 0
+            for k in range(self.nTarg):
+                self.obj0 += self.param.fun_obj0(self.fv1[k], self.param.KparDist) / (self.param.sigmaError**2)
+                foo = surfaces.Surface(surf=self.fvDef[k])
+                self.fvDef[k].updateVertices(np.squeeze(self.xt[(k+1)*self.Tsize1, :, :]))
+                foo.computeCentersAreas()
             self.obj += self.obj0 + self.dataTerm(self.fvDef)
             #print self.obj0,  self.dataTerm(self.fvDef)
-
         return self.obj
 
     def getVariable(self):
@@ -225,8 +244,10 @@ class SurfaceMatching:
         foo = self.objectiveFunDef(rhotTry, withTrajectory=True)
         objTry += foo[0]
 
-        ff = surfaces.Surface(surf=self.fvDef)
-        ff.updateVertices(np.squeeze(foo[1][-1, :, :]))
+        ff = [] 
+        for k in range(self.nTarg):
+            ff.append(surfaces.Surface(surf=self.fvDef[k]))
+            ff[k].updateVertices(np.squeeze(foo[1][(k+1)*self.Tsize1, :, :]))
         objTry += self.dataTerm(ff)
         if np.isnan(objTry):
             print 'Warning: nan in updateTry'
@@ -242,16 +263,23 @@ class SurfaceMatching:
 
 
     def endPointGradient(self):
-        px = self.param.fun_objGrad(self.fvDef, self.fv1, self.param.KparDist)
-        return px / self.param.sigmaError**2
+        px = []
+        for k in range(self.nTarg):
+            px.append(-self.param.fun_objGrad(self.fvDef[k], self.fv1[k], self.param.KparDist)/ self.param.sigmaError**2)
+        return px 
 
 
     def getGradient(self, coeff=1.0):
-        px1 = -self.endPointGradient()
-        pa1 = np.zeros(self.a0.shape)
-        py1 = np.zeros(self.y0.shape)
-        pv1 = np.zeros(self.v0.shape)
-        foo = evol.secondOrderFiberGradient(self.x0, self.a0, self.y0, self.v0, self.rhot, px1, pa1, py1, pv1, self.param.KparDiff)
+        px1 = self.endPointGradient()
+        pa1 = []
+        py1 = []
+        pv1 = []
+        for k in range(self.nTarg):
+            pa1.append(np.zeros(self.a0.shape))
+            py1.append(np.zeros(self.y0.shape))
+            pv1.append(np.zeros(self.v0.shape))
+        foo = evol.secondOrderFiberGradient(self.x0, self.a0, self.y0, self.v0, self.rhot, px1, pa1, py1, pv1,
+                                            self.param.KparDiff, times = (1+np.array(range(self.nTarg)))*self.Tsize1)
         grd = Direction()
         grd.diff = foo[0]/(coeff*self.rhot.shape[0])
         return grd
@@ -295,9 +323,10 @@ class SurfaceMatching:
 
     def endOfIteration(self):
         self.iter += 1
-        if (self.iter % self.saveRate == 0) :
+        if (self.iter % self.saveRate == 0):
             (obj1, self.xt, self.at, self.yt, self.vt) = self.objectiveFunDef(self.rhot, withTrajectory=True)
-            self.fvDef.updateVertices(np.squeeze(self.xt[-1, :, :]))
+            for k in range(self.nTarg):
+                self.fvDef[k].updateVertices(np.squeeze(self.xt[(k+1)*self.Tsize1, :, :]))
             (xt, at, yt, vt, zt, Jt)  = evol.secondOrderFiberEvolution(self.x0, self.a0, self.y0, self.v0,  self.rhot, self.param.KparDiff,
                                                            withPointSet = self.fv0Fine.vertices, withJacobian=True)
             fvDef = surfaces.Surface(surf=self.fv0Fine)
@@ -310,7 +339,8 @@ class SurfaceMatching:
                 #self.fvDef.saveVTK(self.outputDir +'/'+ self.saveFile+str(kk)+'.vtk', scalars = self.idx, scal_name='Labels')
         else:
             (obj1, self.xt, self.at, self.yt, self.vt) = self.objectiveFunDef(self.rhot, withTrajectory=True)
-            self.fvDef.updateVertices(np.squeeze(self.xt[-1, :, :]))
+            for k in range(self.nTarg):
+                self.fvDef[k].updateVertices(np.squeeze(self.xt[(k+1)*self.Tsize1, :, :]))
 
 
     def optimizeMatching(self):

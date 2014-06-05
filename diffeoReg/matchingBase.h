@@ -67,7 +67,7 @@ public:
       swapFiles() ;
     }
     
-    if (param.verb)
+    if (param.verb > 1)
       cout << "Reading Template from " << param.fileTemp << endl ;
     if (!param.doNotModifyTemplate && !param.doNotModifyImages){
       if (param.readBinaryTemplate)
@@ -100,7 +100,7 @@ public:
 
     if (param.foundTarget) {
       if (!param.doNotModifyImages) {
-	if (param.verb)
+	if (param.verb > 1)
 	  cout << "Reading Target from " << param.fileTarg << endl ;
 	get_target(tmp2) ;
 	if (param.revertIntensities){
@@ -112,7 +112,7 @@ public:
 	else
 	  copy(tmp2, tmp) ;
 	if (param.expand_margin.size() > 0) {
-	  if (param.verb)
+	  if (param.verb > 1)
 	    cout << "Expanding Target boundaries" << endl ;
 	  expandBoundary(tmp) ;
 	}
@@ -137,7 +137,7 @@ public:
 	  flip(tmp2, param.flipDim) ;
       }
       else {
-	if (param.verb)
+	if (param.verb > 1)
 	  cout << "Reading Target from " << param.fileTarg << endl ;
 	get_target(tmp2) ;
       }
@@ -193,7 +193,7 @@ public:
       copy(Target, savedTarget) ;
     savedParam.copy(param) ;
 
-    if (param.verb)
+    if (param.verb > 1)
       cout << "end init" << endl ;
   }
 
@@ -240,7 +240,7 @@ public:
     
     convImage(tmp1, Template) ;
     
-    if (param.verb)
+    if (param.verb > 1)
       cout << "end init" << endl ;
   }
   

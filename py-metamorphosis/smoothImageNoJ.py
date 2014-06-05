@@ -102,7 +102,7 @@ class SmoothImageMeta(object):
         self.output_dir = output_dir
         self.spline_interp = False
         self.noJ = True
-        self.unconstrained = True
+        self.unconstrained = False
         # used only for letter examples
         self.letter_match = letter_match
 
