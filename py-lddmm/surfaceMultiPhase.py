@@ -406,10 +406,10 @@ class SurfaceMatching(surfaceMatching.SurfaceMatching):
                 #lnu = np.multiply(nu, np.mat(lmb[t, npt:npt1]).T)
                 lnu = np.multiply(nu, lmb[t, npt:npt1].reshape([self.npt[k], 1]))
                 #print lnu.shape
-                dxcval[k][t] = self.param.KparDiff.applyDiffKT(z, [a], [lnu], firstVar=x)
-                dxcval[self.nsurf][t][npt:npt1, :] += (self.param.KparDiff.applyDiffKT(x, [lnu], [a], firstVar=z)
-                                         - self.param.KparDiffOut.applyDiffKT(zB, [lnu], [aB], firstVar=z))
-                dxcval[self.nsurf][t] -= self.param.KparDiffOut.applyDiffKT(z, [aB], [lnu], firstVar=zB)
+                dxcval[k][t] = self.param.KparDiff.applyDiffKT(z, a[np.newaxis,...], lnu[np.newaxis,...], firstVar=x)
+                dxcval[self.nsurf][t][npt:npt1, :] += (self.param.KparDiff.applyDiffKT(x, lnu[np.newaxis,...], a[np.newaxis,...], firstVar=z)
+                                         - self.param.KparDiffOut.applyDiffKT(zB, lnu[np.newaxis,...], aB[np.newaxis,...], firstVar=z))
+                dxcval[self.nsurf][t] -= self.param.KparDiffOut.applyDiffKT(z, aB[np.newaxis,...], lnu[np.newaxis,...], firstVar=zB)
                 dxcval[self.nsurf][t][npt:npt1, :] += np.dot(lnu, A)
                 dacval[k][t] = self.param.KparDiff.applyK(z, lnu, firstVar=x)
                 if self.affineDim > 0:

@@ -37,15 +37,11 @@ def compute():
     ## Object kernel
     K1 = Kernel(name='gauss', sigma = 100.0)
     ## Background kernel
-    K2 = Kernel(name='gauss', sigma = 10.0)
+    K2 = Kernel(name='laplacian', sigma = 10.0, order=3)
 
-    sm = SurfaceMatchingParam(timeStep=0.1, KparDiff=K1, KparDiffOut=K2, sigmaDist=20., sigmaError=10., errorType='measure')
-<<<<<<< HEAD
-    f = (SurfaceMatching(Template=(fv1,fv2), Target=(fv3,fv4), outputDir='/Users/younes/Development/Results/tight_Sliding_rigid2_10',param=sm, mu=1.,regWeightOut=1., testGradient=True,
-=======
-    f = (SurfaceMatching(Template=(fv1,fv2), Target=(fv3,fv4), outputDir='/Users/younes/Development/Results/tight_stitched_rigid2_10',param=sm, mu=1.,regWeightOut=1., testGradient=True,
->>>>>>> fb819a3ad857de3c837e7e8082d4a9a423c972da
-                         typeConstraint='stitched', maxIter_cg=1000, maxIter_al=100, affine='none', rotWeight=0.1))
+    sm = SurfaceMatchingParam(timeStep=0.1, KparDiff=K1, KparDiffOut=K2, sigmaDist=20., sigmaError=10., errorType='current')
+    f = (SurfaceMatching(Template=(fv1,fv2), Target=(fv3,fv4), outputDir='/Users/younes/Development/Results/tight_stitched_rigid2_10',param=sm, mu=1.,regWeightOut=1.,
+                          testGradient=True, typeConstraint='stitched', maxIter_cg=1000, maxIter_al=100, affine='none', rotWeight=0.1))
     f.optimizeMatching()
 
 
