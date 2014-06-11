@@ -698,7 +698,7 @@ def landmarkEPDiff(T, x0, a0, KparDiff, affine = None, withJacobian=False, withN
         xt[k+1, :, :] = z + timeStep * KparDiff.applyK(z, a)
         #print 'test', px.sum()
         if k < (T-1):
-            at[k+1, :, :] = a - timeStep * KparDiff.applyDiffKT(z, [a], [a])
+            at[k+1, :, :] = a - timeStep * KparDiff.applyDiffKT(z, a[np.newaxis,...], a[np.newaxis,...])
         if not (affine == None):
             xt[k+1, :, :] += timeStep * (np.dot(z, A[k].T) + b[k])
         if not (withPointSet == None):

@@ -22,7 +22,7 @@ class Curve:
                         for k in range(pointSet.shape[0]-1):
                             self.faces[k,:] = (k, k+1)
                         if isOpen == False:
-                            self.faces[pointSet.shape[0]-1, :] = (pointSet.shape[0]-1, 0) ;
+                            self.faces[pointSet.shape[0]-1, :] = (pointSet.shape[0]-1, 0)
                         self.computeCentersLengths()
                 else:
                     (mainPart, ext) = os.path.splitext(filename)
@@ -78,6 +78,22 @@ class Curve:
         return a
 
 
+    def computeCurvature(self):
+        e = self.vertices[self.faces[:,1] ,:] - self.vertices[self.faces[:,0] ,:]
+        th = np.arctan2(e[:,1], e[:,0])
+        #print th.shape
+        ll = np.sqrt((self.lenel**2).sum(axis=1))/2
+        ka = (th[np.mod(range(1,self.faces.shape[0]+1), self.faces.shape[0])] - th[range(0,self.faces.shape[0])])/ll
+        nrm = np.zeros(self.lenel.shape)
+        nrm[:,0] = -self.lenel[:,1]
+        nrm[:,1] = self.lenel[:,0]
+        lnrm = np.sqrt((nrm**2).sum(axis=1))[:, np.newaxis]
+        nrm = nrm/lnrm
+        nrm = (nrm[np.mod(range(1,self.faces.shape[0]+1), self.faces.shape[0])] + nrm[range(0,self.faces.shape[0])])/2
+        kan = self.lenel/ll[:,np.newaxis]
+        ka = (kan[np.mod(range(1,self.faces.shape[0]+1), self.faces.shape[0]),:] - kan[range(0,self.faces.shape[0]),:])
+        
+        return ka, nrm, kan
             
     # Computes isocontours using vtk               
     def Isocontour(self, data, value=0.5, target=100.0, scales = [1., 1.], smooth = 30, fill_holes = 1., singleComponent = True):
@@ -251,6 +267,10 @@ class Curve:
             z += np.linalg.det(v[c[:], :])/2
         return z
 
+    def length(self):
+        ll = np.sqrt((self.lenel**2).sum(axis=1))
+        return ll.sum()
+
     # Reads from .byu file
     def readCurve(self, infile):
         with open(infile,'r') as fbyu:
@@ -388,11 +408,33 @@ class Curve:
         
         self.vertices = V
         self.faces = np.int_(F)
-        xDef1 = self.vertices[self.faces[:, 0], :]
-        xDef2 = self.vertices[self.faces[:, 1], :]
-        xDef3 = self.vertices[self.faces[:, 2], :]
         self.computeCentersLengths()
 
+    def resample(self, ds):
+        ll = np.sqrt((self.lenel**2).sum(axis=1))
+        if ll.max() < ds:
+            return
+        v = np.zeros([2*self.vertices.shape[0], self.vertices.shape[1]])  
+        f = np.zeros([2*self.faces.shape[0], self.faces.shape[1]], dtype=int)
+        v[0:self.vertices.shape[0],:] = self.vertices
+        lv = self.vertices.shape[0]
+        lf = 0
+        for k in range(self.faces.shape[0]):  
+            if ll[k] < ds:
+                f[lf,:] = self.faces[k,:]
+                lf += 1
+            else:
+                c = 0.5*(v[self.faces[k,0],:] + v[self.faces[k,1],:])
+                v[lv, :] = c
+                f[lf,:] = (self.faces[k,0], lv)
+                f[lf+1,:] = (lv, self.faces[k,1])
+                lv += 1
+                lf += 2
+        self.vertices = np.copy(v[0:lv,:])
+        self.faces = np.copy(f[0:lf,:])
+        self.computeCentersLengths()
+        print 'resampling', self.length(), self.vertices.shape[0]
+        self.resample(ds)
 
 
 def mergeCurves(curves, tol=0.01):

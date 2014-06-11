@@ -1109,15 +1109,15 @@ def measureNormGradient(fvDef, fv1, KparDist):
     cr1 = cr1 / a1[:, np.newaxis]
     cr2 = cr2 / a2[:, np.newaxis]
 
-    g11 = kfun.kernelMatrix(KparDist, c1)
-    KparDist.hold()
-    dg11 = kfun.kernelMatrix(KparDist, c1, diff=True)
-    KparDist.release()
+    # g11 = kfun.kernelMatrix(KparDist, c1)
+    # KparDist.hold()
+    # dg11 = kfun.kernelMatrix(KparDist, c1, diff=True)
+    # KparDist.release()
     
-    g12 = kfun.kernelMatrix(KparDist, c2, c1)
-    KparDist.hold()
-    dg12 = kfun.kernelMatrix(KparDist, c2, c1, diff=True)
-    KparDist.release()
+    # g12 = kfun.kernelMatrix(KparDist, c2, c1)
+    # KparDist.hold()
+    # dg12 = kfun.kernelMatrix(KparDist, c2, c1, diff=True)
+    # KparDist.release()
 
     z1 = KparDist.applyK(c1, a1[:, np.newaxis]) - KparDist.applyK(c2, a2[:, np.newaxis], firstVar=c1)
     z1 = np.multiply(z1, cr1)
@@ -1133,6 +1133,81 @@ def measureNormGradient(fvDef, fv1, KparDist):
     # dg12 = np.multiply(dg1, a2)
 
     # dz1 = (2./3.) * (np.multiply(dg11.sum(axis=1), c1) - dg11*c1 - np.multiply(dg12.sum(axis=1), c1) + dg12*c2)
+
+    xDef1 = xDef[fvDef.faces[:, 0], :]
+    xDef2 = xDef[fvDef.faces[:, 1], :]
+    xDef3 = xDef[fvDef.faces[:, 2], :]
+
+    px = np.zeros([xDef.shape[0], dim])
+    I = fvDef.faces[:,0]
+    crs = np.cross(xDef3 - xDef2, z1)
+    for k in range(I.size):
+        px[I[k], :] = px[I[k], :]+dz1[k, :] -  crs[k, :]
+
+    I = fvDef.faces[:,1]
+    crs = np.cross(xDef1 - xDef3, z1)
+    for k in range(I.size):
+        px[I[k], :] = px[I[k], :]+dz1[k, :] -  crs[k, :]
+
+    I = fvDef.faces[:,2]
+    crs = np.cross(xDef2 - xDef1, z1)
+    for k in range(I.size):
+        px[I[k], :] = px[I[k], :]+dz1[k, :] -  crs[k, :]
+
+    return 2*px
+
+def varifoldNorm0(fv1, KparDist):
+    c2 = fv1.centers
+    cr2 = fv1.surfel
+    g11 = kfun.kernelMatrix(KparDist, c2)
+    obj = np.multiply(np.dot(cr2,cr2.T)**2, g11).sum()
+    #print 'cn0', obj
+    return obj
+        
+
+# Computes |fvDef|^2 - 2 fvDef * fv1 with current dot produuct 
+def varifoldNormDef(fvDef, fv1, KparDist):
+    c1 = fvDef.centers
+    cr1 = fvDef.surfel
+    c2 = fv1.centers
+    cr2 = fv1.surfel
+    g11 = kfun.kernelMatrix(KparDist, c1)
+    g12 = kfun.kernelMatrix(KparDist, c2, c1)
+    #print cr1-cr2
+    obj = (np.multiply(np.dot(cr1,cr1.T)**2, g11).sum() -
+           2*np.multiply(np.dot(cr1, cr2.T)**2, g12).sum())
+        #print 'cn', obj
+    return obj
+
+# Returns |fvDef - fv1|^2 for current norm
+def varifoldNorm(fvDef, fv1, KparDist):
+    return varifoldNormDef(fvDef, fv1, KparDist) + varifoldNorm0(fv1, KparDist) 
+
+# Returns gradient of |fvDef - fv1|^2 with respect to vertices in fvDef (current norm)
+def varifoldNormGradient(fvDef, fv1, KparDist):
+    xDef = fvDef.vertices
+    c1 = fvDef.centers
+    cr1 = np.mat(fvDef.surfel)
+    c2 = fv1.centers
+    cr2 = np.mat(fv1.surfel)
+    dim = c1.shape[1]
+
+    g11 = kfun.kernelMatrix(KparDist, c1)
+    KparDist.hold()
+    dg11 = kfun.kernelMatrix(KparDist, c1, diff=True)
+    KparDist.release()
+    
+    g12 = kfun.kernelMatrix(KparDist, c2, c1)
+    KparDist.hold()
+    dg12 = kfun.kernelMatrix(KparDist, c2, c1, diff=True)
+    KparDist.release()
+
+
+    z1 = g11*cr1 - g12 * cr2
+    dg11 = np.multiply(dg11 ,(cr1*(cr1.T)))
+    dg12 = np.multiply(dg12 , (cr1*(cr2.T)))
+
+    dz1 = (2./3.) * (np.multiply(np.tile(dg11.sum(axis=1), (1,dim)), c1) - dg11*c1 - np.multiply(np.tile(dg12.sum(axis=1), (1, dim)), c1) + dg12*c2)
 
     xDef1 = xDef[fvDef.faces[:, 0], :]
     xDef2 = xDef[fvDef.faces[:, 1], :]
