@@ -253,7 +253,10 @@ class RegularGrid(object):
             mesh_name = self.mesh_name
         w = vtkXMLStructuredGridWriter()
         w.SetFileName("%s/%s_mesh%d_%d.vts" % (output_dir, mesh_name, self.num_points[0], iter))
-        w.SetInputData(self.sg)
+        if vtkVersion.GetVTKMajorVersion() < 6:
+            w.SetInput(self.sg)
+        else:
+            w.SetInputData(self.sg)
         #w = tvtk.XMLStructuredGridWriter(input=self.sg, file_name="%s/%s_mesh%d_%d.vts" % (output_dir, mesh_name, self.num_points[0], iter))
         w.Write()
         self.sg = None

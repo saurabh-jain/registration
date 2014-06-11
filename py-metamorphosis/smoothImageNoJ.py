@@ -84,7 +84,7 @@ class SplineInterp(object):
         linop = scipy.sparse.linalg.LinearOperator((N,N), self.solve_mult, \
                             dtype=float)
         sol = scipy.sparse.linalg.cg(linop, rhs, tol=1e-30, \
-                            callback=self.solve_callback, maxiter=5000)
+                            callback=self.solve_callback, maxiter=500)
         logging.info("cg finished after %d iterations." % (self.cg_iter))
         return sol[0]
 
@@ -107,7 +107,6 @@ class SmoothImageMeta(object):
         self.letter_match = letter_match
 
         smoothImageConfig.configure(self, config_name)
-        self.khSmooth = self.khs/2
 
         self.rg = regularGrid.RegularGrid(self.dim, self.num_points, \
                              self.domain_max, self.dx, "meta")
@@ -117,12 +116,14 @@ class SmoothImageMeta(object):
         self.optimize_iteration = 0
         self.g_eps = 1.
 
+        self.khSmooth =0.2*numpy.asarray(self.rg.dx).max() # self.khs/2
         logging.info("sigma: %f" % self.sigma)
         logging.info("sfactor: %f" % self.sfactor)
         logging.info("num_points: %s" % str(self.rg.num_points))
         logging.info("domain_max: %s" % str(self.rg.domain_max))
         logging.info("dx: %s" % str(self.rg.dx))
         logging.info("dt: %f" % self.dt)
+        logging.info('khSmooth: %f'% self.khSmooth)
 
         rg = self.rg
         self.x0 = self.rg.nodes.copy()
@@ -138,6 +139,7 @@ class SmoothImageMeta(object):
         if self.unconstrained:
             self.noJ = True
             self.z0 = numpy.zeros((rg.num_nodes, 3))
+            self.z0weight = 100*numpy.ones((rg.num_nodes,1))
             self.z0_state = numpy.zeros((rg.num_nodes, 3))
 
         if not self.noJ:
@@ -149,10 +151,18 @@ class SmoothImageMeta(object):
         rg.vtk_write(0, "images", output_dir=self.output_dir)
 
         if self.spline_interp:
+            trg = kernelMatrix_fort.applyk( \
+                rg.nodes, rg.nodes, self.target_in,
+                self.khs/4, self.kho, self.rg.num_nodes)
+            tpl = kernelMatrix_fort.applyk( \
+                rg.nodes, rg.nodes, self.template_in,
+                self.khs/4, self.kho, self.rg.num_nodes)
             self.khSmooth = self.khs
-            si = SplineInterp(rg, self.khs, self.kho, self.template_in)
+            logging.info('RKHS Projection Template')
+            si = SplineInterp(rg, self.khs, self.kho, tpl,True)
             self.dual_template = si.minimize()
-            si = SplineInterp(rg, self.khs, self.kho, self.target_in)
+            logging.info('RKHS Projection Target')
+            si = SplineInterp(rg, self.khs, self.kho, trg)
             self.dual_target = si.minimize()
         else:
             self.dual_template = self.template_in.copy()
@@ -191,6 +201,8 @@ class SmoothImageMeta(object):
         self.dual_template /= tmpMax
         self.target /= tarMax
         self.dual_target /= tarMax
+        self.z0weight[:] = numpy.sqrt(1e-6 + (self.D_template**2).sum(axis=1)[..., numpy.newaxis])
+
 
 
     def getSimData(self):
@@ -239,9 +251,12 @@ class SmoothImageMeta(object):
         interp_target = kernelMatrix_fort.applyk( \
                     interp_loc, rg.nodes, self.dual_target,
                     self.khSmooth, self.kho, self.rg.num_nodes)
+        #print interp_target.max()
+
         diff = self.m[:,T-1] - interp_target
         if self.noJ:
             objFun = numpy.multiply(diff, diff).sum()
+#            print "objFun", (self.m[:, T-1]**2).sum(), (self.xt[...,T-1]**2).sum()
         else:
             objFun = (numpy.multiply(diff, diff) * self.J[:,T-1]).sum()
 
@@ -413,14 +428,19 @@ class SmoothImageMeta(object):
         else:
             return [dx, dm, dJ]
 
+    def startOptim(self):
+        self.z0_state = self.z0.copy()
+        self.alpha_state = self.alpha.copy()
+
     def endOfIteration(self):
         self.optimize_iteration += 1
+
         if (self.optimize_iteration % self.write_iter == 0):
             #self.writeData("iter%d" % (self.optimize_iteration))
             self.writeData("iter")
 
     def endOptim(self):
-            self.writeData("final")
+        self.writeData("final")
     # ***********************************************************************
     # end of non-linear cg callbacks
     # ***********************************************************************
@@ -433,7 +453,7 @@ class SmoothImageMeta(object):
                                 self.sfactor, self.kvs, self.kvo, \
                                 self.khs, self.kho, \
                                 self.alpha, self.x0, self.template, \
-                                self.z0,
+                                self.z0*self.z0weight,
                                 self.num_times, rg.num_nodes)
             else:
                 (x,m,z,v) = kernelMatrix_fort.shoot_noj(self.dt, \
@@ -550,7 +570,7 @@ class SmoothImageMeta(object):
         else:
             ge = ealpha
         if self.unconstrained:
-            return ge, ex, ez
+            return ge, ex, ez*self.z0weight
         else:
             return ge, ex
 
@@ -726,7 +746,27 @@ class SmoothImageMeta(object):
         return ge
 
     def computeMatching(self):
-        conjugateGradient.cg(self, True, maxIter=2000, TestGradient=False, \
+
+        if  False:
+            self.sigma *= 4
+            self.sfactor /= 16
+            self.khSmooth *= 1.44
+            conjugateGradient.cg(self, True, maxIter=10, TestGradient=False, \
+                                     epsInit=self.cg_init_eps)
+            self.sigma /= 2
+            self.sfactor *= 4
+            self.khSmooth /= 1.2 
+            self.z0 /= 4  
+            #self.z0_state = self.z0.copy()  
+            #print 'z0', (self.z0**2).sum()
+            conjugateGradient.cg(self, True, maxIter=10, TestGradient=False, \
+                                     epsInit=self.cg_init_eps)
+            self.sigma /= 2
+            self.sfactor *= 4
+            self.khSmooth /= 1.2
+            self.z0 /= 4 
+            #self.z0_state = self.z0.copy()  
+        conjugateGradient.cg(self, True, maxIter=10000, TestGradient=False, \
                             epsInit=self.cg_init_eps)
         return self
 
@@ -746,6 +786,9 @@ class SmoothImageMeta(object):
             interp_target = kernelMatrix_fort.applyk( \
                             xtc, rg.nodes, self.dual_target,
                             self.khSmooth, self.kho, self.rg.num_nodes)
+            interp_template = kernelMatrix_fort.applyk( \
+                psit[...,t], rg.nodes, self.dual_template,
+                self.khSmooth, self.kho, self.rg.num_nodes)
             meta = rg.grid_interpolate(self.m[:,t], psit[...,t])
             xtc[:,0] = xtc[:,0] - self.id_x
             xtc[:,1] = xtc[:,1] - self.id_y
@@ -760,6 +803,7 @@ class SmoothImageMeta(object):
             rg.add_vtk_point_data(self.template, "template")
             rg.add_vtk_point_data(self.target, "target")
             rg.add_vtk_point_data(interp_target.real, "deformedTarget")
+            rg.add_vtk_point_data(interp_template.real, "deformedTemplate")
             rg.add_vtk_point_data(meta.real, "metamorphosis")
             rg.vtk_write(t, name, output_dir=self.output_dir)
 
