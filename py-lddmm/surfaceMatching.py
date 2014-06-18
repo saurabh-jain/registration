@@ -32,6 +32,10 @@ class SurfaceMatchingParam:
             self.fun_obj0 = surfaces.measureNorm0
             self.fun_obj = surfaces.measureNormDef
             self.fun_objGrad = surfaces.measureNormGradient
+        elif errorType=='varifold':
+            self.fun_obj0 = surfaces.varifoldNorm0
+            self.fun_obj = surfaces.varifoldNormDef
+            self.fun_objGrad = surfaces.varifoldNormGradient
         else:
             print 'Unknown error Type: ', self.errorType
         if KparDiff == None:

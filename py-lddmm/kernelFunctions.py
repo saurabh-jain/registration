@@ -307,18 +307,24 @@ class Kernel(KernelSpec):
         self._hold=self._state
 
     # Computes K(x,x)a or K(x,y)a
-    def applyK(self, x, a, firstVar = None, grid=None):
+    def applyK(self, x, a, firstVar = None, grid=None,matrixWeights=False):
         if not (self.kernelMatrix == None):
             #r = self.precompute(x, firstVar=firstVar, grid=grid, diff=False)
             #z = np.dot(r, a)
             #print 'OMP!'
             if firstVar == None:
                 #z = np.zeros([x.shape[0],a.shape[1]])
-                z = kff.applyk(x, x, a, self.sigma, self.order, x.shape[0], x.shape[0], x.shape[1], a.shape[1])
+                if matrixWeights:
+                    z = kff.applyk2(x, x, a, self.sigma, self.order, x.shape[0], x.shape[0], x.shape[1], a.shape[2])
+                else:
+                    z = kff.applyk(x, x, a, self.sigma, self.order, x.shape[0], x.shape[0], x.shape[1], a.shape[1])
                 # for k in range(a.shape[1]):
                 #     z[:,k] = kff.applyk(x, x, a[:,k], self.sigma, self.order, x.shape[0], x.shape[0], x.shape[1])
             else:
-                z = kff.applyk(firstVar, x, a, self.sigma, self.order, firstVar.shape[0], x.shape[0], x.shape[1], a.shape[1])
+                if matrixWeights:
+                    z = kff.applyk2(firstVar, x, a, self.sigma, self.order, firstVar.shape[0], x.shape[0], x.shape[1], a.shape[2])
+                else:
+                    z = kff.applyk(firstVar, x, a, self.sigma, self.order, firstVar.shape[0], x.shape[0], x.shape[1], a.shape[1])
                 # z = np.zeros([firstVar.shape[0],a.shape[1]])
                 # for k in range(a.shape[1]):
                 #     z[:,k] = kff.applyk(firstVar, x, a[:,k], self.sigma, self.order, firstVar.shape[0], x.shape[0], x.shape[1])
@@ -382,25 +388,12 @@ class Kernel(KernelSpec):
         return zpx
 
     # Computes A(i) = sum_j D_2[K(x(i), x(j))a2(j)]a1(j)
-    def applyDiffK2(self, x, a1, a2):
-        zpx = np.zeros(x.shape)
-        v = np.dot(x,a1.T)
-        if not (self.kernelMatrix == None):
-            r = self.precompute(x, diff=True)
-            u = v - (x*a1).sum(axis=1)[np.newaxis,:]
-            zpx -=  2* np.dot(r*u, a2)
-        if self.affine == 'affine':
-            xx = x-self.center
-            zpx += self.w1 * np.dot(v,a2)
-            #np.multiply(xx, a1).sum(axis = 1) * a2.sum(axis=0)
-        elif self.affine == 'euclidean':
-            xx = x-self.center
-            for E in self.affine_basis:
-                yy = np.dot(xx,E.T)
-                bb = np.dot(a1,E.T)
-                zpx += self.w1 * np.dot(np.dot(xx,a1.T), a2)
-                #np.multiply(a2.T, bb.sum(axis=0).T) * yy
-        return zpx
+    def applyDiffK2(self, x, beta, firstVar=None):
+        if firstVar == None:
+            z = kff.applykdiff2(x, x, beta, self.sigma, self.order, x.shape[0], x.shape[0], x.shape[1])
+        else:
+            z = kff.applykdiff2(firstVar, x, beta, self.sigma, self.order, firstVar.shape[0], x.shape[0], x.shape[1])
+        return z
 
     # Computes array A(i) = sum_k sum_(j) nabla_1[a1(k,i). K(x(i), x(j))a2(k,j)]
     def applyDiffKT(self, x, a1, a2, firstVar=None):

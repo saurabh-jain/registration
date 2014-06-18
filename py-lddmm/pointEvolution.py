@@ -709,7 +709,7 @@ def landmarkEPDiff(T, x0, a0, KparDiff, affine = None, withJacobian=False, withN
 
         if not (withNormals==None):
             zn = np.squeeze(nt[k, :, :])        
-            nt[k+1, :, :] = zn - timeStep * KparDiff.applyDiffKT(z, [zn], [a]) 
+            nt[k+1, :, :] = zn - timeStep * KparDiff.applyDiffKT(z, zn[np.newaxis,...], a[np.newaxis,...]) 
             if not (affine == None):
                 nt[k+1, :, :] += timeStep * np.dot(zn, A[k])
         if withJacobian:
@@ -750,8 +750,10 @@ def landmarkHamiltonianCovector(x0, at, px1, KparDiff, regweight, affine = None)
         # if (isfield(KparDiff, 'zs') && size(z, 2) == 3)
         #     z(:,3) = z(:,3) / KparDiff.zs ;
         # end
-        a1 = [px, a, -2*regweight*a]
-        a2 = [a, px, a]
+        a1 = np.concatenate((px[np.newaxis,...], a[np.newaxis,...], -2*regweight*a[np.newaxis,...]))
+        a2 = np.concatenate((a[np.newaxis,...], px[np.newaxis,...], a[np.newaxis,...]))
+        #a1 = [px, a, -2*regweight*a]
+        #a2 = [a, px, a]
         #print 'test', px.sum()
         zpx = KparDiff.applyDiffKT(z, a1, a2)
         pxt[M-t-2, :, :] = np.squeeze(pxt[M-t-1, :, :]) + timeStep * zpx

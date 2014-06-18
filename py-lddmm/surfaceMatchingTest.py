@@ -26,8 +26,8 @@ def compute(createSurfaces=True):
         fv2 = Surface() ;
         fv2.Isosurface(I1, value = 0, target=2000, scales=[1, 1, 1], smooth=0.01)
 
-        fv1.saveVTK('/Users/younes/Development/Results/Diffeons/fv1Alt.vtk')
-        fv2.saveVTK('/Users/younes/Development/Results/Diffeons/fv2Alt.vtk')
+        fv1.saveVTK('/Users/younes/Development/Results/Diffeons/fv1.vtk')
+        fv2.saveVTK('/Users/younes/Development/Results/Diffeons/fv2.vtk')
     else:
         if False:
             path = '/Users/younes/Development/project/ncbc/data/template/PDS-II/AllScan1_PDSII/shape_analysis/hippocampus/'
@@ -63,8 +63,8 @@ def compute(createSurfaces=True):
     ## Object kernel
     K1 = Kernel(name='gauss', sigma = 10.0)
 
-    sm = SurfaceMatchingParam(timeStep=0.1, KparDiff=K1, sigmaDist=10, sigmaError=1., errorType='current')
-    f = SurfaceMatching(Template=fv1, Target=fv2, outputDir='/Users/younes/Development/Results/Surface/Balls',param=sm, testGradient=False,
+    sm = SurfaceMatchingParam(timeStep=0.1, KparDiff=K1, sigmaDist=10, sigmaError=1., errorType='varifold')
+    f = SurfaceMatching(Template=fv1, Target=fv2, outputDir='/Users/younes/Development/Results/Surface/Balls',param=sm, testGradient=True,
                         #subsampleTargetSize = 500,
                          maxIter=1000, affine= 'none', rotWeight=1., transWeight = 1., scaleWeight=10., affineWeight=100.)
 
