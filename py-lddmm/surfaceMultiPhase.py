@@ -905,12 +905,19 @@ class SurfaceMatching(surfaceMatching.SurfaceMatching):
         #self.testConstraintTerm(self.xt, self.nut, self.at, self.Afft)
         nn = 0 ;
         for k in range(self.nsurf):
+            AV0 = self.fv0[k].computeVertexArea()
             n1 = self.xt[k].shape[1] ;
             for kk in range(self.Tsize+1):
                 self.fvDefB[k].updateVertices(np.squeeze(self.xt[-1][kk, nn:nn+n1, :]))
-                self.fvDefB[k].saveVTK(self.outputDir +'/'+ self.saveFile+str(k)+'Out'+str(kk)+'.vtk', scalars = Jt[-1][kk, nn:nn+n1], scal_name='Jacobian')
+                AV = self.fvDefB[k].computeVertexArea()
+                AV = (AV[0]/AV0[0])-1
+                #self.fvDefB[k].saveVTK(self.outputDir +'/'+ self.saveFile+str(k)+'Out'+str(kk)+'.vtk', scalars = Jt[-1][kk, nn:nn+n1], scal_name='Jacobian')
+                self.fvDefB[k].saveVTK(self.outputDir +'/'+ self.saveFile+str(k)+'Out'+str(kk)+'.vtk', scalars = AV[:,0], scal_name='Jacobian')
                 self.fvDef[k].updateVertices(np.squeeze(self.xt[k][kk, :, :]))
-                self.fvDef[k].saveVTK(self.outputDir +'/'+self.saveFile+str(k)+'In'+str(kk)+'.vtk', scalars = Jt[k][kk, :], scal_name='Jacobian')
+                AV = self.fvDef[k].computeVertexArea()
+                AV = (AV[0]/AV0[0])-1
+                #self.fvDef[k].saveVTK(self.outputDir +'/'+self.saveFile+str(k)+'In'+str(kk)+'.vtk', scalars = Jt[k][kk, :], scal_name='Jacobian')
+                self.fvDef[k].saveVTK(self.outputDir +'/'+self.saveFile+str(k)+'In'+str(kk)+'.vtk', scalars = AV[:,0], scal_name='Jacobian')
             nn += n1
 
     def optimizeMatching(self):

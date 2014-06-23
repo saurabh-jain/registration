@@ -868,6 +868,7 @@ class Surface:
 
     def saveVTK(self, fileName, scalars = None, normals = None, tensors=None, scal_name='scalars', vectors=None, vect_name='vectors'):
         vf = vtkFields()
+        print scalars
         if not (scalars==None):
             vf.scalars.append(scal_name)
             vf.scalars.append(scalars)

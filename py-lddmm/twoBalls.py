@@ -26,25 +26,26 @@ def compute():
     v = (z - y)/s2
     I1 = .095 - ((x-.7)**2 + v**2 + 0.5*u**2) 
     fv3 = Surface() ;
-    fv3.Isosurface(I1, value = 0, target=750, scales=[1, 1, 1])
+    fv3.Isosurface(I1, value = 0, target=Tg, scales=[1, 1, 1])
 
     u = (z + y)/s2
     v = (z - y)/s2
     I1 = .095 - ((x-1.3)**2 + v**2 + 0.5*u**2) 
     fv4 = Surface() ;
-    fv4.Isosurface(I1, value=0, target=750, scales=[1, 1, 1])
+    fv4.Isosurface(I1, value=0, target=Tg, scales=[1, 1, 1])
 
     ## Object kernel
     K1 = Kernel(name='gauss', sigma = 100.0)
     ## Background kernel
     K2 = Kernel(name='laplacian', sigma = 10.0, order=3)
 
-    outputDir = '/cis/home/younes/MorphingData/twoBallsSliding'
-    #'/Users/younes/Development/Results/tight_stitched_rigid2_10'
+    outputDir = '/Users/younes/Development/Results/twoBallsStitched'
+    #outputDir = '/cis/home/younes/MorphingData/twoBallsStitched'
+    #outputDir = '/Users/younes/Development/Results/tight_stitched_rigid2_10'
 
-    sm = SurfaceMatchingParam(timeStep=0.1, KparDiff=K1, KparDiffOut=K2, sigmaDist=20., sigmaError=10., errorType='current')
+    sm = SurfaceMatchingParam(timeStep=0.1, KparDiff=K1, KparDiffOut=K2, sigmaDist=20., sigmaError=10., errorType='varifold')
     f = (SurfaceMatching(Template=(fv1,fv2), Target=(fv3,fv4), outputDir=outputDir, param=sm, mu=.1,regWeightOut=1.,
-                          testGradient=True, typeConstraint='slidingV2', maxIter_cg=1000, maxIter_al=100, affine='none', rotWeight=0.1))
+                          testGradient=False, typeConstraint='stitched', maxIter_cg=1000, maxIter_al=100, affine='none', rotWeight=0.1))
     f.optimizeMatching()
 
 
