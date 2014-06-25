@@ -5,7 +5,6 @@ import os
 import glob
 from vtk import *
 import kernelFunctions as kfun
-import pointEvolution_fort as evol_omp
 
 class vtkFields:
     def __init__(self):
@@ -868,7 +867,7 @@ class Surface:
 
     def saveVTK(self, fileName, scalars = None, normals = None, tensors=None, scal_name='scalars', vectors=None, vect_name='vectors'):
         vf = vtkFields()
-        print scalars
+        #print scalars
         if not (scalars==None):
             vf.scalars.append(scal_name)
             vf.scalars.append(scalars)
