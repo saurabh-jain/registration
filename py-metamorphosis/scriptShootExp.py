@@ -13,6 +13,8 @@ parser = optparse.OptionParser()
 parser.add_option("-o", "--output_dir", dest="output_dir")
 parser.add_option("-c", "--config_name", dest="config_name")
 (options, args) = parser.parse_args()
+print output_directory_base, options.output_dir
+print options
 output_dir = output_directory_base + options.output_dir
 # remove any old results in the output directory
 if os.access(output_dir, os.F_OK):
@@ -20,7 +22,7 @@ if os.access(output_dir, os.F_OK):
 os.mkdir(output_dir)
 loggingUtils.setup_default_logging(output_dir, smoothImageConfig)
 logging.info(options)
-letter_match = (11,18,0)
+letter_match = (11,18,30) #targets: 0, 1, 25
 sim = smoothImageNoJ.SmoothImageMeta(output_dir, options.config_name, letter_match)
 sim.computeMatching()
 

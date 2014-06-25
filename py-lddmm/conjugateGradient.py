@@ -142,7 +142,7 @@ def cg(opt, verb = True, maxIter=1000, TestGradient = False, epsInit=10.):
                         skipCG = 1
                         noUpdate = 1
             else:
-                while (objTry > obj) & (eps > epsMin):
+                while (objTry > obj) and (eps > epsMin):
                     eps = eps / 2
                     objTry = opt.updateTry(dir0, eps, obj)
                     #opt.acceptVarTry()

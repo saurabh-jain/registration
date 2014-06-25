@@ -98,8 +98,8 @@ template <class OBJECT_TYPE, class scalProd, class linearOperator> class linearC
 	  break ;
 	energyOld = energy ;
       }
-    
-    cout << " conjugate gradient: Total variation: " << energy0 - energy << endl ;
+    if (verb)
+      cout << " conjugate gradient: Total variation: " << energy0 - energy << endl ;
     return energy ;
   }
 } ;
@@ -151,56 +151,92 @@ template<class OBJECT_TYPE, class TAN_TYPE, class _scalProd, class _optimFun> cl
       Control parameters: nb_iter: maximum number of iterations; epsIni: initial step; epsMax: maximum step; minVarEn: minimal relative variation of energy to continue
       gs: flag for golden search; verb: flag for verbose printing
   */
-  double operator()(_optimFun &opt, _scalProd &scp, OBJECT_TYPE& x0, OBJECT_TYPE &x, int nb_iter, double epsIni, double epsMax, double minVarEn, bool gs, bool verb) {
-    TAN_TYPE grad, oldGrad, foo, savedGrad;
+  double operator()(_optimFun &opt, _scalProd &scp, OBJECT_TYPE& x0, OBJECT_TYPE &x, int nb_iter, double epsIni, double epsMax, double minVarEn, bool gs, int verb) {
+    TAN_TYPE grad, oldGrad, dir0, oldDir, savedGrad;
     OBJECT_TYPE xtry, xtry2, xtry3 ;
-    double  old_ener, old_ener0, ener=0, ener2, eps2 ;
-    _real gs_ener[3], gs_eps[3] ;
+    double  enerTry, enerTry2, ener0, ener=0, ener2, eps2, b, oldGrad2,
+      grad2, grad12, gradTry ;
+    // _real gs_ener[3], gs_eps[3] ;
     unsigned int CG_RATE = 200 ;
     int smallVarCount = 0 , svcMAX = 2 ;
-    bool cg ;
+    bool cg = true ;
     //    _optimFun opt ;
 
     eps = epsIni ;
     x.copy(x0) ;
     opt.startOfProcedure(x) ;
-    old_ener = opt.objectiveFun(x0) ;
-    old_ener0 = old_ener ; 
-    if (verb)
-      cout << "initial energy = " << old_ener << endl ;
+    ener = opt.objectiveFun(x0) ;
+    ener0 = ener ; 
+    if (verb>0)
+      cout << "initial energy = " << ener << endl ;
 
-    bool stopLoop ;
+    bool stopLoop, noupdate ;
     int cg_count = 0;
 
     for(int iter=0; iter < nb_iter; iter++) {
+      noupdate = false ;
       opt.startOfIteration(x) ;
-      if (verb)
+      if (verb>1)
 	cout <<"Iteration " << iter+1 << endl ;
       stopLoop = false;
 
-      if (iter > 0)
-	oldGrad.copy(grad) ;
       opt.gradNorm = opt.computeGrad(x, grad) ;
-      if (verb)
-	cout << "Gradient Norm: " << opt.gradNorm << endl ;
-      cg = false ;
-      if (iter > 0 && cg_count % CG_RATE != 0 && smallVarCount == 0) {
-	//	_scalProd scp(x) ;
-	double b ;
-	foo.copy(grad) ;
-	foo -= oldGrad ;
-	b = scp(grad, foo)/ scp(oldGrad, oldGrad) ;
-	if (b > 0) {
-	  oldGrad *= b ;
-	  grad -= oldGrad ;
-	  cg = true ;
-	  if (verb) 
-	    cout << "Using CG direction" << endl ;
-	}
-	else if (verb == true) {
-	  cout << "Negative b in CG: " << b << endl ; 
-	}
+      if (iter == 0) {
+	oldGrad2 = scp(grad, grad) ;
+	grad2 = oldGrad2 ;
+	if (oldGrad2 < 1e-20)
+	  gradTry = 1e-10 ;
+	else
+	  gradTry = sqrt(oldGrad2) ;
+	oldDir.copy(grad) ;
+	oldGrad.copy(grad) ;
+	dir0.copy(grad) ;
+	b=0 ;
       }
+      else {
+	grad2 = scp(grad, grad) ;
+	grad12 = scp(grad, oldGrad) ;
+	oldGrad.copy(grad) ;
+	if (cg)
+	  b = (grad2 -grad12)/oldGrad2 ;
+	else
+	  b = 0 ;
+	if (b<0)
+	  b=0 ;
+	oldGrad2 = grad2 ;
+	gradTry = grad2 + b * grad12 ;
+	if (gradTry < 1e-20)
+	  gradTry = 1e-10 ;
+	else
+	  gradTry = sqrt(gradTry) ;
+	dir0.copy(oldDir) ;
+	dir0 *= b ;
+	dir0 += grad ;
+	//	addProduct(grad, b, oldDir, dir0) ;
+	oldDir.copy(dir0) ;
+	oldGrad.copy(grad) ;
+      }
+
+      if (verb>1)
+	cout << "Gradient Norm: " << opt.gradNorm << endl ;
+      // cg = false ;
+      // if (iter > 0 && cg_count % CG_RATE != 0 && smallVarCount == 0) {
+      // 	//	_scalProd scp(x) ;
+      // 	double b ;
+      // 	foo.copy(grad) ;
+      // 	foo -= oldGrad ;
+      // 	b = scp(grad, foo)/ scp(oldGrad, oldGrad) ;
+      // 	if (b > 0) {
+      // 	  oldGrad *= b ;
+      // 	  grad -= oldGrad ;
+      // 	  cg = true ;
+      // 	  if (verb) 
+      // 	    cout << "Using CG direction" << endl ;
+      // 	}
+      // 	else if (verb == true) {
+      // 	  cout << "Negative b in CG: " << b << endl ; 
+      // 	}
+      // }
       //      cout << grad << endl ;
 
 
@@ -210,212 +246,81 @@ template<class OBJECT_TYPE, class TAN_TYPE, class _scalProd, class _optimFun> cl
       eps2 = opt.epsBound() ;
       if (eps > eps2)
 	eps = eps2 ; 
-      //      if (verb)
-      //cout << "eps2 = " << eps2 << endl;
-      ener = opt.update(x, grad, eps, xtry) ;
-      if (verb) {
-	cout << "ener = " << ener << " old_ener = " << old_ener << " eps = " << eps << " " << opt.gradNorm << endl ;
-      }
-      gs_ener[0] = old_ener ;
-      gs_eps[0] = 0 ;
 
-      if (ener > old_ener) {
+      enerTry = opt.update(x, dir0, eps, xtry) ;
+      if (verb>1) {
+	cout << "ener = " << enerTry << " old ener = " << ener << " eps = " << eps << " " << opt.gradNorm << endl ;
+      }
+
+      if (enerTry > ener) {
 	// test if correct direction of descent
-	double	epsTest = eps * 1e-10 ;
-	if (epsTest < epsMin)
-	  epsTest = epsMin ;
-	ener2 = opt.update(x, grad, epsTest,  xtry2) ;
-	if (ener2 > old_ener) {
-	  if (cg == false)
-	    cout << "Iter " << iter << ": Bad Direction ; ener = " << ener2 << " old_ener = " << old_ener << " eps = " << epsTest << endl ;
-	  //	ener2 = opt.update(x, grad, 0,  xtry2) ;
-	  //cout << ener2 << endl ;
-	  stopLoop = true ;
-	}
-      }
-    
-      if (stopLoop) {
-	if (cg == false) {
-	  break ;
-	}
-	else
-	  cg_count = 0 ;
-      }
-      else{
-	cg_count++ ;
-	gs_ener[2] = ener ;
-	gs_eps[2] = eps ;
-      
-	if (ener < old_ener) {
-	  bool okLoop = false ;
-	  int il = 0 ;
-	  do {
-	    ener = opt.update(x, grad, 1.5*gs_eps[2], xtry3) ;
-	    if (verb) {
-	      cout << "Step increase; ener = " << ener << " old_ener = " << old_ener << " eps = " << 1.5*gs_eps[2] << endl ;
-	    }
-	    if (ener < 0.9999999 * gs_ener[2]){
-	      gs_eps[2] *= 1.5 ;
-	      gs_ener[2] = ener ;
-	      xtry.copy(xtry3) ;
-	      okLoop = true ;
-	    }
-	    else 
-	      okLoop = false ;
+	double	epsTest = 1e-6/gradTry ;
+	ener2 = opt.update(x, dir0, epsTest,  xtry2) ;
+	if (ener2 > ener) {
+	  if (cg == false){
+	    cout << "Iter " << iter << ": Bad Direction ; ener = " <<
+	    ener2 << " old ener = " << ener << " eps = " << epsTest << endl ;
+	    //	ener2 = opt.update(x, grad, 0,  xtry2) ;
+	    //cout << ener2 << endl ;
+	    stopLoop = true ;
 	  }
-	  while (okLoop && (++il < 3) && (gs_eps[2] < epsMax) && (gs_eps[2] < eps2)) ;
-/* 	  if (il == 3) */
-/* 	    eps = gs_eps[2]/2 ; */
-/* 	  else */
-	    eps = gs_eps[2] ;
-	    ener = gs_ener[2] ;
-	   }
-
-	if (!gs && iter>0) {
-	  double a0 = 0.0;
-	  // b0 = 5000 ;
-	  //	  while ((gs_ener[2] > old_ener - a0 * gs_eps[2] * ng2 || gs_ener[2] < old_ener - b0 * gs_eps[2] * ng2) && gs_eps[2] > epsMin)  {
-	  while ((gs_ener[2] > old_ener - a0 * gs_eps[2] * opt.gradNorm) && gs_eps[2] > eps*1e-10)  {
-	    gs_eps[2] *= .5 ;
-	    gs_ener[2] = opt.update(x, grad, gs_eps[2], xtry) ;
-	    if (verb) {
-	      cout << "ener = " << gs_ener[2] << " modified old_ener = "  << old_ener - a0 * gs_eps[2] * opt.gradNorm 
-		   << " " <<  opt.gradNorm  << " eps = " << gs_eps[2] << endl ;
-	    }
+	  else {
+	    cg = false ;
+	    noupdate = true ;
 	  }
-	  x.copy(xtry) ;
-	  ener = gs_ener[2] ;
-	  eps = 1.5*gs_eps[2] ;
-	  ener2 = opt.endOfIteration(x) ;
-	  if (ener2 > -1e-10)
-	    ener = ener2 ;
 	}
 	else {
-	  gs_eps[1] = eps ;
-	  gs_ener[1] = ener ;
-	  // find intermediate value for golden search
-	  int kg=0 ;
-	  if (ener > old_ener)
-	    do {
-	      gs_eps[2] = gs_eps[1] ;
-	      gs_ener[2] = gs_ener[1] ;
-	      gs_eps[1] *= .5 ;
-	      gs_ener[1] = opt.update(x, grad, gs_eps[1], xtry2) ;
-	      if (verb) {
-		cout << "ener = " << gs_ener[1] << " old_ener = " << old_ener  << " eps = " << gs_eps[1] << endl ;
-	      }
-	      kg++ ;
+	  while ((enerTry > ener) && (eps > epsMin)) {
+	      eps /= 2 ;
+	      enerTry = opt.update(x, dir0, eps, xtry) ;
 	    }
-	    while ( (gs_ener[1] >  0.999999 * old_ener || (gs_ener[1] >  0.999999 * gs_ener[2] && kg <= 5)) && gs_eps[1] > eps*1e-10) ;
-	 else {
-	    xtry2.copy(xtry) ;
-	    /*do {
-	      gs_enerTry = opt.update(x, grad, 2*gs_eps[2],  xtry3) ;
-	      if (verb) {
-		cout << "ener = " << gs_enerTry << " old_ener = " << old_ener  << " eps = " << gs_eps[2] << endl ;
-	      }
-	      if (gs_ener[2] >  0.999999 * gs_enerTry) {
-		gs_eps[2] *= 2 ;
-		gs_ener[2] = gs_enerTry ;
-	      }
-	      kg++ ;
-	    }
-	    while ( (gs_ener[2] >  0.999999 * gs_enerTry && kg <= 5) && gs_eps[2] < epsMax) ;*/
-	  }
-	
-	  if (gs_ener[1] > gs_ener[0] || gs_ener[1] > gs_ener[2]) {
-	    // if no intermediate is found: no golden search 
-	    if (verb)
-	      cout << "No golden search" << endl ;
-	    eps = gs_eps[2]/0.75 ;
-	    opt.update(x, grad, gs_eps[2],  xtry) ;
-	    ener = gs_ener[2] ;
-	    x.copy(xtry) ;
-	    opt.endOfIteration(x) ;
-	  }
-	  else { 
-	    //golden search
-	    if (verb)
-	      cout << "golden search" << endl ;
-	    xtry.copy(xtry2) ;
-	    ener = gs_ener[1] ;
-	    _real delta = gs_eps[2] - gs_eps[1];// eps0 = gs_eps[2] ;
-	    int bigI = 1 ;
-	    if (gs_eps[1] - gs_eps[0] > delta) {
-	      delta = gs_eps[1] - gs_eps[0] ;
-	      bigI = -1 ;
-	    }
-	
-	    //      cout << gs_eps[0] << " " << gs_eps[1] << " " << gs_eps[2] << " " << bigI << endl ;
-	    while (delta > 0.25*gs_eps[1]) {
-	      _real epsTry = gs_eps[1] + 0.383 * bigI * delta ;
-	      ener2 = opt.update(x, grad, epsTry, xtry2) ;
-	      if (verb) {
-		cout << "ener = " << ener2 << " old_ener = " << old_ener << " eps = " << epsTry << endl ;
-	      }
-	      if (ener2 > gs_ener[1]) {
-		if (bigI == 1) {
-		  gs_ener[2] = ener ;
-		  gs_eps[2] = epsTry ;
-		}
-		else{
-		  gs_ener[0] = ener ;
-		  gs_eps[0] = epsTry ;
-		}
-	      }
-	      else{
-		xtry.copy(xtry2) ;
-		ener = ener2 ;
-		if (bigI == 1) {
-		  gs_ener[0] = gs_ener[1] ;
-		  gs_eps[0] = gs_eps[1] ;
-		  gs_ener[1] = ener ;
-		  gs_eps[1] = epsTry ;
-		}
-		else {
-		  gs_ener[2] = gs_ener[1] ;
-		  gs_eps[2] = gs_eps[1] ;
-		  gs_ener[1] = ener ;
-		  gs_eps[1] = epsTry ;
-		}
-	      }
-	      delta = gs_eps[2] - gs_eps[1];
-	      bigI = 1 ;
-	      if (gs_eps[1] - gs_eps[0] > delta) {
-		delta = gs_eps[1] - gs_eps[0] ;
-		bigI = -1 ;
-	      }
-	      if (verb)
-		cout << gs_eps[0] << " " << gs_eps[1] << " " << gs_eps[2] << " " << bigI << endl ;
-	    }
-
-	    eps = gs_eps[1] * 2 ;
-	    x.copy(xtry) ;
-	    ener2 = opt.endOfIteration(x) ;
-	    if (ener2 > -1e-10)
-	      ener = ener2 ;
-	  }
 	}
-	//	if (ener < 0.01)
-	//	  break ;
-	if (old_ener - ener < minVarEn * (old_ener0-ener)) {
+      }
+
+      if (~noupdate) {
+	bool contt = true ;
+	while (contt) {
+	  enerTry2 = opt.update(x, dir0, 0.5*eps, xtry2);
+	  if (enerTry > enerTry2) {
+	    eps /= 2 ;
+	    enerTry = enerTry2 ;
+	    xtry.copy(xtry2) ;
+	  }
+	  else
+	    contt = false ;
+	}
+	contt = true ;
+	while (contt) {
+	  enerTry2 = opt.update(x, dir0, 1.25*eps, xtry2);
+	  if (enerTry > enerTry2) {
+	    eps *= 1.25 ;
+	    enerTry = enerTry2 ;
+	    xtry.copy(xtry2) ;
+	  }
+	  else
+	    contt = false ;
+	}
+
+ 	if (ener - enerTry < minVarEn * (ener0-ener)) {
 	  smallVarCount ++ ;
 	  //cg = false ;
 	  if (smallVarCount > svcMAX)
 	    break ; 
-	  if (smallVarCount == svcMAX)
-	    eps = gs_eps[2] * 100 ; 
 	}
 	else
 	  smallVarCount = 0 ;
-	old_ener = ener ;
-	if (verb)
+	ener = enerTry ;
+	x.copy(xtry) ;
+	if (verb>1)
 	  cout << "ener = " << ener << " " << smallVarCount << endl ;
       }
 
+      if (verb>0)
+	cout << "Iter " << iter << " ener = " << ener << " eps = " << eps << " " << opt.gradNorm << endl ;
       if (opt.stopProcedure())
 	break ;
       //    cout << "endloop" << endl; 
+      opt.endOfIteration(x) ;
     }
 
     opt.endOfProcedure(x) ;

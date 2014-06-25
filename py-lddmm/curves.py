@@ -2,7 +2,13 @@ import numpy as np
 import scipy as sp
 import os
 import glob
-from vtk import *
+try:
+    from vtk import *
+    gotVTK = True
+except ImportError:
+    print 'could not import VTK functions'
+    gotVTK = False
+    
 import kernelFunctions as kfun
 
 # General surface class
@@ -22,7 +28,7 @@ class Curve:
                         for k in range(pointSet.shape[0]-1):
                             self.faces[k,:] = (k, k+1)
                         if isOpen == False:
-                            self.faces[pointSet.shape[0]-1, :] = (pointSet.shape[0]-1, 0) ;
+                            self.faces[pointSet.shape[0]-1, :] = (pointSet.shape[0]-1, 0)
                         self.computeCentersLengths()
                 else:
                     (mainPart, ext) = os.path.splitext(filename)
@@ -78,91 +84,92 @@ class Curve:
         return a
 
 
+    def computeCurvature(self):
+        e = self.vertices[self.faces[:,1] ,:] - self.vertices[self.faces[:,0] ,:]
+        th = np.arctan2(e[:,1], e[:,0])
+        #print th.shape
+        ll = np.sqrt((self.lenel**2).sum(axis=1))/2
+        ka = (th[np.mod(range(1,self.faces.shape[0]+1), self.faces.shape[0])] - th[range(0,self.faces.shape[0])])/ll
+        nrm = np.zeros(self.lenel.shape)
+        nrm[:,0] = -self.lenel[:,1]
+        nrm[:,1] = self.lenel[:,0]
+        lnrm = np.sqrt((nrm**2).sum(axis=1))[:, np.newaxis]
+        nrm = nrm/lnrm
+        nrm = (nrm[np.mod(range(1,self.faces.shape[0]+1), self.faces.shape[0])] + nrm[range(0,self.faces.shape[0])])/2
+        kan = self.lenel/ll[:,np.newaxis]
+        ka = (kan[np.mod(range(1,self.faces.shape[0]+1), self.faces.shape[0]),:] - kan[range(0,self.faces.shape[0]),:])
+        
+        return ka, nrm, kan
             
     # Computes isocontours using vtk               
     def Isocontour(self, data, value=0.5, target=100.0, scales = [1., 1.], smooth = 30, fill_holes = 1., singleComponent = True):
-        #data = self.LocalSignedDistance(data0, value)
-        img = vtkImageData()
-        img.SetDimensions(data.shape[0], data.shape[1], 1)
-        img.SetNumberOfScalarComponents(1)
-        img.SetOrigin(0,0, 0)
-        v = vtkDoubleArray()
-        v.SetNumberOfValues(data.size)
-        v.SetNumberOfComponents(1)
-        for ii,tmp in enumerate(np.ravel(data, order='F')):
-            v.SetValue(ii,tmp)
-        img.GetPointData().SetScalars(v)
-        cf = vtkContourFilter()
-        cf.SetInput(img)
-        cf.SetValue(0,value)
-        cf.SetNumberOfContours(1)
-        cf.Update()
-        # return cf
-        # #print cf
-        if singleComponent:
-            connectivity = vtkPolyDataConnectivityFilter()
-            connectivity.ScalarConnectivityOff()
-            connectivity.SetExtractionModeToLargestRegion()
-            connectivity.SetInput(cf.GetOutput())
-            connectivity.Update()
-            g = connectivity.GetOutput()
-        else:
-            g = cf.GetOutput()
+        if gotVTK:
+            #data = self.LocalSignedDistance(data0, value)
+            img = vtkImageData()
+            img.SetDimensions(data.shape[0], data.shape[1], 1)
+            if vtkVersion.GetVTKMajorVersion() >= 6:
+                img.AllocateScalars(VTK_FLOAT,1)
+            else:
+                img.SetNumberOfScalarComponents(1)
+            img.SetOrigin(0,0, 0)
+            v = vtkDoubleArray()
+            v.SetNumberOfValues(data.size)
+            v.SetNumberOfComponents(1)
+            for ii,tmp in enumerate(np.ravel(data, order='F')):
+                v.SetValue(ii,tmp)
+            img.GetPointData().SetScalars(v)
+            cf = vtkContourFilter()
+            if vtkVersion.GetVTKMajorVersion() >= 6:
+                cf.SetInputData(img)
+            else:
+                cf.SetInput(img)
+            cf.SetValue(0,value)
+            cf.SetNumberOfContours(1)
+            cf.Update()
+            # return cf
+            # #print cf
+            if singleComponent:
+                connectivity = vtkPolyDataConnectivityFilter()
+                connectivity.ScalarConnectivityOff()
+                connectivity.SetExtractionModeToLargestRegion()
+                if vtkVersion.GetVTKMajorVersion() >= 6:
+                    connectivity.SetInputData(cf.GetOutput())
+                else:
+                    connectivity.SetInput(cf.GetOutput())
+                connectivity.Update()
+                g = connectivity.GetOutput()
+            else:
+                g = cf.GetOutput()
             
-        # if smooth > 0:
-        #     smoother= vtkWindowedSincPolyDataFilter()
-        #     smoother.SetInput(g)
-        #     smoother.SetNumberOfIterations(smooth)
-        #     smoother.NonManifoldSmoothingOn()
-        #     smoother.NormalizeCoordinatesOn()
-        #     smoother.GenerateErrorScalarsOn() 
-        #     smoother.Update()
-        #     g = smoother.GetOutput()
+            npoints = int(g.GetNumberOfPoints())
+            nfaces = int(g.GetNumberOfLines())
+            print 'Dimensions:', npoints, nfaces, g.GetNumberOfCells()
+            V = np.zeros([npoints, 2])
+            for kk in range(npoints):
+                V[kk, :] = np.array(g.GetPoint(kk)[0:2])
+                #print kk, V[kk]
+                #print kk, np.array(g.GetPoint(kk))
+            F = np.zeros([nfaces, 2])
+            gf = 0
+            for kk in range(g.GetNumberOfCells()):
+                c = g.GetCell(kk)
+                if(c.GetNumberOfPoints() == 2):
+                    for ll in range(2):
+                        F[gf,ll] = c.GetPointId(ll)
+                        #print kk, gf, F[gf]
+                    gf += 1
 
-        # dc = vtkDecimatePro()
-        # red = 1 - min(np.float(target)/g.GetNumberOfPoints(), 1)
-        # dc.SetTargetReduction(red)
-        # dc.PreserveTopologyOn()
-        # dc.SetInput(g)
-        # dc.Update()
-        # g = dc.GetOutput()
-        # #print 'points:', g.GetNumberOfPoints()
-
-        # cp = vtkCleanPolyData()
-        # cp.SetInput(dc.GetOutput())
-        # cp.ConvertPolysToLinesOn()
-        # cp.SetAbsoluteTolerance(1e-5)
-        # cp.Update()
-        # g = cp.GetOutput()
-
-        #g = cf.GetOutput() ;
-        npoints = int(g.GetNumberOfPoints())
-        nfaces = int(g.GetNumberOfLines())
-        print 'Dimensions:', npoints, nfaces, g.GetNumberOfCells()
-        V = np.zeros([npoints, 2])
-        for kk in range(npoints):
-            V[kk, :] = np.array(g.GetPoint(kk)[0:2])
-            #print kk, V[kk]
-            #print kk, np.array(g.GetPoint(kk))
-        F = np.zeros([nfaces, 2])
-        gf = 0
-        for kk in range(g.GetNumberOfCells()):
-            c = g.GetCell(kk)
-            if(c.GetNumberOfPoints() == 2):
-                for ll in range(2):
-                    F[gf,ll] = c.GetPointId(ll)
-                    #print kk, gf, F[gf]
-                gf += 1
-
-                #self.vertices = np.multiply(data.shape-V-1, scales)
-        self.vertices = np.multiply(V, scales)
-        self.faces = np.int_(F[0:gf, :])
-        self.computeCentersLengths()
-        #self.checkEdges()
-        #print self.faces.shape
-        self.orientEdges()
-        #print self.faces.shape
-        #self.checkEdges()
+                    #self.vertices = np.multiply(data.shape-V-1, scales)
+            self.vertices = np.multiply(V, scales)
+            self.faces = np.int_(F[0:gf, :])
+            self.computeCentersLengths()
+            #self.checkEdges()
+            #print self.faces.shape
+            self.orientEdges()
+            #print self.faces.shape
+            #self.checkEdges()
+        else:
+            raise Exception('Cannot run Isocontour without VTK')
 
 
     def orientEdges(self):
@@ -250,6 +257,10 @@ class Curve:
         for c in f:
             z += np.linalg.det(v[c[:], :])/2
         return z
+
+    def length(self):
+        ll = np.sqrt((self.lenel**2).sum(axis=1))
+        return ll.sum()
 
     # Reads from .byu file
     def readCurve(self, infile):
@@ -368,31 +379,56 @@ class Curve:
             fvtkout.write('\n')
 
 
-    # Reads .vtk file TO DO
+    # Reads .vtk file
     def readVTK(self, fileName):
-        u = vtkPolyDataReader()
-        u.SetFileName(fileName)
-        u.Update()
-        v = u.GetOutput()
-        npoints = int(v.GetNumberOfPoints())
-        nfaces = int(v.GetNumberOfLines())
-        V = np.zeros([npoints, 2])
-        for kk in range(npoints):
-            V[kk, :] = np.array(v.GetPoint(kk)[0:2])
+        if gotVTK:
+            u = vtkPolyDataReader()
+            u.SetFileName(fileName)
+            u.Update()
+            v = u.GetOutput()
+            npoints = int(v.GetNumberOfPoints())
+            nfaces = int(v.GetNumberOfLines())
+            V = np.zeros([npoints, 2])
+            for kk in range(npoints):
+                V[kk, :] = np.array(v.GetPoint(kk)[0:2])
 
-        F = np.zeros([nfaces, 2])
-        for kk in range(nfaces):
-            c = v.GetCell(kk)
-            for ll in range(2):
-                F[kk,ll] = c.GetPointId(ll)
+            F = np.zeros([nfaces, 2])
+            for kk in range(nfaces):
+                c = v.GetCell(kk)
+                for ll in range(2):
+                    F[kk,ll] = c.GetPointId(ll)
         
-        self.vertices = V
-        self.faces = np.int_(F)
-        xDef1 = self.vertices[self.faces[:, 0], :]
-        xDef2 = self.vertices[self.faces[:, 1], :]
-        xDef3 = self.vertices[self.faces[:, 2], :]
-        self.computeCentersLengths()
+            self.vertices = V
+            self.faces = np.int_(F)
+            self.computeCentersLengths()
+        else:
+            raise Exception('Cannot read VTK files without VTK functions')
 
+    def resample(self, ds):
+        ll = np.sqrt((self.lenel**2).sum(axis=1))
+        if ll.max() < ds:
+            return
+        v = np.zeros([2*self.vertices.shape[0], self.vertices.shape[1]])  
+        f = np.zeros([2*self.faces.shape[0], self.faces.shape[1]], dtype=int)
+        v[0:self.vertices.shape[0],:] = self.vertices
+        lv = self.vertices.shape[0]
+        lf = 0
+        for k in range(self.faces.shape[0]):  
+            if ll[k] < ds:
+                f[lf,:] = self.faces[k,:]
+                lf += 1
+            else:
+                c = 0.5*(v[self.faces[k,0],:] + v[self.faces[k,1],:])
+                v[lv, :] = c
+                f[lf,:] = (self.faces[k,0], lv)
+                f[lf+1,:] = (lv, self.faces[k,1])
+                lv += 1
+                lf += 2
+        self.vertices = np.copy(v[0:lv,:])
+        self.faces = np.copy(f[0:lf,:])
+        self.computeCentersLengths()
+        print 'resampling', self.length(), self.vertices.shape[0]
+        self.resample(ds)
 
 
 def mergeCurves(curves, tol=0.01):
@@ -472,8 +508,10 @@ def saveEvolution(fileName, fv0, xt):
 def currentNorm0(fv1, KparDist):
     c2 = fv1.centers
     cr2 = fv1.lenel
-    g11 = kfun.kernelMatrix(KparDist, c2)
-    return np.multiply(np.dot(cr2, cr2.T), g11).sum()
+    obj = np.multiply(cr2, KparDist.applyK(c2, cr2)).sum()
+    return obj
+#    g11 = kfun.kernelMatrix(KparDist, c2)
+#    return np.multiply(np.dot(cr2, cr2.T), g11).sum()
         
 
 # Computes |fvDef|^2 - 2 fvDef * fv1 with current dot produuct 
@@ -482,9 +520,11 @@ def currentNormDef(fvDef, fv1, KparDist):
     cr1 =fvDef.lenel
     c2 = fv1.centers
     cr2 = fv1.lenel
-    g11 = kfun.kernelMatrix(KparDist, c1)
-    g12 = kfun.kernelMatrix(KparDist, c2, c1)
-    obj = (np.multiply(np.dot(cr1,cr1.T), g11).sum() - 2*np.multiply(np.dot(cr1, cr2.T), g12).sum())
+    obj = (np.multiply(cr1, KparDist.applyK(c1, cr1)).sum()
+            - 2*np.multiply(cr1, KparDist.applyK(c2, cr2, firstVar=c1)).sum())
+    #g11 = kfun.kernelMatrix(KparDist, c1)
+    #g12 = kfun.kernelMatrix(KparDist, c2, c1)
+    #obj = (np.multiply(np.dot(cr1,cr1.T), g11).sum() - 2*np.multiply(np.dot(cr1, cr2.T), g12).sum())
     return obj
 
 # Returns |fvDef - fv1|^2 for current norm
@@ -501,19 +541,23 @@ def currentNormGradient(fvDef, fv1, KparDist):
     dim = c1.shape[1]
     #print cr2
 
-    g11 = kfun.kernelMatrix(KparDist, c1)
-    dg11 = kfun.kernelMatrix(KparDist, c1, diff=True)
+    #g11 = kfun.kernelMatrix(KparDist, c1)
+    #dg11 = kfun.kernelMatrix(KparDist, c1, diff=True)
     
-    g12 = kfun.kernelMatrix(KparDist, c2, c1)
-    dg12 = kfun.kernelMatrix(KparDist, c2, c1, diff=True)
+    #g12 = kfun.kernelMatrix(KparDist, c2, c1)
+    #dg12 = kfun.kernelMatrix(KparDist, c2, c1, diff=True)
 
 
-    z1 = np.dot(g11, cr1) - np.dot(g12, cr2)
-    dg11 = np.multiply(dg11 , np.dot(cr1, cr1.T))
-    dg12 = np.multiply(dg12 , np.dot(cr1, cr2.T))
+    z1 = KparDist.applyK(c1, cr1) - KparDist.applyK(c2, cr2, firstVar=c1)
+    dz1 = .5*(KparDist.applyDiffKT(c1, cr1[np.newaxis,...], cr1[np.newaxis,...]) -
+            KparDist.applyDiffKT(c2, cr1[np.newaxis,...], cr2[np.newaxis,...], firstVar=c1))
 
-    dz1 = (np.multiply(dg11.sum(axis=1), c1.T).T - np.dot(dg11,c1)
-           - np.multiply(dg12.sum(axis=1), c1.T).T + np.dot(dg12,c2))
+    #z1 = np.dot(g11, cr1) - np.dot(g12, cr2)
+    #dg11 = np.multiply(dg11 , np.dot(cr1, cr1.T))
+    #dg12 = np.multiply(dg12 , np.dot(cr1, cr2.T))
+
+    #dz1 = (np.multiply(dg11.sum(axis=1), c1.T).T - np.dot(dg11,c1)
+    #       - np.multiply(dg12.sum(axis=1), c1.T).T + np.dot(dg12,c2))
 
     # xDef1 = xDef[fvDef.faces[:, 0], :]
     # xDef2 = xDef[fvDef.faces[:, 1], :]
@@ -546,24 +590,27 @@ def currentNormGradient(fvDef, fv1, KparDist):
 def measureNorm0(fv1, KparDist):
     c2 = fv1.centers
     cr2 = fv1.lenel
-    cr2 = np.sqrt((cr2**2).sum(axis=1))
-    g11 = kfun.kernelMatrix(KparDist, c2)
+    cr2 = np.sqrt((cr2**2).sum(axis=1))[:,np.newaxis]
+ #   g11 = kfun.kernelMatrix(KparDist, c2)
     #print cr2.shape, g11.shape
-    return np.dot(np.dot(cr2, g11), cr2.T).sum()
+    return np.multiply(cr2, KparDist.applyK(c2, cr2)).sum()
+#    return np.dot(np.dot(cr2, g11), cr2.T).sum()
         
     
 # Computes |fvDef|^2 - 2 fvDef * fv1 with measure dot produuct 
 def measureNormDef(fvDef, fv1, KparDist):
     c1 = fvDef.centers
     cr1 = fvDef.lenel
-    cr1 = np.sqrt((cr1**2).sum(axis=1)+1e-10)
+    cr1 = np.sqrt((cr1**2).sum(axis=1)+1e-10)[:,np.newaxis]
     c2 = fv1.centers
     cr2 = fv1.lenel
-    cr2 = np.sqrt((cr2**2).sum(axis=1)+1e-10)
-    g11 = kfun.kernelMatrix(KparDist, c1)
-    g12 = kfun.kernelMatrix(KparDist, c2, c1)
+    cr2 = np.sqrt((cr2**2).sum(axis=1)+1e-10)[:,np.newaxis]
+    obj = (np.multiply(cr1, KparDist.applyK(c1, cr1)).sum()
+        - 2*np.multiply(cr1, KparDist.applyK(c2, cr2, firstVar=c1)).sum())
+    #g11 = kfun.kernelMatrix(KparDist, c1)
+    #g12 = kfun.kernelMatrix(KparDist, c2, c1)
     #obj = (np.multiply(cr1*cr1.T, g11).sum() - 2*np.multiply(cr1*(cr2.T), g12).sum())
-    obj = np.dot(np.dot(cr1, g11), cr1.T).sum() - 2* np.dot(np.dot(cr1, g12), cr2.T).sum()
+    #obj = np.dot(np.dot(cr1, g11), cr1.T).sum() - 2* np.dot(np.dot(cr1, g12), cr2.T).sum()
     return obj
 
 # Returns |fvDef - fv1|^2 for measure norm
@@ -579,26 +626,34 @@ def measureNormGradient(fvDef, fv1, KparDist):
     c2 = fv1.centers
     cr2 = fv1.lenel
     dim = c1.shape[1]
-    a1 = np.reshape(np.sqrt((cr1**2).sum(axis=1)+1e-10), (cr1.shape[0], 1))
-    a2 = np.reshape(np.sqrt((cr2**2).sum(axis=1)+1e-10), (cr2.shape[0],1)) 
-    cr1 = np.divide(cr1, a1)
-    cr2 = np.divide(cr2, a2)
+    a1 = np.sqrt((cr1**2).sum(axis=1)+1e-10)
+    a2 = np.sqrt((cr2**2).sum(axis=1)+1e-10)
+    cr1 = cr1 / a1[:, np.newaxis]
+    cr2 = cr2 / a2[:, np.newaxis]
+    # a1 = np.reshape(np.sqrt((cr1**2).sum(axis=1)+1e-10), (cr1.shape[0], 1))
+    # a2 = np.reshape(np.sqrt((cr2**2).sum(axis=1)+1e-10), (cr2.shape[0],1)) 
+    # cr1 = np.divide(cr1, a1)
+    # cr2 = np.divide(cr2, a2)
 
-    g11 = kfun.kernelMatrix(KparDist, c1)
-    dg11 = kfun.kernelMatrix(KparDist, c1, diff=True)
+    # g11 = kfun.kernelMatrix(KparDist, c1)
+    # dg11 = kfun.kernelMatrix(KparDist, c1, diff=True)
     
-    g12 = kfun.kernelMatrix(KparDist, c2, c1)
-    dg12 = kfun.kernelMatrix(KparDist, c2, c1, diff=True)
+    # g12 = kfun.kernelMatrix(KparDist, c2, c1)
+    # dg12 = kfun.kernelMatrix(KparDist, c2, c1, diff=True)
 
 
-    z1 = np.dot(g11, a1) - np.dot(g12, a2)
+    z1 = KparDist.applyK(c1, a1[:, np.newaxis]) - KparDist.applyK(c2, a2[:, np.newaxis], firstVar=c1)
     z1 = np.multiply(z1, cr1)
-    dg1 = np.multiply(dg11, a1)
-    dg11 = np.multiply(dg1, a1.T)
-    dg1 = np.multiply(dg12, a1)
-    dg12 = np.multiply(dg1, a2.T)
+    # z1 = np.dot(g11, a1) - np.dot(g12, a2)
+    # z1 = np.multiply(z1, cr1)
+    # dg1 = np.multiply(dg11, a1)
+    # dg11 = np.multiply(dg1, a1.T)
+    # dg1 = np.multiply(dg12, a1)
+    # dg12 = np.multiply(dg1, a2.T)
 
-    dz1 = (np.multiply(dg11.sum(axis=1).reshape((-1,1)), c1) - np.dot(dg11,c1) - np.multiply(dg12.sum(axis=1).reshape((-1,1)), c1) + np.dot(dg12,c2))
+    dz1 = (1./2.) * (KparDist.applyDiffKT(c1, a1[np.newaxis,:,np.newaxis], a1[np.newaxis,:,np.newaxis]) -
+                      KparDist.applyDiffKT(c2, a1[np.newaxis,:,np.newaxis], a2[np.newaxis,:,np.newaxis], firstVar=c1))
+    # dz1 = (np.multiply(dg11.sum(axis=1).reshape((-1,1)), c1) - np.dot(dg11,c1) - np.multiply(dg12.sum(axis=1).reshape((-1,1)), c1) + np.dot(dg12,c2))
 
     xDef1 = xDef[fvDef.faces[:, 0], :]
     xDef2 = xDef[fvDef.faces[:, 1], :]

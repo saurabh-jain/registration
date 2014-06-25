@@ -58,7 +58,7 @@ def landmarkDirectEvolutionEuler(x0, at, KparDiff, affine = None, withJacobian=F
 
         if not (withNormals==None):
             zn = np.squeeze(nt[k, :, :])        
-            nt[k+1, :, :] = zn - timeStep * KparDiff.applyDiffKT(z, [zn], [a]) 
+            nt[k+1, :, :] = zn - timeStep * KparDiff.applyDiffKT(z, zn[np.newaxis,...], a[np.newaxis,...]) 
             if not (affine == None):
                 nt[k+1, :, :] += timeStep * np.dot(zn, A[k])
     if simpleOutput:
@@ -698,7 +698,7 @@ def landmarkEPDiff(T, x0, a0, KparDiff, affine = None, withJacobian=False, withN
         xt[k+1, :, :] = z + timeStep * KparDiff.applyK(z, a)
         #print 'test', px.sum()
         if k < (T-1):
-            at[k+1, :, :] = a - timeStep * KparDiff.applyDiffKT(z, [a], [a])
+            at[k+1, :, :] = a - timeStep * KparDiff.applyDiffKT(z, a[np.newaxis,...], a[np.newaxis,...])
         if not (affine == None):
             xt[k+1, :, :] += timeStep * (np.dot(z, A[k].T) + b[k])
         if not (withPointSet == None):
@@ -709,7 +709,7 @@ def landmarkEPDiff(T, x0, a0, KparDiff, affine = None, withJacobian=False, withN
 
         if not (withNormals==None):
             zn = np.squeeze(nt[k, :, :])        
-            nt[k+1, :, :] = zn - timeStep * KparDiff.applyDiffKT(z, [zn], [a]) 
+            nt[k+1, :, :] = zn - timeStep * KparDiff.applyDiffKT(z, zn[np.newaxis,...], a[np.newaxis,...]) 
             if not (affine == None):
                 nt[k+1, :, :] += timeStep * np.dot(zn, A[k])
         if withJacobian:
@@ -750,8 +750,10 @@ def landmarkHamiltonianCovector(x0, at, px1, KparDiff, regweight, affine = None)
         # if (isfield(KparDiff, 'zs') && size(z, 2) == 3)
         #     z(:,3) = z(:,3) / KparDiff.zs ;
         # end
-        a1 = [px, a, -2*regweight*a]
-        a2 = [a, px, a]
+        a1 = np.concatenate((px[np.newaxis,...], a[np.newaxis,...], -2*regweight*a[np.newaxis,...]))
+        a2 = np.concatenate((a[np.newaxis,...], px[np.newaxis,...], a[np.newaxis,...]))
+        #a1 = [px, a, -2*regweight*a]
+        #a2 = [a, px, a]
         #print 'test', px.sum()
         zpx = KparDiff.applyDiffKT(z, a1, a2)
         pxt[M-t-2, :, :] = np.squeeze(pxt[M-t-1, :, :]) + timeStep * zpx
@@ -886,21 +888,25 @@ def secondOrderFiberHamiltonian(x, a, y, v, rho, px, pa, py, pv, KparDiff):
     return Ht
 
     
-def secondOrderFiberCovector(x0, a0, y0, v0, rhot, px1, pa1, py1, pv1, KparDiff):
+def secondOrderFiberCovector(x0, a0, y0, v0, rhot, px1, pa1, py1, pv1, KparDiff, times= None):
     T = rhot.shape[0]
+    nTarg = len(px1)
+    Tsize1 = T/nTarg
+    if times == None:
+        t1 = (float(T)/nTarg) * (range(nTarg)+1)
     N = x0.shape[0]
     M = y0.shape[0]
     dim = x0.shape[1]
     timeStep = 1.0/T
     [xt, at, yt, vt] = secondOrderFiberEvolution(x0, a0, y0, v0, rhot, KparDiff)
     pxt = np.zeros([T, N, dim])
-    pxt[T-1, :, :] = px1
+    pxt[T-1, :, :] = px1[nTarg-1]
     pat = np.zeros([T, M, dim])
-    pat[T-1, :, :] = pa1
+    pat[T-1, :, :] = pa1[nTarg-1]
     pyt = np.zeros([T, M, dim])
-    pyt[T-1, :, :] = py1
+    pyt[T-1, :, :] = py1[nTarg-1]
     pvt = np.zeros([T, M, dim])
-    pvt[T-1, :, :] = pv1
+    pvt[T-1, :, :] = pv1[nTarg-1]
     for t in range(T-1):
         px = np.squeeze(pxt[T-t-1, :, :])
         pa = np.squeeze(pat[T-t-1, :, :])
@@ -954,12 +960,18 @@ def secondOrderFiberCovector(x0, a0, y0, v0, rhot, px1, pa1, py1, pv1, KparDiff)
         pat[T-t-2, :, :] = pa + timeStep * zpa
         pyt[T-t-2, :, :] = py + timeStep * zpy
         pvt[T-t-2, :, :] = pv + timeStep * zpv
+        if (t<T-1) and ((T-t-1)%Tsize1 == 0):
+#            print T-t-1, (T-t-1)/Tsize1
+            pxt[T-t-2, :, :] += px1[(T-t-1)/Tsize1 - 1]
+            pat[T-t-2, :, :] += pa1[(T-t-1)/Tsize1 - 1]
+            pyt[T-t-2, :, :] += py1[(T-t-1)/Tsize1 - 1]
+            pvt[T-t-2, :, :] += pv1[(T-t-1)/Tsize1 - 1]
 
     return pxt, pat, pyt, pvt, xt, at, yt, vt
 
 # Computes gradient after covariant evolution for deformation cost a^TK(x,x) a
-def secondOrderFiberGradient(x0, a0, y0, v0, rhot, px1, pa1, py1, pv1, KparDiff, getCovector = False):
-    (pxt, pat, pyt, pvt, xt, at, yt, vt) = secondOrderFiberCovector(x0, a0, y0, v0, rhot, px1, pa1, py1, pv1, KparDiff)
+def secondOrderFiberGradient(x0, a0, y0, v0, rhot, px1, pa1, py1, pv1, KparDiff, times = None, getCovector = False):
+    (pxt, pat, pyt, pvt, xt, at, yt, vt) = secondOrderFiberCovector(x0, a0, y0, v0, rhot, px1, pa1, py1, pv1, KparDiff, times=times)
     drhot = np.zeros(rhot.shape)
     # if not (affine == None):
     #     dA = np.zeros(affine[0].shape)
