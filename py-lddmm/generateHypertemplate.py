@@ -33,6 +33,7 @@ def main():
     #print mean
     k0 = np.argmin(np.fabs(z-mean))
     fv = surfaces.Surface(filename = files[k0])
+    print 'keeping ' + files[k0] 
     minx = fv.vertices[:,0].min() 
     maxx = fv.vertices[:,0].max() 
     miny = fv.vertices[:,1].min() 

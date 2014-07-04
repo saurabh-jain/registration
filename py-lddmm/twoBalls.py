@@ -40,14 +40,18 @@ def compute():
     ## Background kernel
     K2 = Kernel(name='laplacian', sigma = 10.0, order=2)
 
-    outputDir = '/Users/younes/Development/Results/twoBallsSliding'
+    outputDir = '/Users/younes/Development/Results/twoBallsStitched2'
     #outputDir = '/cis/home/younes/MorphingData/twoBallsStitched'
     #outputDir = '/Users/younes/Development/Results/tight_stitched_rigid2_10'
 
     sm = SurfaceMatchingParam(timeStep=0.1, KparDiff=K1, KparDiffOut=K2, sigmaDist=20., sigmaError=10., errorType='varifold')
     f = (SurfaceMatching(Template=(fv1,fv2), Target=(fv3,fv4), outputDir=outputDir, param=sm, mu=.1,regWeightOut=1.,
-                          testGradient=False, typeConstraint='slidingV2', maxIter_cg=1000, maxIter_al=100, affine='none', rotWeight=0.1))
+                          testGradient=False, typeConstraint='stitched', maxIter_cg=1000, maxIter_al=100, affine='none', rotWeight=0.1))
     f.optimizeMatching()
 
 
     return f
+
+if __name__=="__main__":
+    compute()
+

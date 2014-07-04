@@ -113,6 +113,7 @@ class Surface:
         for k in range(nv):
             if (np.fabs(AV[k]) <1e-10):
                 print 'Warning: vertex ', k, 'has no face; use removeIsolated'
+        #print 'sum check area:', AF.sum(), AV.sum()
         return AV, AF
 
     def computeVertexNormals(self):
