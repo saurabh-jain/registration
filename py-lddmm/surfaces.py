@@ -3,6 +3,7 @@ import scipy as sp
 import scipy.linalg as spLA
 import os
 import glob
+import logging
 from vtk import *
 import kernelFunctions as kfun
 
@@ -207,7 +208,7 @@ class Surface:
     def fromPolyData(self, g, scales=[1.,1.,1.]):
         npoints = int(g.GetNumberOfPoints())
         nfaces = int(g.GetNumberOfPolys())
-        print 'Dimensions:', npoints, nfaces, g.GetNumberOfCells()
+        logging.info('Dimensions: %d %d %d' %(npoints, nfaces, g.GetNumberOfCells()))
         V = np.zeros([npoints, 3])
         for kk in range(npoints):
             V[kk, :] = np.array(g.GetPoint(kk))
@@ -397,7 +398,8 @@ class Surface:
         z= self.surfVolume()
         if (z > 0):
             self.flipFaces()
-            print 'flipping volume', z, self.surfVolume()
+            #print 'flipping volume', z, self.surfVolume()
+            logging.info('flipping volume %.2f %.2f' % (z, self.surfVolume()))
 
         #print g
         # npoints = int(g.GetNumberOfPoints())
@@ -706,7 +708,7 @@ class Surface:
                 kk += 1
         idx = I[idx]
         if idx.max() < (k-1):
-            print 'Warning: kmeans convergence with', idx.max(), 'clusters instead of', k
+            loggin.info('Warning: kmeans convergence with %d clusters instead of %d' %(idx.max(), k))
             #ml = w.sum(axis=1)/N
         nc = idx.max()+1
         C = np.zeros([nc, self.vertices.shape[1]])

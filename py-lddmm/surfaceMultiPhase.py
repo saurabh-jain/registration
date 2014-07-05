@@ -1,6 +1,7 @@
 import os
 import numpy as np
 import scipy as sp
+import logging
 import surfaces
 import kernelFunctions as kfun
 import pointEvolution as evol
@@ -49,7 +50,7 @@ class SurfaceMatching(surfaceMatching.SurfaceMatching):
     def __init__(self, Template=None, Target=None, fileTempl=None, fileTarg=None, param=None, verb=True, regWeight=1.0, regWeightOut=1.0, affineWeight = 1.0, testGradient=False, mu = 0.1, outputDir='.', saveFile = 'evolution', typeConstraint='stitched', affine='none', rotWeight = None, scaleWeight = None, transWeight = None,  maxIter_cg=1000, maxIter_al=100):
         if Template==None:
             if fileTempl==None:
-                print 'Please provide a template surface'
+                logging.error('Please provide a template surface')
                 return
             else:
                 self.fv0 = []
@@ -61,7 +62,7 @@ class SurfaceMatching(surfaceMatching.SurfaceMatching):
                 self.fv0.append(surfaces.Surface(surf=ftmp))
         if Target==None:
             if fileTarg==None:
-                print 'Please provide a target surface'
+                logging.error('Please provide a target surface')
                 return
             else:
                 self.fv1 = []
@@ -77,7 +78,7 @@ class SurfaceMatching(surfaceMatching.SurfaceMatching):
         self.outputDir = outputDir  
         if not os.access(outputDir, os.W_OK):
             if os.access(outputDir, os.F_OK):
-                print 'Cannot save in ' + outputDir
+                logging.error('Cannot save in ' + outputDir)
                 return
             else:
                 os.mkdir(outputDir)
@@ -208,7 +209,7 @@ class SurfaceMatching(surfaceMatching.SurfaceMatching):
             #     #self.dotProduct = self.kernelDotProduct
             #     self.dotProduct = self.standardDotProduct            
         else:
-            print 'Unrecognized constraint type'
+            logging.error('Unrecognized constraint type')
             return
         
         self.mu = np.sqrt(mu)
@@ -258,7 +259,6 @@ class SurfaceMatching(surfaceMatching.SurfaceMatching):
                 x = np.squeeze(xt[k][t, :, :])
                 nu = np.squeeze(nut[k][t, :, :])
                 npt1 = npt + self.npt[k]
-                print 'OMP?'
                 r = evol_omp.applyK(x, x, a, self.param.KparDiff.sigma, self.param.KparDiff.order,
                                     x.shape[0], x.shape[0], x.shape[1]) + np.dot(x, A.T) + b
                 r2 = evol_omp.applyK(x, zB, a, self.param.KparDiffOut.sigma, self.param.KparDiffOut.order,
@@ -523,16 +523,16 @@ class SurfaceMatching(surfaceMatching.SurfaceMatching):
         va = 0
         for k in range(self.nsurf+1):
             va += np.multiply(da[k], atTry[k]-at[k]).sum()/eps
-        print 'Testing constraints:'
-        print 'var x:', self.Tsize*(ux[0]-u0[0])/(eps), -vx 
-        print 'var nu:', self.Tsize*(un[0]-u0[0])/(eps), -vn 
-        print 'var a:', self.Tsize*(ua[0]-u0[0])/(eps), -va 
+        logging.info('Testing constraints:')
+        logging.info('var x: %f %f' %( self.Tsize*(ux[0]-u0[0])/(eps), -vx)) 
+        logging.info('var nu: %f %f' %(self.Tsize*(un[0]-u0[0])/(eps), -vn ))
+        logging.info('var a: %f %f' %( self.Tsize*(ua[0]-u0[0])/(eps), -va)) 
         if self.affineDim > 0:
             uA = self.constraintTerm(xt, nut, at, AfftTry)
             vA = 0
             for k in range(self.nsurf):
                 vA += np.multiply(dA[k], AfftTry[k]-Afft[k]).sum()/eps
-            print 'var affine:', self.Tsize*(uA[0]-u0[0])/(eps), -vA 
+            logging.info('var affine: %f %f' %(self.Tsize*(uA[0]-u0[0])/(eps), -vA ))
 
     def  objectiveFunDef(self, at, Afft, withTrajectory = False, withJacobian = False):
         param = self.param
@@ -648,7 +648,7 @@ class SurfaceMatching(surfaceMatching.SurfaceMatching):
         objTry += foo[0]+2*self.obj0
 
         if np.isnan(objTry):
-            print 'Warning: nan in updateTry'
+            logging.warning('Warning: nan in updateTry')
             return 1e500
 
 
@@ -901,7 +901,7 @@ class SurfaceMatching(surfaceMatching.SurfaceMatching):
 
     def endOfIteration(self):
         (obj1, self.xt, Jt, self.cval) = self.objectiveFunDef(self.at, self.Afft, withJacobian=True)
-        print 'mean constraint', np.sqrt((self.cval**2).sum()/self.cval.size), np.fabs(self.cval).sum() / self.cval.size
+        logging.info('mean constraint %f %f' %(np.sqrt((self.cval**2).sum()/self.cval.size), np.fabs(self.cval).sum() / self.cval.size))
         #self.testConstraintTerm(self.xt, self.nut, self.at, self.Afft)
         nn = 0 ;
         for k in range(self.nsurf):
@@ -945,7 +945,7 @@ class SurfaceMatching(surfaceMatching.SurfaceMatching):
         self.muEps = 1.0
         it = 0
         while (self.muEps > 0.05) & (it<self.maxIter_al)  :
-            print 'Starting Minimization: gradEps = ', self.gradEps, ' muEps = ', self.muEps, ' mu = ', self.mu
+            logging.info('Starting Minimization: gradEps = %f muEps = %f mu = %f' %(self.gradEps, self.muEps,self.mu))
             #self.coeffZ = max(1.0, self.mu)
             cg.cg(self, verb = self.verb, maxIter = self.maxIter_cg, TestGradient = self.testGradient, epsInit=0.1)
             for t in range(self.Tsize+1):
@@ -953,7 +953,7 @@ class SurfaceMatching(surfaceMatching.SurfaceMatching):
                     self.lmb[t, :, :] -= 0.5*self.derCstrFun(self.cval[t, :, :]/self.mu)/self.mu
                 else:
                     self.lmb[t, :] -= 0.5*self.derCstrFun(self.cval[t, :]/self.mu)/self.mu
-            print 'mean lambdas', np.fabs(self.lmb).sum() / self.lmb.size
+            logging.info('mean lambdas %f' %(np.fabs(self.lmb).sum() / self.lmb.size))
             if self.converged:
                 self.gradEps *= .75
                 if (((self.cval**2).sum()/self.cval.size) > self.muEps**2):

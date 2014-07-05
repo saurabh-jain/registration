@@ -1,10 +1,21 @@
 import numpy as np
+import logging
+import loggingUtils
 import surfaces
 from surfaces import *
 from kernelFunctions import *
 from surfaceMultiPhase import *
 
 def compute():
+
+    outputDir = '/Users/younes/Development/Results/twoBallsStitched2'
+    #outputDir = '/cis/home/younes/MorphingData/twoBallsStitched'
+    #outputDir =
+    '/Users/younes/Development/Results/tight_stitched_rigid2_10'
+    if __name__ == "__main__":
+        loggingUtils.setup_default_logging(outputDir, fileName='info')
+    else:
+        loggingUtils.setup_default_logging()
 
     Tg = 2000
     npt = 100.0
@@ -40,9 +51,6 @@ def compute():
     ## Background kernel
     K2 = Kernel(name='laplacian', sigma = 10.0, order=2)
 
-    outputDir = '/Users/younes/Development/Results/twoBallsStitched2'
-    #outputDir = '/cis/home/younes/MorphingData/twoBallsStitched'
-    #outputDir = '/Users/younes/Development/Results/tight_stitched_rigid2_10'
 
     sm = SurfaceMatchingParam(timeStep=0.1, KparDiff=K1, KparDiffOut=K2, sigmaDist=20., sigmaError=10., errorType='varifold')
     f = (SurfaceMatching(Template=(fv1,fv2), Target=(fv3,fv4), outputDir=outputDir, param=sm, mu=.1,regWeightOut=1.,
