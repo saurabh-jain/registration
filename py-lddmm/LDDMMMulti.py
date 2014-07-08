@@ -60,26 +60,35 @@ def compute(args=None, noArgs=True):
         K1 = Kernel(name='laplacian', sigma = 50.0, order=4)
         ## Background kernel
         K2 = Kernel(name='laplacian', sigma = 10.0, order=2)
+        typeConstraint = 'stitched'
         sm = SurfaceMatchingParam(timeStep=0.1, KparDiff=K1, KparDiffOut=K2,
                                   sigmaDist=50., sigmaError=10., errorType='varifold')
     else:
         fTmpl = []
         for name in args.template:
             fTmpl.append(Surface(filename=name))
+        for f in fTmpl:
+            f.vertices *= args.scaleFactor
         fTarg = []
         for name in args.target:
             fTarg.append(Surface(filename=name))
+        for f in fTarg:
+            f.vertices *= args.scaleFactor
         ## Object kernel
         K1 = Kernel(name='laplacian', sigma = args.sigmaKernelIn, order=4)
         ## Background kernel
         K2 = Kernel(name='laplacian', sigma = args.sigmaKernelOut, order=2)
         sm = SurfaceMatchingParam(timeStep=0.1, KparDiff=K1, KparDiffOut=K2,
-                                  sigmaDist=args.sigmaDist, sigmaError=args.sigmaError, errorType='varifold')
+                                  sigmaDist=args.sigmaDist, sigmaError=args.sigmaError, errorType=args.typeError)
         outputDir = args.dirOut
         loggingUtils.setup_default_logging(fileName=outputDir+'/'+args.logFile, stdOutput = args.stdOutput)
+        if args.sliding:
+            typeConstraint = 'slidingV2'
+        else:
+            typeConstraint = 'stitched'
         
     f = (SurfaceMatching(Template=fTmpl, Target=fTarg, outputDir=outputDir, param=sm, mu=.1,regWeightOut=1.,
-                          testGradient=False, typeConstraint='stitched', maxIter_cg=1000, maxIter_al=100, affine='none', rotWeight=0.1))
+                          testGradient=False, typeConstraint=typeConstraint, maxIter_cg=1000, maxIter_al=100, affine='none', rotWeight=0.1))
     f.optimizeMatching()
 
 
@@ -102,9 +111,14 @@ if __name__=="__main__":
                         default = 50, help='kernel width (error term); (default = 50)') 
     parser.add_argument('--sigmaError', metavar='sigmaError', type=float, dest='sigmaError',
                         default = 10, help='weight (error term); (default = 10)') 
+    parser.add_argument('--scaleFactor', metavar='scaleFactor', type=float, dest='scaleFactor',
+                        default = 1, help='scale factor for all surfaces') 
     parser.add_argument('--dirOut', metavar = 'dirOut', type = str, dest = 'dirOut', default = None, help='Output directory')
     parser.add_argument('--logFile', metavar = 'logFile', type = str, dest = 'logFile', default = 'info.txt', help='Output log file')
     parser.add_argument('--stdout', action = 'store_true', dest = 'stdOutput', default = False, help='To also print on standard output')
+    parser.add_argument('--typeError', metavar='typeError', type=str,
+                        dest='typeError', default = 'varifold', help='error term: measure, current or varifold') 
+    parser.add_argument('--sliding', action = 'store_true', dest = 'sliding', default = False, help='To use sliding constraint')
     args = parser.parse_args()
     if args.target == None or args.template == None:
         print 'Error: At least one template and one target are required'
