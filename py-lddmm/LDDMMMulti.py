@@ -76,7 +76,7 @@ def compute(args=None, noArgs=True):
         sm = SurfaceMatchingParam(timeStep=0.1, KparDiff=K1, KparDiffOut=K2,
                                   sigmaDist=args.sigmaDist, sigmaError=args.sigmaError, errorType='varifold')
         outputDir = args.dirOut
-        loggingUtils.setup_default_logging(fileName=args.logFile, stdOutput = args.stdOutput)
+        loggingUtils.setup_default_logging(fileName=outputDir+'/'+args.logFile, stdOutput = args.stdOutput)
         
     f = (SurfaceMatching(Template=fTmpl, Target=fTarg, outputDir=outputDir, param=sm, mu=.1,regWeightOut=1.,
                           testGradient=False, typeConstraint='stitched', maxIter_cg=1000, maxIter_al=100, affine='none', rotWeight=0.1))

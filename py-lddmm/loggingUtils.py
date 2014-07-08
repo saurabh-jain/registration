@@ -10,8 +10,9 @@ def setup_default_logging(output_dir=None, config=None, fileName=None, stdOutput
     else:
         log_file_name = config.log_file_name
     if output_dir == None:
-        output_dir = "./"
+        output_dir = ""
     if fileName != None:
+        print 'creating file handler for ', "%s%s" % (output_dir, log_file_name)
         fh = logging.FileHandler("%s/%s" % (output_dir, log_file_name), mode='w')
         fh.setFormatter(formatter)
         logger.addHandler(fh)
