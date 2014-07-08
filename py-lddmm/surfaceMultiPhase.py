@@ -914,11 +914,11 @@ class SurfaceMatching(surfaceMatching.SurfaceMatching):
                 #self.fvDefB[k].saveVTK(self.outputDir +'/'+ self.saveFile+str(k)+'Out'+str(kk)+'.vtk', scalars = Jt[-1][kk, nn:nn+n1], scal_name='Jacobian')
                 vf = surfaces.vtkFields() ;
                 vf.scalars.append('Jacobian') ;
-                vf.scalars.append(Jt[-1][kk, nn:nn+n1]-1)
+                vf.scalars.append(np.exp(Jt[-1][kk, nn:nn+n1])-1)
                 vf.scalars.append('Jacobian_T') ;
                 vf.scalars.append(AV[:,0])
                 vf.scalars.append('Jacobian_N') ;
-                vf.scalars.append(Jt[-1][kk, nn:nn+n1]/(AV[:,0]+1))
+                vf.scalars.append(np.exp(Jt[-1][kk, nn:nn+n1])/(AV[:,0]+1))
                 #self.fvDefB[k].saveVTK(self.outputDir +'/'+ self.saveFile+str(k)+'Out'+str(kk)+'.vtk', scalars = AV[:,0], scal_name='Jacobian')
                 self.fvDefB[k].saveVTK2(self.outputDir +'/'+ self.saveFile+str(k)+'Out'+str(kk)+'.vtk', vf)
                 self.fvDef[k].updateVertices(np.squeeze(self.xt[k][kk, :, :]))
@@ -926,11 +926,11 @@ class SurfaceMatching(surfaceMatching.SurfaceMatching):
                 AV = (AV[0]/AV0[0])-1
                 vf = surfaces.vtkFields() ;
                 vf.scalars.append('Jacobian') ;
-                vf.scalars.append(Jt[k][kk, :]-1)
+                vf.scalars.append(np.exp(Jt[k][kk, :])-1)
                 vf.scalars.append('Jacobian_T') ;
                 vf.scalars.append(AV[:,0])
                 vf.scalars.append('Jacobian_N') ;
-                vf.scalars.append(Jt[k][kk, :]/(AV[:,0]+1))
+                vf.scalars.append(np.exp(Jt[k][kk, :])/(AV[:,0]+1))
                 #self.fvDef[k].saveVTK(self.outputDir +'/'+self.saveFile+str(k)+'In'+str(kk)+'.vtk', scalars = Jt[k][kk, :], scal_name='Jacobian')
                 #self.fvDef[k].saveVTK(self.outputDir +'/'+self.saveFile+str(k)+'In'+str(kk)+'.vtk', scalars = AV[:,0], scal_name='Jacobian')
                 self.fvDef[k].saveVTK2(self.outputDir +'/'+self.saveFile+str(k)+'In'+str(kk)+'.vtk', vf)
