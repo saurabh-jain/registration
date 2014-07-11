@@ -3,9 +3,9 @@ import scipy as sp
 import scipy.linalg as spLA
 import os
 import glob
+import logging
 from vtk import *
 import kernelFunctions as kfun
-import pointEvolution_fort as evol_omp
 
 class vtkFields:
     def __init__(self):
@@ -32,6 +32,8 @@ class Surface:
                         self.readOFF(filename)
                     elif ext=='.vtk':
                         self.readVTK(filename)
+                    elif ext=='.obj':
+                        self.readOBJ(filename)
                     else:
                         print 'Unknown Surface Extension:', ext
                         self.vertices = np.empty(0)
@@ -114,6 +116,7 @@ class Surface:
         for k in range(nv):
             if (np.fabs(AV[k]) <1e-10):
                 print 'Warning: vertex ', k, 'has no face; use removeIsolated'
+        #print 'sum check area:', AF.sum(), AV.sum()
         return AV, AF
 
     def computeVertexNormals(self):
@@ -207,7 +210,7 @@ class Surface:
     def fromPolyData(self, g, scales=[1.,1.,1.]):
         npoints = int(g.GetNumberOfPoints())
         nfaces = int(g.GetNumberOfPolys())
-        print 'Dimensions:', npoints, nfaces, g.GetNumberOfCells()
+        logging.info('Dimensions: %d %d %d' %(npoints, nfaces, g.GetNumberOfCells()))
         V = np.zeros([npoints, 3])
         for kk in range(npoints):
             V[kk, :] = np.array(g.GetPoint(kk))
@@ -397,7 +400,8 @@ class Surface:
         z= self.surfVolume()
         if (z > 0):
             self.flipFaces()
-            print 'flipping volume', z, self.surfVolume()
+            #print 'flipping volume', z, self.surfVolume()
+            logging.info('flipping volume %.2f %.2f' % (z, self.surfVolume()))
 
         #print g
         # npoints = int(g.GetNumberOfPoints())
@@ -706,7 +710,7 @@ class Surface:
                 kk += 1
         idx = I[idx]
         if idx.max() < (k-1):
-            print 'Warning: kmeans convergence with', idx.max(), 'clusters instead of', k
+            loggin.info('Warning: kmeans convergence with %d clusters instead of %d' %(idx.max(), k))
             #ml = w.sum(axis=1)/N
         nc = idx.max()+1
         C = np.zeros([nc, self.vertices.shape[1]])
@@ -868,7 +872,7 @@ class Surface:
 
     def saveVTK(self, fileName, scalars = None, normals = None, tensors=None, scal_name='scalars', vectors=None, vect_name='vectors'):
         vf = vtkFields()
-        print scalars
+        #print scalars
         if not (scalars==None):
             vf.scalars.append(scal_name)
             vf.scalars.append(scalars)
@@ -945,6 +949,33 @@ class Surface:
     # Reads .vtk file
     def readVTK(self, fileName):
         u = vtkPolyDataReader()
+        u.SetFileName(fileName)
+        u.Update()
+        v = u.GetOutput()
+        #print v
+        npoints = int(v.GetNumberOfPoints())
+        nfaces = int(v.GetNumberOfPolys())
+        V = np.zeros([npoints, 3])
+        for kk in range(npoints):
+            V[kk, :] = np.array(v.GetPoint(kk))
+
+        F = np.zeros([nfaces, 3])
+        for kk in range(nfaces):
+            c = v.GetCell(kk)
+            for ll in range(3):
+                F[kk,ll] = c.GetPointId(ll)
+        
+        self.vertices = V
+        self.faces = np.int_(F)
+        xDef1 = self.vertices[self.faces[:, 0], :]
+        xDef2 = self.vertices[self.faces[:, 1], :]
+        xDef3 = self.vertices[self.faces[:, 2], :]
+        self.centers = (xDef1 + xDef2 + xDef3) / 3
+        self.surfel =  np.cross(xDef2-xDef1, xDef3-xDef1)
+
+    # Reads .vtk file
+    def readOBJ(self, fileName):
+        u = vtkOBJReader()
         u.SetFileName(fileName)
         u.Update()
         v = u.GetOutput()

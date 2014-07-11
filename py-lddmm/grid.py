@@ -1,5 +1,5 @@
 import numpy as np
-from vtk import *
+#from vtk import *
 import os
 
 # General surface class

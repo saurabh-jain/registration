@@ -12,7 +12,7 @@ def compute(createSurfaces=True):
         z = z-1
         s2 = np.sqrt(2)
 
-        I1 = .06 - ((x-.50)**2 + 0.5*y**2 + z**2)  
+        I1 = .06 - ((x-.50)**2 + 0.5*y**4 + z**2)  
         fv1 = Surface() ;
         fv1.Isosurface(I1, value = 0, target=2000, scales=[1, 1, 1], smooth=0.01)
 
