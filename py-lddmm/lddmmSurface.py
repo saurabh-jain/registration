@@ -5,6 +5,8 @@ import argparse
 import diffeo
 import pointSets
 import surfaces
+import logging
+import loggingUtils
 import surfaceMatching
 from kernelFunctions import *
 from affineRegistration import *
@@ -12,6 +14,9 @@ from surfaceMatching import *
 
 
 def main():
+
+    loggingUtils.setup_default_logging()
+
     parser = argparse.ArgumentParser(description='runs surface matching registration over directories (relative to the template)')
     parser.add_argument('template', metavar='template', type = str, help='template')
     parser.add_argument('target', metavar='target', type = str, help='target')
