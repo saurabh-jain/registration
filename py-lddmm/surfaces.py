@@ -4,7 +4,13 @@ import scipy.linalg as spLA
 import os
 import glob
 import logging
-from vtk import *
+try:
+    from vtk import *
+    import vtk.util.numpy_support as v2n
+    gotVTK = True
+except ImportError:
+    print 'could not import VTK functions'
+    gotVTK = False
 import kernelFunctions as kfun
 
 class vtkFields:
@@ -194,18 +200,21 @@ class Surface:
         return res
 
     def toPolyData(self):
-        points = vtkPoints()
-        for k in range(self.vertices.shape[0]):
-            points.InsertNextPoint(self.vertices[k,0], self.vertices[k,1], self.vertices[k,2])
-        polys = vtkCellArray()
-        for k in range(self.faces.shape[0]):
-            polys.InsertNextCell(3)
-            for kk in range(3):
-                polys.InsertCellPoint(self.faces[k,kk])
-        polydata = vtkPolyData()
-        polydata.SetPoints(points)
-        polydata.SetPolys(polys)
-        return polydata
+        if gotVTK:
+            points = vtkPoints()
+            for k in range(self.vertices.shape[0]):
+                points.InsertNextPoint(self.vertices[k,0], self.vertices[k,1], self.vertices[k,2])
+            polys = vtkCellArray()
+            for k in range(self.faces.shape[0]):
+                polys.InsertNextCell(3)
+                for kk in range(3):
+                    polys.InsertCellPoint(self.faces[k,kk])
+            polydata = vtkPolyData()
+            polydata.SetPoints(points)
+            polydata.SetPolys(polys)
+            return polydata
+        else:
+            raise Exception('Cannot run toPolyData without VTK')
 
     def fromPolyData(self, g, scales=[1.,1.,1.]):
         npoints = int(g.GetNumberOfPoints())
@@ -233,58 +242,21 @@ class Surface:
 
 
     def Simplify(self, target=1000.0):
-        # points = vtkPoints()
-        # for k in range(self.vertices.shape[0]):
-        #     points.InsertNextPoint(self.vertices[k,0], self.vertices[k,1], self.vertices[k,2])
-        # polys = vtkCellArray()
-        # for k in range(self.faces.shape[0]):
-        #     polys.InsertNextCell(3)
-        #     for kk in range(3):
-        #         polys.InsertCellPoint(self.faces[k,kk])
-        polydata = self.toPolyData()
-        # polydata.SetPoints(points)
-        # polydata.SetPolys(polys)
-        dc = vtkQuadricDecimation()
-        red = 1 - min(np.float(target)/polydata.GetNumberOfPoints(), 1)
-        dc.SetTargetReduction(red)
-        #dc.PreserveTopologyOn()
-        #dc.SetSplitting(0)
-        dc.SetInput(polydata)
-        #print dc
-        dc.Update()
-        g = dc.GetOutput()
-        # #print 'points:', g.GetNumberOfPoints()
-        # cp = vtkCleanPolyData()
-        # cp.SetInput(dc.GetOutput())
-        # #cp.SetPointMerging(1)
-        # cp.ConvertPolysToLinesOn()
-        # cp.SetAbsoluteTolerance(1e-5)
-        # cp.Update()
-        # g = cp.GetOutput()
-        # #print g
-        self.fromPolyData(g)
-        # npoints = int(g.GetNumberOfPoints())
-        # nfaces = int(g.GetNumberOfPolys())
-        # print 'Dimensions after Reduction:', npoints, nfaces, g.GetNumberOfCells()
-        # V = np.zeros([npoints, 3])
-        # for kk in range(npoints):
-        #     V[kk, :] = np.array(g.GetPoint(kk))
-        # F = np.zeros([nfaces, 3])
-        # gf = 0
-        # for kk in range(g.GetNumberOfCells()):
-        #     c = g.GetCell(kk)
-        #     if(c.GetNumberOfPoints() == 3):
-        #         for ll in range(3):
-        #             F[gf,ll] = c.GetPointId(ll)
-        #         gf += 1
-
-        # self.vertices = V
-        # self.faces = np.int_(F[0:gf, :])
-        # self.computeCentersAreas()
-        z= self.surfVolume()
-        if (z > 0):
-            self.flipFaces()
-            print 'flipping volume', z, self.surfVolume()
+        if gotVTK:
+            polydata = self.toPolyData()
+            dc = vtkQuadricDecimation()
+            red = 1 - min(np.float(target)/polydata.GetNumberOfPoints(), 1)
+            dc.SetTargetReduction(red)
+            dc.SetInput(polydata)
+            dc.Update()
+            g = dc.GetOutput()
+            self.fromPolyData(g)
+            z= self.surfVolume()
+            if (z > 0):
+                self.flipFaces()
+                print 'flipping volume', z, self.surfVolume()
+        else:
+            raise Exception('Cannot run Simplify without VTK')
 
     def flipFaces(self):
         self.faces = self.faces[:, [0,2,1]]
@@ -293,140 +265,146 @@ class Surface:
 
 
     def smooth(self, n=30, smooth=0.1):
-        g = self.toPolyData()
-        print g
-        smoother= vtkWindowedSincPolyDataFilter()
-        smoother.SetInput(g)
-        smoother.SetNumberOfIterations(n)
-        smoother.SetPassBand(smooth)   
-        smoother.NonManifoldSmoothingOn()
-        smoother.NormalizeCoordinatesOn()
-        smoother.GenerateErrorScalarsOn() 
-        #smoother.GenerateErrorVectorsOn()
-        smoother.Update()
-        g = smoother.GetOutput()
-        self.fromPolyData(g)
+        if gotVTK:
+            g = self.toPolyData()
+            print g
+            smoother= vtkWindowedSincPolyDataFilter()
+            smoother.SetInput(g)
+            smoother.SetNumberOfIterations(n)
+            smoother.SetPassBand(smooth)   
+            smoother.NonManifoldSmoothingOn()
+            smoother.NormalizeCoordinatesOn()
+            smoother.GenerateErrorScalarsOn() 
+            #smoother.GenerateErrorVectorsOn()
+            smoother.Update()
+            g = smoother.GetOutput()
+            self.fromPolyData(g)
+        else:
+            raise Exception('Cannot run smooth without VTK')
 
             
     # Computes isosurfaces using vtk               
     def Isosurface(self, data, value=0.5, target=1000.0, scales = [1., 1., 1.], smooth = 0.1, fill_holes = 1.):
-        #data = self.LocalSignedDistance(data0, value)
-        if isinstance(data, vtkImageData):
-            img = data
-        else:
-            img = vtkImageData()
-            img.SetDimensions(data.shape)
-            img.SetOrigin(0,0,0)
-            if vtkVersion.GetVTKMajorVersion() >= 6:
-                img.AllocateScalars(VTK_FLOAT,1)
+        if gotVTK:
+            #data = self.LocalSignedDistance(data0, value)
+            if isinstance(data, vtkImageData):
+                img = data
             else:
-                img.SetNumberOfScalarComponents(1)
-            v = vtkDoubleArray()
-            v.SetNumberOfValues(data.size)
-            v.SetNumberOfComponents(1)
-            for ii,tmp in enumerate(np.ravel(data, order='F')):
-                v.SetValue(ii,tmp)
-                img.GetPointData().SetScalars(v)
+                img = vtkImageData()
+                img.SetDimensions(data.shape)
+                img.SetOrigin(0,0,0)
+                if vtkVersion.GetVTKMajorVersion() >= 6:
+                    img.AllocateScalars(VTK_FLOAT,1)
+                else:
+                    img.SetNumberOfScalarComponents(1)
+                v = vtkDoubleArray()
+                v.SetNumberOfValues(data.size)
+                v.SetNumberOfComponents(1)
+                for ii,tmp in enumerate(np.ravel(data, order='F')):
+                    v.SetValue(ii,tmp)
+                    img.GetPointData().SetScalars(v)
                 
-        cf = vtkContourFilter()
-        if vtkVersion.GetVTKMajorVersion() >= 6:
-            cf.SetInputData(img)
-        else:
-            cf.SetInput(img)
-        cf.SetValue(0,value)
-        cf.SetNumberOfContours(1)
-        cf.Update()
-        #print cf
-        connectivity = vtkPolyDataConnectivityFilter()
-        connectivity.ScalarConnectivityOff()
-        connectivity.SetExtractionModeToLargestRegion()
-        if vtkVersion.GetVTKMajorVersion() >= 6:
-            connectivity.SetInputData(cf.GetOutput())
-        else:
-            connectivity.SetInput(cf.GetOutput())
-        connectivity.Update()
-        g = connectivity.GetOutput()
-
-        if smooth > 0:
-            smoother= vtkWindowedSincPolyDataFilter()
+            cf = vtkContourFilter()
             if vtkVersion.GetVTKMajorVersion() >= 6:
-                smoother.SetInputData(g)
+                cf.SetInputData(img)
             else:
-                smoother.SetInput(g)
-            #     else:
-            # smoother.SetInputConnection(contour.GetOutputPort())    
-            smoother.SetNumberOfIterations(30)
-            #this has little effect on the error!
-            #smoother.BoundarySmoothingOff()
-            #smoother.FeatureEdgeSmoothingOff()
-            #smoother.SetFeatureAngle(120.0)
-            smoother.SetPassBand(smooth)        #this increases the error a lot!
-            smoother.NonManifoldSmoothingOn()
-            #smoother.NormalizeCoordinatesOn()
-            #smoother.GenerateErrorScalarsOn() 
-            #smoother.GenerateErrorVectorsOn()
-            smoother.Update()
-            g = smoother.GetOutput()
+                cf.SetInput(img)
+            cf.SetValue(0,value)
+            cf.SetNumberOfContours(1)
+            cf.Update()
+            #print cf
+            connectivity = vtkPolyDataConnectivityFilter()
+            connectivity.ScalarConnectivityOff()
+            connectivity.SetExtractionModeToLargestRegion()
+            if vtkVersion.GetVTKMajorVersion() >= 6:
+                connectivity.SetInputData(cf.GetOutput())
+            else:
+                connectivity.SetInput(cf.GetOutput())
+            connectivity.Update()
+            g = connectivity.GetOutput()
+    
+            if smooth > 0:
+                smoother= vtkWindowedSincPolyDataFilter()
+                if vtkVersion.GetVTKMajorVersion() >= 6:
+                    smoother.SetInputData(g)
+                else:
+                    smoother.SetInput(g)
+                #     else:
+                # smoother.SetInputConnection(contour.GetOutputPort())    
+                smoother.SetNumberOfIterations(30)
+                #this has little effect on the error!
+                #smoother.BoundarySmoothingOff()
+                #smoother.FeatureEdgeSmoothingOff()
+                #smoother.SetFeatureAngle(120.0)
+                smoother.SetPassBand(smooth)        #this increases the error a lot!
+                smoother.NonManifoldSmoothingOn()
+                #smoother.NormalizeCoordinatesOn()
+                #smoother.GenerateErrorScalarsOn() 
+                #smoother.GenerateErrorVectorsOn()
+                smoother.Update()
+                g = smoother.GetOutput()
 
-        #dc = vtkDecimatePro()
-        red = 1 - min(np.float(target)/g.GetNumberOfPoints(), 1)
-        #print 'Reduction: ', red
-        dc = vtkQuadricDecimation()
-        dc.SetTargetReduction(red)
-        #dc.AttributeErrorMetricOn()
-        #dc.SetDegree(10)
-        #dc.SetSplitting(0)
-        if vtkVersion.GetVTKMajorVersion() >= 6:
-            dc.SetInputData(g)
+            #dc = vtkDecimatePro()
+            red = 1 - min(np.float(target)/g.GetNumberOfPoints(), 1)
+            #print 'Reduction: ', red
+            dc = vtkQuadricDecimation()
+            dc.SetTargetReduction(red)
+            #dc.AttributeErrorMetricOn()
+            #dc.SetDegree(10)
+            #dc.SetSplitting(0)
+            if vtkVersion.GetVTKMajorVersion() >= 6:
+                dc.SetInputData(g)
+            else:
+                dc.SetInput(g)
+                #dc.SetInput(g)
+            #print dc
+            dc.Update()
+            g = dc.GetOutput()
+            #print 'points:', g.GetNumberOfPoints()
+            cp = vtkCleanPolyData()
+            if vtkVersion.GetVTKMajorVersion() >= 6:
+                cp.SetInputData(dc.GetOutput())
+            else:
+                cp.SetInput(dc.GetOutput())
+                #        cp.SetInput(dc.GetOutput())
+            #cp.SetPointMerging(1)
+            cp.ConvertPolysToLinesOn()
+            cp.SetAbsoluteTolerance(1e-5)
+            cp.Update()
+            g = cp.GetOutput()
+            self.fromPolyData(g,scales)
+            z= self.surfVolume()
+            if (z > 0):
+                self.flipFaces()
+                #print 'flipping volume', z, self.surfVolume()
+                logging.info('flipping volume %.2f %.2f' % (z, self.surfVolume()))
+
+            #print g
+            # npoints = int(g.GetNumberOfPoints())
+            # nfaces = int(g.GetNumberOfPolys())
+            # print 'Dimensions:', npoints, nfaces, g.GetNumberOfCells()
+            # V = np.zeros([npoints, 3])
+            # for kk in range(npoints):
+            #     V[kk, :] = np.array(g.GetPoint(kk))
+            #     #print kk, V[kk]
+            #     #print kk, np.array(g.GetPoint(kk))
+            # F = np.zeros([nfaces, 3])
+            # gf = 0
+            # for kk in range(g.GetNumberOfCells()):
+            #     c = g.GetCell(kk)
+            #     if(c.GetNumberOfPoints() == 3):
+            #         for ll in range(3):
+            #             F[gf,ll] = c.GetPointId(ll)
+            #             #print kk, gf, F[gf]
+            #         gf += 1
+    
+            #         #self.vertices = np.multiply(data.shape-V-1, scales)
+            # self.vertices = np.multiply(V, scales)
+            # self.faces = np.int_(F[0:gf, :])
+            # self.computeCentersAreas()
         else:
-            dc.SetInput(g)
-            #dc.SetInput(g)
-        #print dc
-        dc.Update()
-        g = dc.GetOutput()
-        #print 'points:', g.GetNumberOfPoints()
-        cp = vtkCleanPolyData()
-        if vtkVersion.GetVTKMajorVersion() >= 6:
-            cp.SetInputData(dc.GetOutput())
-        else:
-            cp.SetInput(dc.GetOutput())
-            #        cp.SetInput(dc.GetOutput())
-        #cp.SetPointMerging(1)
-        cp.ConvertPolysToLinesOn()
-        cp.SetAbsoluteTolerance(1e-5)
-        cp.Update()
-        g = cp.GetOutput()
-        self.fromPolyData(g,scales)
-        z= self.surfVolume()
-        if (z > 0):
-            self.flipFaces()
-            #print 'flipping volume', z, self.surfVolume()
-            logging.info('flipping volume %.2f %.2f' % (z, self.surfVolume()))
-
-        #print g
-        # npoints = int(g.GetNumberOfPoints())
-        # nfaces = int(g.GetNumberOfPolys())
-        # print 'Dimensions:', npoints, nfaces, g.GetNumberOfCells()
-        # V = np.zeros([npoints, 3])
-        # for kk in range(npoints):
-        #     V[kk, :] = np.array(g.GetPoint(kk))
-        #     #print kk, V[kk]
-        #     #print kk, np.array(g.GetPoint(kk))
-        # F = np.zeros([nfaces, 3])
-        # gf = 0
-        # for kk in range(g.GetNumberOfCells()):
-        #     c = g.GetCell(kk)
-        #     if(c.GetNumberOfPoints() == 3):
-        #         for ll in range(3):
-        #             F[gf,ll] = c.GetPointId(ll)
-        #             #print kk, gf, F[gf]
-        #         gf += 1
-
-        #         #self.vertices = np.multiply(data.shape-V-1, scales)
-        # self.vertices = np.multiply(V, scales)
-        # self.faces = np.int_(F[0:gf, :])
-        # self.computeCentersAreas()
-
+            raise Exception('Cannot run Isosurface without VTK')
+    
     # Ensures that orientation is correct
     def edgeRecover(self):
         v = self.vertices
@@ -948,58 +926,64 @@ class Surface:
 
     # Reads .vtk file
     def readVTK(self, fileName):
-        u = vtkPolyDataReader()
-        u.SetFileName(fileName)
-        u.Update()
-        v = u.GetOutput()
-        #print v
-        npoints = int(v.GetNumberOfPoints())
-        nfaces = int(v.GetNumberOfPolys())
-        V = np.zeros([npoints, 3])
-        for kk in range(npoints):
-            V[kk, :] = np.array(v.GetPoint(kk))
+        if gotVTK:
+            u = vtkPolyDataReader()
+            u.SetFileName(fileName)
+            u.Update()
+            v = u.GetOutput()
+            #print v
+            npoints = int(v.GetNumberOfPoints())
+            nfaces = int(v.GetNumberOfPolys())
+            V = np.zeros([npoints, 3])
+            for kk in range(npoints):
+                V[kk, :] = np.array(v.GetPoint(kk))
 
-        F = np.zeros([nfaces, 3])
-        for kk in range(nfaces):
-            c = v.GetCell(kk)
-            for ll in range(3):
-                F[kk,ll] = c.GetPointId(ll)
-        
-        self.vertices = V
-        self.faces = np.int_(F)
-        xDef1 = self.vertices[self.faces[:, 0], :]
-        xDef2 = self.vertices[self.faces[:, 1], :]
-        xDef3 = self.vertices[self.faces[:, 2], :]
-        self.centers = (xDef1 + xDef2 + xDef3) / 3
-        self.surfel =  np.cross(xDef2-xDef1, xDef3-xDef1)
-
-    # Reads .vtk file
+            F = np.zeros([nfaces, 3])
+            for kk in range(nfaces):
+                c = v.GetCell(kk)
+                for ll in range(3):
+                    F[kk,ll] = c.GetPointId(ll)
+            
+            self.vertices = V
+            self.faces = np.int_(F)
+            xDef1 = self.vertices[self.faces[:, 0], :]
+            xDef2 = self.vertices[self.faces[:, 1], :]
+            xDef3 = self.vertices[self.faces[:, 2], :]
+            self.centers = (xDef1 + xDef2 + xDef3) / 3
+            self.surfel =  np.cross(xDef2-xDef1, xDef3-xDef1)
+        else:
+            raise Exception('Cannot run readVTK without VTK')
+    
+    # Reads .obj file
     def readOBJ(self, fileName):
-        u = vtkOBJReader()
-        u.SetFileName(fileName)
-        u.Update()
-        v = u.GetOutput()
-        #print v
-        npoints = int(v.GetNumberOfPoints())
-        nfaces = int(v.GetNumberOfPolys())
-        V = np.zeros([npoints, 3])
-        for kk in range(npoints):
-            V[kk, :] = np.array(v.GetPoint(kk))
-
-        F = np.zeros([nfaces, 3])
-        for kk in range(nfaces):
-            c = v.GetCell(kk)
-            for ll in range(3):
-                F[kk,ll] = c.GetPointId(ll)
-        
-        self.vertices = V
-        self.faces = np.int_(F)
-        xDef1 = self.vertices[self.faces[:, 0], :]
-        xDef2 = self.vertices[self.faces[:, 1], :]
-        xDef3 = self.vertices[self.faces[:, 2], :]
-        self.centers = (xDef1 + xDef2 + xDef3) / 3
-        self.surfel =  np.cross(xDef2-xDef1, xDef3-xDef1)
-
+        if gotVTK:
+            u = vtkOBJReader()
+            u.SetFileName(fileName)
+            u.Update()
+            v = u.GetOutput()
+            #print v
+            npoints = int(v.GetNumberOfPoints())
+            nfaces = int(v.GetNumberOfPolys())
+            V = np.zeros([npoints, 3])
+            for kk in range(npoints):
+                V[kk, :] = np.array(v.GetPoint(kk))
+    
+            F = np.zeros([nfaces, 3])
+            for kk in range(nfaces):
+                c = v.GetCell(kk)
+                for ll in range(3):
+                    F[kk,ll] = c.GetPointId(ll)
+            
+            self.vertices = V
+            self.faces = np.int_(F)
+            xDef1 = self.vertices[self.faces[:, 0], :]
+            xDef2 = self.vertices[self.faces[:, 1], :]
+            xDef3 = self.vertices[self.faces[:, 2], :]
+            self.centers = (xDef1 + xDef2 + xDef3) / 3
+            self.surfel =  np.cross(xDef2-xDef1, xDef3-xDef1)
+        else:
+            raise Exception('Cannot run readOBJ without VTK')
+    
 # Reads several .byu files
 def readMultipleByu(regexp, Nmax = 0):
     files = glob.glob(regexp)

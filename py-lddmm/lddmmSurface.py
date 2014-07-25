@@ -24,10 +24,14 @@ def main():
     parser.add_argument('--sigmaKernel', metavar='sigmaKernel', type=float, dest='sigmaKernel', default = 6.5, help='kernel width') 
     parser.add_argument('--sigmaDist', metavar='sigmaDist', type=float, dest='sigmaDist', default = 2.5, help='kernel width (error term); (default = 2.5)') 
     parser.add_argument('--sigmaError', metavar='sigmaError', type=float, dest='sigmaError', default = 1.0, help='std error; (default = 1.0)') 
-    parser.add_argument('--typeError', metavar='typeError', type=str, dest='typeError', default = 'measure', help='type error term (default: measure)') 
+    parser.add_argument('--typeError', metavar='typeError', type=str, dest='typeError', default = 'varifold', help='type error term (default: varifold)') 
     parser.add_argument('--dirOut', metavar = 'dirOut', type = str, dest = 'dirOut', default = '', help='Output directory')
     parser.add_argument('--tmpOut', metavar = 'tmpOut', type = str, dest = 'tmpOut', default = '', help='info files directory')
     parser.add_argument('--rigid', action = 'store_true', dest = 'rigid', default = False, help='Perform Rigid Registration First')
+    parser.add_argument('--logFile', metavar = 'logFile', type = str, dest = 'logFile', default = 'info.txt', help='Output log file')
+    parser.add_argument('--stdout', action = 'store_true', dest = 'stdOutput', default = False, help='To also print on standard output')
+    parser.add_argument('--scaleFactor', metavar='scaleFactor', type=float, dest='scaleFactor',
+                        default = 1, help='scale factor for all surfaces') 
     args = parser.parse_args()
 
     if args.dirOut == '':
@@ -39,12 +43,15 @@ def main():
         os.makedirs(args.dirOut)
     if not os.path.exists(args.tmpOut):
         os.makedirs(args.tmpOut)
+    loggingUtils.setup_default_logging(fileName=args.tmpOut+'/'+args.logFile, stdOutput = args.stdOutput)
 
 
     tmpl = surfaces.Surface(filename=args.template)
+    tmpl.vertices *= args.scaleFactor
     K1 = Kernel(name=args.typeKernel, sigma = args.sigmaKernel)
-    sm = SurfaceMatchingParam(timeStep=0.05, KparDiff=K1, sigmaDist=args.sigmaDist, sigmaError=args.sigmaError, errorType=args.typeError)
+    sm = SurfaceMatchingParam(timeStep=0.1, KparDiff=K1, sigmaDist=args.sigmaDist, sigmaError=args.sigmaError, errorType=args.typeError)
     fv = surfaces.Surface(filename=args.target)
+    fv.vertices *= args.scaleFactor
     #print fv.vertices
 
     if args.rigid:

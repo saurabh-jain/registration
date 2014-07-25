@@ -347,9 +347,19 @@ class SurfaceMatching:
             (xt, yt, Jt)  = evol.landmarkDirectEvolutionEuler(self.fv0.vertices, self.at, self.param.KparDiff, affine=A,
                                                               withPointSet = self.fv0Fine.vertices, withJacobian=True)
             fvDef = surfaces.Surface(surf=self.fv0Fine)
+            AV0 = fvDef.computeVertexArea()
             for kk in range(self.Tsize+1):
                 fvDef.updateVertices(np.squeeze(yt[kk, :, :]))
-                fvDef.saveVTK(self.outputDir +'/'+ self.saveFile+str(kk)+'.vtk', scalars = Jt[kk, :], scal_name='Jacobian')
+                AV = fvDef.computeVertexArea()
+                AV = (AV[0]/AV0[0])-1
+                vf = surfaces.vtkFields() ;
+                vf.scalars.append('Jacobian') ;
+                vf.scalars.append(np.exp(Jt[kk, :])-1)
+                vf.scalars.append('Jacobian_T') ;
+                vf.scalars.append(AV[:,0])
+                vf.scalars.append('Jacobian_N') ;
+                vf.scalars.append(np.exp(Jt[kk, :])/(AV[:,0]+1)-1)
+                fvDef.saveVTK2(self.outputDir +'/'+ self.saveFile+str(kk)+'.vtk', vf)
                 #self.fvDef.saveVTK(self.outputDir +'/'+ self.saveFile+str(kk)+'.vtk', scalars = self.idx, scal_name='Labels')
         else:
             (obj1, self.xt) = self.objectiveFunDef(self.at, self.Afft, withTrajectory=True)
