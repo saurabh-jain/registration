@@ -65,6 +65,7 @@ class SurfaceMatching(surfaceMatching.SurfaceMatching):
         self.maxIter_al = maxIter_al
         self.x0 = self.fv0.vertices
         self.npt = self.x0.shape[0]
+        self.coeffAff = 10.
         
         self.cval = np.zeros([self.Tsize+1, self.npt])
         self.cstr = np.zeros([self.Tsize+1, self.npt])
@@ -84,13 +85,13 @@ class SurfaceMatching(surfaceMatching.SurfaceMatching):
         for t in range(self.Tsize):
             a = at[t]
             x = xt[t]
-            if self.affineDim > 0:
-                AB = np.dot(self.affineBasis, Afft[t]) 
-                A = AB[0:dim2].reshape([self.dim, self.dim])
-                b = AB[dim2:dim2+self.dim]
-            else:
-                A = np.zeros([self.dim, self.dim])
-                b = np.zeros(self.dim)
+            # if self.affineDim > 0:
+            #     AB = np.dot(self.affineBasis, Afft[t]) 
+            #     A = AB[0:dim2].reshape([self.dim, self.dim])
+            #     b = AB[dim2:dim2+self.dim]
+            # else:
+            #     A = np.zeros([self.dim, self.dim])
+            #     b = np.zeros(self.dim)
             nu = np.zeros(x.shape)
             fk = self.fv0.faces
             xDef0 = x[fk[:, 0], :]
@@ -106,7 +107,8 @@ class SurfaceMatching(surfaceMatching.SurfaceMatching):
             nu /= np.sqrt((nu**2).sum(axis=1)).reshape([nu.shape[0], 1])
 
 
-            r = self.param.KparDiff.applyK(x, a) + np.dot(x, A.T) + b
+            #r = self.param.KparDiff.applyK(x, a) + np.dot(x, A.T) + b
+            r = self.param.KparDiff.applyK(x, a) 
             self.nu[t,...] = nu
             self.v[t,...] = r
             self.cstr[t,:] = np.maximum(np.squeeze((nu*r).sum(axis=1)), 0)
@@ -125,13 +127,13 @@ class SurfaceMatching(surfaceMatching.SurfaceMatching):
         for t in range(self.Tsize):
             a = at[t]
             x = xt[t]
-            if self.affineDim > 0:
-                AB = np.dot(self.affineBasis, Afft[t]) 
-                A = AB[0:dim2].reshape([self.dim, self.dim])
-                b = AB[dim2:dim2+self.dim]
-            else:
-                A = np.zeros([self.dim, self.dim])
-                b = np.zeros(self.dim)
+            # if self.affineDim > 0:
+            #     AB = np.dot(self.affineBasis, Afft[t]) 
+            #     A = AB[0:dim2].reshape([self.dim, self.dim])
+            #     b = AB[dim2:dim2+self.dim]
+            # else:
+            #     A = np.zeros([self.dim, self.dim])
+            #     b = np.zeros(self.dim)
             fk = self.fv0.faces
             nu = np.zeros(x.shape)
             xDef0 = x[fk[:, 0], :]
@@ -148,17 +150,19 @@ class SurfaceMatching(surfaceMatching.SurfaceMatching):
             nu /= normNu.reshape([nu.shape[0], 1])
             #r2 = self.param.KparDiffOut.applyK(zB, aB)
 
-            dv = self.param.KparDiff.applyK(x, a) + np.dot(x, A.T) + b
+            #dv = self.param.KparDiff.applyK(x, a) + np.dot(x, A.T) + b
+            dv = self.param.KparDiff.applyK(x, a) 
             lmb[t, :] = -np.maximum(np.multiply(nu, dv).sum(axis=1) -self.lmb[t,:]*self.mu, 0)/self.mu
             #lnu = np.multiply(nu, np.mat(lmb[t, npt:npt1]).T)
             lnu = np.multiply(nu, lmb[t, :].reshape([self.npt, 1]))
             #print lnu.shape
             dxcval[t] = self.param.KparDiff.applyDiffKT(x, a[np.newaxis,...], lnu[np.newaxis,...])
             dxcval[t] += self.param.KparDiff.applyDiffKT(x, lnu[np.newaxis,...], a[np.newaxis,...])
-            dxcval[t] += np.dot(lnu, A)
+            #dxcval[t] += np.dot(lnu, A)
             dacval[t] = self.param.KparDiff.applyK(x, lnu)
-            if self.affineDim > 0:
-                dAffcval[t, :] = (np.dot(self.affineBasis.T, np.vstack([np.dot(lnu.T, x).reshape([dim2,1]), lnu.sum(axis=0).reshape([self.dim,1])]))).flatten()
+            dAffcval = []
+            # if self.affineDim > 0:
+            #     dAffcval[t, :] = (np.dot(self.affineBasis.T, np.vstack([np.dot(lnu.T, x).reshape([dim2,1]), lnu.sum(axis=0).reshape([self.dim,1])]))).flatten()
             lv = np.multiply(dv, lmb[t, :].reshape([self.npt,1]))
             lv /= normNu.reshape([nu.shape[0], 1])
             lv -= np.multiply(nu, np.multiply(nu, lv).sum(axis=1).reshape([nu.shape[0], 1]))
@@ -187,8 +191,8 @@ class SurfaceMatching(surfaceMatching.SurfaceMatching):
         eps = 0.00000001
         xtTry = xt + eps*np.random.randn(self.Tsize+1, self.npt, self.dim)
         atTry = at + eps*np.random.randn(self.Tsize, self.npt, self.dim)
-        if self.affineDim > 0:
-            AfftTry = Afft + eps*np.random.randn(self.Tsize, self.affineDim)
+        # if self.affineDim > 0:
+        #     AfftTry = Afft + eps*np.random.randn(self.Tsize, self.affineDim)
             
 
         u0 = self.constraintTerm(xt, at, Afft)
@@ -200,10 +204,10 @@ class SurfaceMatching(surfaceMatching.SurfaceMatching):
         logging.info('Testing constraints:')
         logging.info('var x: %f %f' %( self.Tsize*(ux[0]-u0[0])/(eps), -vx)) 
         logging.info('var a: %f %f' %( self.Tsize*(ua[0]-u0[0])/(eps), -va)) 
-        if self.affineDim > 0:
-            uA = self.constraintTerm(xt, at, AfftTry)
-            vA = np.multiply(dA, AfftTry-Afft).sum()/eps
-            logging.info('var affine: %f %f' %(self.Tsize*(uA[0]-u0[0])/(eps), -vA ))
+        # if self.affineDim > 0:
+        #     uA = self.constraintTerm(xt, at, AfftTry)
+        #     vA = np.multiply(dA, AfftTry-Afft).sum()/eps
+        #     logging.info('var affine: %f %f' %(self.Tsize*(uA[0]-u0[0])/(eps), -vA ))
 
     def  objectiveFunDef(self, at, Afft, withTrajectory = False, withJacobian = False):
         f = super(SurfaceMatching, self).objectiveFunDef(at, Afft, withTrajectory=True, withJacobian=withJacobian)
@@ -312,13 +316,14 @@ class SurfaceMatching(surfaceMatching.SurfaceMatching):
             for t in range(self.Tsize):
                 dat[t] += self.param.KparDiff.applyK(xt[t], 2*self.regweight*at[t] - pxt[t])
         if self.affineDim > 0:
-            dAfft = 2*np.multiply(self.affineWeight, Afft) - dAffcval
+            dAfft = 2*np.multiply(self.affineWeight.reshape([1, self.affineDim]), Afft) 
+            #dAfft = 2*np.multiply(self.affineWeight, Afft) - dAffcval
             for t in range(self.Tsize):
                 dA = np.dot(pxt[t].T, xt[t]).reshape([self.dim**2, 1])
                 db = pxt[t].sum(axis=0).reshape([self.dim,1]) 
                 dAff = np.dot(self.affineBasis.T, np.vstack([dA, db]))
                 dAfft[t] -=  dAff.reshape(dAfft[t].shape)
-            dAfft = np.divide(dAfft, self.affineWeight)
+            dAfft = np.divide(dAfft, self.affineWeight.reshape([1, self.affineDim]))
         else:
             dAfft = None
  
@@ -370,8 +375,8 @@ class SurfaceMatching(surfaceMatching.SurfaceMatching):
             res[ll]=0
             res[ll] += np.multiply(g1.diff, gr.diff).sum()
             if self.affineDim > 0:
-                uu = np.multiply(g1.aff, self.affineWeight)
-                res[ll] += np.multiply(uu, gr.aff).sum()
+                uu = np.multiply(g1.aff, self.affineWeight.reshape([1, self.affineDim]))
+                res[ll] += np.multiply(uu, gr.aff).sum() * self.coeffAff
                 #+np.multiply(g1[1][k][:, dim2:dim2+self.dim], gr[1][k][:, dim2:dim2+self.dim]).sum())
         return res
 
@@ -384,7 +389,7 @@ class SurfaceMatching(surfaceMatching.SurfaceMatching):
         grd = surfaceMatching.Direction()
         grd.diff = foo[0] / (coeff*self.Tsize)
         if self.affineDim > 0:
-            grd.aff = foo[1] / (coeff*self.Tsize)
+            grd.aff = foo[1] / (self.coeffAff*coeff*self.Tsize)
         return grd
 
     def randomDir(self):
