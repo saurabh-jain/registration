@@ -68,7 +68,7 @@ class Direction:
 #        saveFile: generic name for saved surfaces
 #        affine: 'affine', 'similitude', 'euclidean', 'translation' or 'none'
 #        maxIter: max iterations in conjugate gradient
-class SurfaceMatching:
+class SurfaceMatching(object):
 
     def __init__(self, Template=None, Target=None, fileTempl=None, fileTarg=None, param=None, maxIter=1000, regWeight = 1.0, affineWeight = 1.0, verb=True,
                  subsampleTargetSize=-1,
@@ -97,7 +97,7 @@ class SurfaceMatching:
         self.outputDir = outputDir
         if not os.access(outputDir, os.W_OK):
             if os.access(outputDir, os.F_OK):
-                print 'Cannot save in ' + outputDir
+                logging.error('Cannot save in ' + outputDir)
                 return
             else:
                 os.mkdir(outputDir)
@@ -141,6 +141,7 @@ class SurfaceMatching:
         self.Afft = np.zeros([self.Tsize, self.affineDim])
         self.AfftTry = np.zeros([self.Tsize, self.affineDim])
         self.xt = np.tile(self.fv0.vertices, [self.Tsize+1, 1, 1])
+        self.v = np.zeros([self.Tsize+1, self.npt, self.dim])
         self.obj = None
         self.objTry = None
         self.gradCoeff = self.fv0.vertices.shape[0]
@@ -186,6 +187,7 @@ class SurfaceMatching:
             a = np.squeeze(at[t, :, :])
             #rzz = kfun.kernelMatrix(param.KparDiff, z)
             ra = param.KparDiff.applyK(z, a)
+            self.v[t, :] = ra
             obj = obj + self.regweight*timeStep*np.multiply(a, (ra)).sum()
             if self.affineDim > 0:
                 obj +=  timeStep * np.multiply(self.affineWeight.reshape(Afft[t].shape), Afft[t]**2).sum()
@@ -347,9 +349,25 @@ class SurfaceMatching:
             (xt, yt, Jt)  = evol.landmarkDirectEvolutionEuler(self.fv0.vertices, self.at, self.param.KparDiff, affine=A,
                                                               withPointSet = self.fv0Fine.vertices, withJacobian=True)
             fvDef = surfaces.Surface(surf=self.fv0Fine)
+            AV0 = fvDef.computeVertexArea()
             for kk in range(self.Tsize+1):
                 fvDef.updateVertices(np.squeeze(yt[kk, :, :]))
-                fvDef.saveVTK(self.outputDir +'/'+ self.saveFile+str(kk)+'.vtk', scalars = Jt[kk, :], scal_name='Jacobian')
+                AV = fvDef.computeVertexArea()
+                AV = (AV[0]/AV0[0])-1
+                vf = surfaces.vtkFields() ;
+                vf.scalars.append('Jacobian') ;
+                vf.scalars.append(np.exp(Jt[kk, :])-1)
+                vf.scalars.append('Jacobian_T') ;
+                vf.scalars.append(AV[:,0])
+                vf.scalars.append('Jacobian_N') ;
+                vf.scalars.append(np.exp(Jt[kk, :])/(AV[:,0]+1)-1)
+                if kk < self.Tsize:
+                    kkm = kk
+                else:
+                    kkm = kk-1
+                vf.vectors.append('velocity') ;
+                vf.vectors.append(self.v[kkm,:])
+                fvDef.saveVTK2(self.outputDir +'/'+ self.saveFile+str(kk)+'.vtk', vf)
                 #self.fvDef.saveVTK(self.outputDir +'/'+ self.saveFile+str(kk)+'.vtk', scalars = self.idx, scal_name='Labels')
         else:
             (obj1, self.xt) = self.objectiveFunDef(self.at, self.Afft, withTrajectory=True)

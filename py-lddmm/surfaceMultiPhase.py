@@ -20,7 +20,7 @@ from affineBasis import *
 #      errorType: 'measure' or 'current'
 #      typeKernel: 'gauss' or 'laplacian'
 class SurfaceMatchingParam(surfaceMatching.SurfaceMatchingParam):
-    def __init__(self, timeStep = .1, KparDiff = None, KparDist = None, KparDiffOut = None, sigmaKernel = 6.5, sigmaKernelOut=6.5, sigmaDist=2.5, sigmaError=1.0, typeKernel='gauss', errorType='measure'):
+    def __init__(self, timeStep = .1, KparDiff = None, KparDist = None, KparDiffOut = None, sigmaKernel = 6.5, sigmaKernelOut=6.5, sigmaDist=2.5, sigmaError=1.0, typeKernel='gauss', errorType='varifold'):
         surfaceMatching.SurfaceMatchingParam.__init__(self, timeStep = timeStep, KparDiff = KparDiff, KparDist=KparDist, sigmaKernel =  sigmaKernel, sigmaDist = sigmaDist, sigmaError = sigmaError, typeKernel = typeKernel, errorType=errorType)
         self.sigmaKernelOut = sigmaKernelOut
         if KparDiffOut == None:
@@ -41,7 +41,7 @@ class SurfaceMatchingParam(surfaceMatching.SurfaceMatchingParam):
 #        mu: initial value for quadratic penalty normalization
 #        outputDir: where results are saved
 #        saveFile: generic name for saved surfaces
-#        typeConstraint: 'stiched', 'sliding', 'slidingV2'
+#        typeConstraint: 'stitched', 'sliding', 'slidingV2'
 #        affine: 'affine', 'euclidean' or 'none'
 #        maxIter_cg: max iterations in conjugate gradient
 #        maxIter_al: max interation for augmented lagrangian
@@ -212,7 +212,7 @@ class SurfaceMatching(surfaceMatching.SurfaceMatching):
             logging.error('Unrecognized constraint type')
             return
         
-        self.mu = np.sqrt(mu)
+        self.mu = mu
         self.obj = None
         self.objTry = None
         self.saveFile = saveFile
@@ -235,7 +235,7 @@ class SurfaceMatching(surfaceMatching.SurfaceMatching):
                 cval[t,npt:npt1, :] = z - zB[npt:npt1, :]
                 npt = npt1
 
-            obj += timeStep * (- np.multiply(self.lmb[t, :], cval[t,:]).sum() + self.cstrFun(cval[t, :]/self.mu).sum())
+            obj += timeStep * (- np.multiply(self.lmb[t, :], cval[t,:]).sum() + cval[t, :]**2/(2*self.mu)).sum())
         return obj,cval
 
     def constraintTermSliding(self, xt, nut, at, Afft):
@@ -269,7 +269,7 @@ class SurfaceMatching(surfaceMatching.SurfaceMatching):
                 cval[t,npt:npt1] = np.squeeze(np.multiply(nu, r-r2).sum(axis=1))
                 npt = npt1
 
-            obj += timeStep * (- np.multiply(self.lmb[t, :], cval[t,:]).sum() + self.cstrFun(cval[t, :]/self.mu).sum())
+            obj += timeStep * (- np.multiply(self.lmb[t, :], cval[t,:]).sum() + cval[t, :]**2/(2*self.mu)).sum())
         return obj,cval
 
     def cstrFun(self, x):
@@ -302,7 +302,7 @@ class SurfaceMatching(surfaceMatching.SurfaceMatching):
             for k in range(self.nsurf):
                 z = np.squeeze(xt[k][t, :, :]) 
                 npt1 = npt + self.npt[k]
-                lmb[t, npt:npt1] = self.lmb[t, npt:npt1] - self.derCstrFun((z - zB[npt:npt1, :])/self.mu)/self.mu
+                lmb[t, npt:npt1] = self.lmb[t, npt:npt1] - (z - zB[npt:npt1, :])/self.mu
                 dxcval[k][t] = lmb[t, npt:npt1]
                 dxcval[-1][t, npt:npt1] = -lmb[t, npt:npt1]
                 npt = npt1
@@ -350,7 +350,7 @@ class SurfaceMatching(surfaceMatching.SurfaceMatching):
                 cval[t,npt:npt1] = np.squeeze(np.multiply(nu, r - r2[npt:npt1, :]).sum(axis=1))
                 npt = npt1
 
-            obj += timeStep * (- np.multiply(self.lmb[t, :], cval[t,:]).sum() + self.cstrFun(cval[t, :]/self.mu).sum())
+            obj += timeStep * (- np.multiply(self.lmb[t, :], cval[t,:]).sum() + (cval[t, :]**2/(2*self.mu)).sum())
             #print 'slidingV2', obj
         return obj,cval
 
@@ -402,7 +402,7 @@ class SurfaceMatching(surfaceMatching.SurfaceMatching):
                 nu /= normNu.reshape([nu.shape[0], 1])
 
                 dv = self.param.KparDiff.applyK(x, a, firstVar=z) + np.dot(z, A.T) + b - r2[npt:npt1, :]
-                lmb[t, npt:npt1] = self.lmb[t, npt:npt1] - self.derCstrFun(np.multiply(nu, dv).sum(axis=1)/self.mu)/self.mu
+                lmb[t, npt:npt1] = self.lmb[t, npt:npt1] - np.multiply(nu, dv).sum(axis=1)/self.mu
                 #lnu = np.multiply(nu, np.mat(lmb[t, npt:npt1]).T)
                 lnu = np.multiply(nu, lmb[t, npt:npt1].reshape([self.npt[k], 1]))
                 #print lnu.shape
@@ -473,7 +473,7 @@ class SurfaceMatching(surfaceMatching.SurfaceMatching):
                 npt1 = npt + self.npt[k]
                 r = self.param.KparDiff.applyK(x, a)
                 r2 = self.param.KparDiffOut.applyK(zB, aB, firstVar=x)
-                lmb[t, npt:npt1] = self.lmb[t, npt:npt1] - self.derCstrFun(np.squeeze(np.multiply(nu, r-r2).sum(axis=1))/self.mu)/self.mu
+                lmb[t, npt:npt1] = self.lmb[t, npt:npt1] - np.squeeze(np.multiply(nu, r-r2).sum(axis=1))/self.mu
                 lnu = np.multiply(nu, lmb[t, npt:npt1].reshape([self.npt[k], 1]))
                 dxcval[k][t] = (self.param.KparDiff.applyDiffKT(x, [lnu,a], [a,lnu]) -
                                 self.param.KparDiffOut.applyDiffKT(zB, [lnu], [aB], firstVar=x))
@@ -918,7 +918,7 @@ class SurfaceMatching(surfaceMatching.SurfaceMatching):
                 vf.scalars.append('Jacobian_T') ;
                 vf.scalars.append(AV[:,0])
                 vf.scalars.append('Jacobian_N') ;
-                vf.scalars.append(np.exp(Jt[-1][kk, nn:nn+n1])/(AV[:,0]+1))
+                vf.scalars.append(np.exp(Jt[-1][kk, nn:nn+n1])/(AV[:,0]+1)-1)
                 #self.fvDefB[k].saveVTK(self.outputDir +'/'+ self.saveFile+str(k)+'Out'+str(kk)+'.vtk', scalars = AV[:,0], scal_name='Jacobian')
                 self.fvDefB[k].saveVTK2(self.outputDir +'/'+ self.saveFile+str(k)+'Out'+str(kk)+'.vtk', vf)
                 self.fvDef[k].updateVertices(np.squeeze(self.xt[k][kk, :, :]))
@@ -930,7 +930,7 @@ class SurfaceMatching(surfaceMatching.SurfaceMatching):
                 vf.scalars.append('Jacobian_T') ;
                 vf.scalars.append(AV[:,0])
                 vf.scalars.append('Jacobian_N') ;
-                vf.scalars.append(np.exp(Jt[k][kk, :])/(AV[:,0]+1))
+                vf.scalars.append(np.exp(Jt[k][kk, :])/(AV[:,0]+1)-1)
                 #self.fvDef[k].saveVTK(self.outputDir +'/'+self.saveFile+str(k)+'In'+str(kk)+'.vtk', scalars = Jt[k][kk, :], scal_name='Jacobian')
                 #self.fvDef[k].saveVTK(self.outputDir +'/'+self.saveFile+str(k)+'In'+str(kk)+'.vtk', scalars = AV[:,0], scal_name='Jacobian')
                 self.fvDef[k].saveVTK2(self.outputDir +'/'+self.saveFile+str(k)+'In'+str(kk)+'.vtk', vf)
@@ -951,9 +951,9 @@ class SurfaceMatching(surfaceMatching.SurfaceMatching):
             cg.cg(self, verb = self.verb, maxIter = self.maxIter_cg, TestGradient = self.testGradient, epsInit=0.1)
             for t in range(self.Tsize+1):
                 if self.typeConstraint=='stitched':
-                    self.lmb[t, :, :] -= 0.5*self.derCstrFun(self.cval[t, :, :]/self.mu)/self.mu
+                    self.lmb[t, :, :] -= self.cval[t, :, :]/self.mu
                 else:
-                    self.lmb[t, :] -= 0.5*self.derCstrFun(self.cval[t, :]/self.mu)/self.mu
+                    self.lmb[t, :] -= self.cval[t, :]/self.mu
             logging.info('mean lambdas %f' %(np.fabs(self.lmb).sum() / self.lmb.size))
             if self.converged:
                 self.gradEps *= .75
