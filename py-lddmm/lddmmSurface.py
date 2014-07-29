@@ -7,10 +7,8 @@ import pointSets
 import surfaces
 import logging
 import loggingUtils
-import surfaceMatching
 from kernelFunctions import *
 from affineRegistration import *
-from surfaceMatching import *
 
 
 def main():
@@ -32,6 +30,7 @@ def main():
     parser.add_argument('--stdout', action = 'store_true', dest = 'stdOutput', default = False, help='To also print on standard output')
     parser.add_argument('--scaleFactor', metavar='scaleFactor', type=float, dest='scaleFactor',
                         default = 1, help='scale factor for all surfaces') 
+    parser.add_argument('--atrophy', action = 'store_true', dest = 'atrophy', default = False, help='force atrophy')
     args = parser.parse_args()
 
     if args.dirOut == '':
@@ -45,11 +44,15 @@ def main():
         os.makedirs(args.tmpOut)
     loggingUtils.setup_default_logging(fileName=args.tmpOut+'/'+args.logFile, stdOutput = args.stdOutput)
 
+    if args.atrophy:
+        import surfaceMatchingAtrophy as smt
+    else:
+        import surfaceMatching as smt
 
     tmpl = surfaces.Surface(filename=args.template)
     tmpl.vertices *= args.scaleFactor
     K1 = Kernel(name=args.typeKernel, sigma = args.sigmaKernel)
-    sm = SurfaceMatchingParam(timeStep=0.1, KparDiff=K1, sigmaDist=args.sigmaDist, sigmaError=args.sigmaError, errorType=args.typeError)
+    sm = smt.SurfaceMatchingParam(timeStep=0.1, KparDiff=K1, sigmaDist=args.sigmaDist, sigmaError=args.sigmaError, errorType=args.typeError)
     fv = surfaces.Surface(filename=args.target)
     fv.vertices *= args.scaleFactor
     #print fv.vertices
@@ -60,8 +63,12 @@ def main():
 
         #print fv.vertices
 
-    f = SurfaceMatching(Template=tmpl, Target=fv, outputDir=args.tmpOut,param=sm, testGradient=False,
-                        maxIter=1000, affine= 'none', rotWeight=1., transWeight = 1., scaleWeight=10., affineWeight=100.)
+    if args.atrophy:
+        f = smt.SurfaceMatching(Template=tmpl, Target=fv, outputDir=args.tmpOut,param=sm, testGradient=False, mu = 0.001,
+                            maxIter_cg=1000, affine= 'none', rotWeight=1., transWeight = 1., scaleWeight=10., affineWeight=100.)
+    else:
+        f = smt.SurfaceMatching(Template=tmpl, Target=fv, outputDir=args.tmpOut,param=sm, testGradient=False,
+                            maxIter=1000, affine= 'none', rotWeight=1., transWeight = 1., scaleWeight=10., affineWeight=100.)
 
     f.optimizeMatching()
     u = path.split(args.target)
