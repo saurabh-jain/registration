@@ -937,12 +937,13 @@ class SurfaceMatching(surfaceMatching.SurfaceMatching):
             nn += n1
 
     def optimizeMatching(self):
-	self.coeffZ = 10.
+	self.coeffZ = 1.
 	grd = self.getGradient(self.gradCoeff)
 	[grd2] = self.dotProduct(grd, [grd])
 
         self.gradEps = np.sqrt(grd2) / 100
         self.muEps = 1.0
+        self.restartRate = 100 ;
         it = 0
         while (self.muEps > 0.05) & (it<self.maxIter_al)  :
             logging.info('Starting Minimization: gradEps = %f muEps = %f mu = %f' %(self.gradEps, self.muEps,self.mu))

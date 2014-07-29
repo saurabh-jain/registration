@@ -63,6 +63,7 @@ def compute(args=None, noArgs=True):
         typeConstraint = 'stitched'
         sm = SurfaceMatchingParam(timeStep=0.1, KparDiff=K1, KparDiffOut=K2,
                                   sigmaDist=50., sigmaError=10., errorType='varifold')
+        mu = 0.1 ;
     else:
         fTmpl = []
         for name in args.template:
@@ -81,13 +82,14 @@ def compute(args=None, noArgs=True):
         sm = SurfaceMatchingParam(timeStep=0.1, KparDiff=K1, KparDiffOut=K2,
                                   sigmaDist=args.sigmaDist, sigmaError=args.sigmaError, errorType=args.typeError)
         outputDir = args.dirOut
-        loggingUtils.setup_default_logging(fileName=outputDir+'/'+args.logFile, stdOutput = args.stdOutput)
+        loggingUtils.setup_default_logging(fileName=outputDir+args.logFile, stdOutput = args.stdOutput)
         if args.sliding:
             typeConstraint = 'slidingV2'
         else:
             typeConstraint = 'stitched'
+        mu = args.mu
         
-    f = (SurfaceMatching(Template=fTmpl, Target=fTarg, outputDir=outputDir, param=sm, mu=.1,regWeightOut=1.,
+    f = (SurfaceMatching(Template=fTmpl, Target=fTarg, outputDir=outputDir, param=sm, mu=mu,regWeightOut=1.,
                           testGradient=False, typeConstraint=typeConstraint, maxIter_cg=1000, maxIter_al=100, affine='none', rotWeight=0.1))
     f.optimizeMatching()
 
@@ -119,6 +121,9 @@ if __name__=="__main__":
     parser.add_argument('--typeError', metavar='typeError', type=str,
                         dest='typeError', default = 'varifold', help='error term: measure, current or varifold') 
     parser.add_argument('--sliding', action = 'store_true', dest = 'sliding', default = False, help='To use sliding constraint')
+    parser.add_argument('--mu', metavar='mu', type=float, dest='mu',
+                        default = 0.1, help='augmented lagrangian initial weight; (default = 0.1)') 
+
     args = parser.parse_args()
     if args.target == None or args.template == None:
         print 'Error: At least one template and one target are required'
