@@ -1,5 +1,6 @@
 import os
 import numpy as np
+import numpy.linalg as la
 import scipy as sp
 import surfaces
 import kernelFunctions as kfun
@@ -92,7 +93,7 @@ class SurfaceMatching(object):
 
             #print np.fabs(self.fv1.surfel-self.fv0.surfel).max()
 
-        self.saveRate = 10
+        self.saveRate = 1
         self.iter = 0
         self.outputDir = outputDir
         if not os.access(outputDir, os.W_OK):
@@ -107,16 +108,16 @@ class SurfaceMatching(object):
         self.testGradient = testGradient
         self.regweight = regWeight
         self.affine = affine
-        affB = AffineBasis(self.dim, affine)
-        self.affineDim = affB.affineDim
-        self.affineBasis = affB.basis
+        self.affB = AffineBasis(self.dim, affine)
+        self.affineDim = self.affB.affineDim
+        self.affineBasis = self.affB.basis
         self.affineWeight = affineWeight * np.ones([self.affineDim, 1])
-        if (len(affB.rotComp) > 0) & (rotWeight != None):
-            self.affineWeight[affB.rotComp] = rotWeight
-        if (len(affB.simComp) > 0) & (scaleWeight != None):
-            self.affineWeight[affB.simComp] = scaleWeight
-        if (len(affB.transComp) > 0) & (transWeight != None):
-            self.affineWeight[affB.transComp] = transWeight
+        if (len(self.affB.rotComp) > 0) & (rotWeight != None):
+            self.affineWeight[self.affB.rotComp] = rotWeight
+        if (len(self.affB.simComp) > 0) & (scaleWeight != None):
+            self.affineWeight[self.affB.simComp] = scaleWeight
+        if (len(self.affB.transComp) > 0) & (transWeight != None):
+            self.affineWeight[self.affB.transComp] = transWeight
 
         if param==None:
             self.param = SurfaceMatchingParam()
@@ -135,6 +136,18 @@ class SurfaceMatching(object):
         self.fvDef = surfaces.Surface(surf=self.fv0)
         self.npt = self.fv0.vertices.shape[0]
 
+        z= self.fv0.surfVolume()
+        if (z < 0):
+            self.fv0ori = -1
+        else:
+            self.fv0ori = 1
+
+        z= self.fv1.surfVolume()
+        if (z < 0):
+            self.fv1ori = -1
+        else:
+            self.fv1ori = 1
+
         self.Tsize = int(round(1.0/self.param.timeStep))
         self.at = np.zeros([self.Tsize, x0.shape[0], x0.shape[1]])
         self.atTry = np.zeros([self.Tsize, x0.shape[0], x0.shape[1]])
@@ -148,6 +161,10 @@ class SurfaceMatching(object):
         self.saveFile = saveFile
         self.fv0.saveVTK(self.outputDir+'/Template.vtk')
         self.fv1.saveVTK(self.outputDir+'/Target.vtk')
+        self.coeffAff1 = 1.
+        self.coeffAff2 = 100.
+        self.coeffAff = self.coeffAff1
+        self.affBurnIn = 20
 
     def setOutputDir(self, outputDir):
         self.outputDir = outputDir
@@ -273,12 +290,13 @@ class SurfaceMatching(object):
         if self.affineDim > 0:
             dA = foo[1]
             db = foo[2]
-            #dAfft = 2*np.multiply(self.affineWeight.reshape([1, self.affineDim]), self.Afft)
-            grd.aff = 2 * self.Afft
+            grd.Aff = 2*np.multiply(self.affineWeight.reshape([1, self.affineDim]), self.Afft)
+            #grd.aff = 2 * self.Afft
             for t in range(self.Tsize):
                dAff = np.dot(self.affineBasis.T, np.vstack([dA[t].reshape([dim2,1]), db[t].reshape([self.dim, 1])]))
-               grd.aff[t] -=  np.divide(dAff.reshape(grd.aff[t].shape), self.affineWeight.reshape(grd.aff[t].shape))
-            grd.aff /= (coeff*self.Tsize)
+               #grd.aff[t] -=  np.divide(dAff.reshape(grd.aff[t].shape), self.affineWeight.reshape(grd.aff[t].shape))
+               grd.aff[t] -=  dAff.reshape(grd.aff[t].shape)
+            grd.aff /= (self.coeffAff*coeff*self.Tsize)
             #            dAfft[:,0:self.dim**2]/=100
         return grd
 
@@ -311,14 +329,16 @@ class SurfaceMatching(object):
             z = np.squeeze(self.xt[t, :, :])
             gg = np.squeeze(g1.diff[t, :, :])
             u = self.param.KparDiff.applyK(z, gg)
-            uu = np.multiply(g1.aff[t], self.affineWeight.reshape(g1.aff[t].shape))
+            #uu = np.multiply(g1.aff[t], self.affineWeight.reshape(g1.aff[t].shape))
+            uu = g1.aff[t]
             ll = 0
             for gr in g2:
                 ggOld = np.squeeze(gr.diff[t, :, :])
                 res[ll]  = res[ll] + np.multiply(ggOld,u).sum()
                 if self.affineDim > 0:
                     #print np.multiply(np.multiply(g1[1][t], gr[1][t]), self.affineWeight).shape
-                    res[ll] += np.multiply(uu, gr.aff[t]).sum()
+                    #res[ll] += np.multiply(uu, gr.aff[t]).sum() * self.coeffAff
+                    res[ll] += np.multiply(uu, gr.aff[t]).sum() * self.coeffAff
                     #                    +np.multiply(g1[1][t, dim2:dim2+self.dim], gr[1][t, dim2:dim2+self.dim]).sum())
                 ll = ll + 1
 
@@ -332,24 +352,60 @@ class SurfaceMatching(object):
 
     def endOfIteration(self):
         self.iter += 1
+        if self.iter >= self.affBurnIn:
+            self.coeffAff = self.coeffAff2
         if (self.iter % self.saveRate == 0) :
             (obj1, self.xt) = self.objectiveFunDef(self.at, self.Afft, withTrajectory=True)
-            xtEPDiff, atEPdiff = evol.landmarkEPDiff(self.at.shape[0], self.fv0.vertices, np.squeeze(self.at[0, :, :]), self.param.KparDiff)
-            self.fvDef.updateVertices(np.squeeze(xtEPDiff[-1, :, :]))
-            self.fvDef.saveVTK(self.outputDir +'/'+ self.saveFile+'EPDiff.vtk')
-            print 'EPDiff difference', np.fabs(self.xt[-1,:,:] - xtEPDiff[-1,:,:]).sum() 
+            if self.affineDim <=0:
+                xtEPDiff, atEPdiff = evol.landmarkEPDiff(self.at.shape[0], self.fv0.vertices,
+                                                         np.squeeze(self.at[0, :, :]), self.param.KparDiff)
+                self.fvDef.updateVertices(np.squeeze(xtEPDiff[-1, :, :]))
+                self.fvDef.saveVTK(self.outputDir +'/'+ self.saveFile+'EPDiff.vtk')
+                print 'EPDiff difference', np.fabs(self.xt[-1,:,:] - xtEPDiff[-1,:,:]).sum() 
+
             self.fvDef.updateVertices(np.squeeze(self.xt[-1, :, :]))
             dim2 = self.dim**2
             A = [np.zeros([self.Tsize, self.dim, self.dim]), np.zeros([self.Tsize, self.dim])]
             if self.affineDim > 0:
                 for t in range(self.Tsize):
-                    AB = np.dot(self.affineBasis, Afft[t])
+                    AB = np.dot(self.affineBasis, self.Afft[t])
                     A[0][t] = AB[0:dim2].reshape([self.dim, self.dim])
                     A[1][t] = AB[dim2:dim2+self.dim]
             (xt, yt, Jt)  = evol.landmarkDirectEvolutionEuler(self.fv0.vertices, self.at, self.param.KparDiff, affine=A,
                                                               withPointSet = self.fv0Fine.vertices, withJacobian=True)
+            if self.affine=='euclidean' or self.affine=='translation':
+                f = surfaces.Surface(surf=self.fv0Fine)
+                X = self.affB.integrateFlow(self.Afft)
+                displ = np.zeros(self.fv0Fine.vertices.shape[0])
+                dt = 1.0 /self.Tsize ;
+                for t in range(self.Tsize+1):
+                    U = la.inv(X[0][t])
+                    yyt = np.dot(self.xt[t,...] - X[1][t, ...], U.T)
+                    zt = np.dot(xt[t,...] - X[1][t, ...], U.T)
+                    if t < self.Tsize:
+                        at = np.dot(self.at[t,...], U.T)
+                        vt = self.param.KparDiff.applyK(yyt, at, firstVar=zt)
+                    f.updateVertices(yyt)
+                    vf = surfaces.vtkFields() ;
+                    vf.scalars.append('Jacobian') ;
+                    vf.scalars.append(np.exp(Jt[t, :])-1)
+                    vf.scalars.append('displacement')
+                    vf.scalars.append(displ)
+                    vf.vectors.append('velocity') ;
+                    vf.vectors.append(vt)
+                    nu = self.fv0ori*f.computeVertexNormals()
+                    displ += dt * (vt*nu).sum(axis=1)
+                    f.saveVTK2(self.outputDir +'/'+self.saveFile+'Corrected'+str(t)+'.vtk', vf)
+                f = surfaces.Surface(surf=self.fv1)
+                yyt = np.dot(f.vertices - X[1][-1, ...], U.T)
+                f.updateVertices(yyt)
+                f.saveVTK(self.outputDir +'/TargetCorrected.vtk')
             fvDef = surfaces.Surface(surf=self.fv0Fine)
             AV0 = fvDef.computeVertexArea()
+            nu = self.fv0ori*self.fv0.computeVertexNormals()
+            v = self.v[0,...]
+            displ = np.zeros(self.npt)
+            dt = 1.0 /self.Tsize ;
             for kk in range(self.Tsize+1):
                 fvDef.updateVertices(np.squeeze(yt[kk, :, :]))
                 AV = fvDef.computeVertexArea()
@@ -361,7 +417,12 @@ class SurfaceMatching(object):
                 vf.scalars.append(AV[:,0])
                 vf.scalars.append('Jacobian_N') ;
                 vf.scalars.append(np.exp(Jt[kk, :])/(AV[:,0]+1)-1)
+                vf.scalars.append('displacement')
+                vf.scalars.append(displ)
+                displ += dt * (v*nu).sum(axis=1)
                 if kk < self.Tsize:
+                    nu = self.fv0ori*self.fvDef.computeVertexNormals()
+                    v = self.v[kk,...]
                     kkm = kk
                 else:
                     kkm = kk-1
@@ -377,11 +438,13 @@ class SurfaceMatching(object):
     def optimizeMatching(self):
         #print 'dataterm', self.dataTerm(self.fvDef)
         #print 'obj fun', self.objectiveFun(), self.obj0
+        self.coeffAff = self.coeffAff2
         grd = self.getGradient(self.gradCoeff)
         [grd2] = self.dotProduct(grd, [grd])
 
         self.gradEps = max(0.001, np.sqrt(grd2) / 10000)
         print 'Gradient lower bound:', self.gradEps
+        self.coeffAff = self.coeffAff1
         cg.cg(self, verb = self.verb, maxIter = self.maxIter,TestGradient=self.testGradient, epsInit=0.1)
         #return self.at, self.xt
 

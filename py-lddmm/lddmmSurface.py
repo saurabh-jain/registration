@@ -64,11 +64,11 @@ def main():
         #print fv.vertices
 
     if args.atrophy:
-        f = smt.SurfaceMatching(Template=tmpl, Target=fv, outputDir=args.tmpOut,param=sm, testGradient=True, mu = 0.001,
-                            maxIter_cg=1000, affine= 'euclidean', rotWeight=1, transWeight = 1, scaleWeight=10., affineWeight=100.)
+        f = smt.SurfaceMatching(Template=tmpl, Target=fv, outputDir=args.tmpOut,param=sm, testGradient=False, mu = 0.001,
+                            maxIter_cg=1000, affine= 'euclidean', rotWeight=.01, transWeight = .01, scaleWeight=10., affineWeight=100.)
     else:
-        f = smt.SurfaceMatching(Template=tmpl, Target=fv, outputDir=args.tmpOut,param=sm, testGradient=True,
-                            maxIter=1000, affine= 'euclidean', rotWeight=1., transWeight = 1., scaleWeight=10., affineWeight=100.)
+        f = smt.SurfaceMatching(Template=tmpl, Target=fv, outputDir=args.tmpOut,param=sm, testGradient=False,
+                            maxIter=1000, affine= 'euclidean', rotWeight=.01, transWeight = .01, scaleWeight=10., affineWeight=100.)
 
     f.optimizeMatching()
     u = path.split(args.target)
