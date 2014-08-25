@@ -737,13 +737,13 @@ def landmarkHamiltonianCovector(x0, at, px1, KparDiff, regweight, affine = None)
     M = at.shape[0]
     timeStep = 1.0/M
     xt = landmarkDirectEvolutionEuler(x0, at, KparDiff, affine=affine)
-    pxt = np.zeros([M, N, dim])
-    pxt[M-1, :, :] = px1
+    pxt = np.zeros([M+1, N, dim])
+    pxt[M, :, :] = px1
     if not(affine == None):
         A = affine[0]
 
-    for t in range(M-1):
-        px = np.squeeze(pxt[M-t-1, :, :])
+    for t in range(M):
+        px = np.squeeze(pxt[M-t, :, :])
         z = np.squeeze(xt[M-t-1, :, :])
         a = np.squeeze(at[M-t-1, :, :])
         # dgzz = kfun.kernelMatrix(KparDiff, z, diff=True)
@@ -756,11 +756,11 @@ def landmarkHamiltonianCovector(x0, at, px1, KparDiff, regweight, affine = None)
         #a2 = [a, px, a]
         #print 'test', px.sum()
         zpx = KparDiff.applyDiffKT(z, a1, a2)
-        pxt[M-t-2, :, :] = np.squeeze(pxt[M-t-1, :, :]) + timeStep * zpx
+        pxt[M-t-1, :, :] = px + timeStep * zpx
         #print 'zpx', np.fabs(zpx).sum(), np.fabs(px).sum(), z.sum()
         #print 'pxt', np.fabs((pxt)[M-t-2]).sum()
         if not (affine == None):
-            pxt[M-t-2, :, :] += timeStep * np.dot(np.squeeze(pxt[M-t-1, :, :]), A[M-t-1])
+            pxt[M-t-1, :, :] += timeStep * np.dot(px, A[M-t-1])
     return pxt, xt
 
 # Same, adding adjoint evolution for normals
@@ -797,12 +797,12 @@ def landmarkHamiltonianGradient(x0, at, px1, KparDiff, regweight, getCovector = 
         db = np.zeros(affine[1].shape)
     for k in range(at.shape[0]):
         a = np.squeeze(at[k, :, :])
-        px = np.squeeze(pxt[k, :, :])
+        px = np.squeeze(pxt[k+1, :, :])
         #print 'testgr', (2*a-px).sum()
         dat[k, :, :] = (2*regweight*a-px)
         if not (affine == None):
-            dA[k] = np.dot(pxt[k].T, xt[k])
-            db[k] = pxt[k].sum(axis=0)
+            dA[k] = np.dot(pxt[k+1].T, xt[k])
+            db[k] = pxt[k+1].sum(axis=0)
 
     if affine == None:
         if getCovector == False:

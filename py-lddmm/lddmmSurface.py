@@ -31,6 +31,7 @@ def main():
     parser.add_argument('--scaleFactor', metavar='scaleFactor', type=float, dest='scaleFactor',
                         default = 1, help='scale factor for all surfaces') 
     parser.add_argument('--atrophy', action = 'store_true', dest = 'atrophy', default = False, help='force atrophy')
+    parser.add_argument('--symmetric', action = 'store_true', dest = 'symmetric', default = False, help='Use error term on both template and target')
     args = parser.parse_args()
 
     if args.dirOut == '':
@@ -64,10 +65,10 @@ def main():
         #print fv.vertices
 
     if args.atrophy:
-        f = smt.SurfaceMatching(Template=tmpl, Target=fv, outputDir=args.tmpOut,param=sm, testGradient=False, mu = 0.001,
+        f = smt.SurfaceMatching(Template=tmpl, Target=fv, outputDir=args.tmpOut,param=sm, testGradient=False, mu = 0.001, symmetric=args.symmetric,
                             maxIter_cg=1000, affine= 'euclidean', rotWeight=.01, transWeight = .01, scaleWeight=10., affineWeight=100.)
     else:
-        f = smt.SurfaceMatching(Template=tmpl, Target=fv, outputDir=args.tmpOut,param=sm, testGradient=False,
+        f = smt.SurfaceMatching(Template=tmpl, Target=fv, outputDir=args.tmpOut,param=sm, testGradient=False, symmetric=args.symmetric,
                             maxIter=1000, affine= 'euclidean', rotWeight=.01, transWeight = .01, scaleWeight=10., affineWeight=100.)
 
     f.optimizeMatching()
