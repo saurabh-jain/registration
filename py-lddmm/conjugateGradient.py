@@ -49,6 +49,11 @@ def cg(opt, verb = True, maxIter=1000, TestGradient = False, epsInit=10.):
     else:
         gradCoeff = 1.0
 
+    if hasattr(opt, 'restartRate'):
+        restartRate = opt.restartRate
+    else:
+        restartRate = 100
+
     eps = epsInit
     epsMin = 1e-10
     opt.converged = False
@@ -61,7 +66,7 @@ def cg(opt, verb = True, maxIter=1000, TestGradient = False, epsInit=10.):
 
     skipCG = 0
     for it  in range(maxIter):
-        if it % 100 == 0:
+        if it % restartRate == 0:
             skipCG = 1 ;
 
         if hasattr(opt, 'startOfIteration'):
@@ -196,7 +201,7 @@ def cg(opt, verb = True, maxIter=1000, TestGradient = False, epsInit=10.):
                 logging.info('Stopping Gradient Descent: small gradient')
                 opt.converged = True 
                 break
-            eps = 2*eps
+            eps = 100*eps
 
             if hasattr(opt, 'endOfIteration'):
                 opt.endOfIteration()

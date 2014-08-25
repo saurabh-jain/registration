@@ -257,7 +257,7 @@ class KernelSpec:
             self.kernelMatrix = kernelMatrixLaplacian
             if self.order > 4:
                 self.order = 3
-            self.par = [sigma, order]
+            self.par = [sigma, self.order]
         elif name == 'gauss':
             self.kernelMatrix = kernelMatrixGauss
             self.order = 10 
