@@ -26,7 +26,7 @@ from affineBasis import *
 #        saveFile: generic name for saved surfaces
 #        affine: 'affine', 'similitude', 'euclidean', 'translation' or 'none'
 #        maxIter: max iterations in conjugate gradient
-class SurfaceTimeSeries(smatch.SurfaceMatching):
+class SurfaceMatching(smatch.SurfaceMatching):
     def __init__(self, Template=None, Targets=None, fileTemplate=None, fileTarg=None, param=None, maxIter=1000, verb=True,
                  regWeight = 1.0, affineWeight = 1.0, rotWeight = None, scaleWeight = None, transWeight = None,
                  testGradient=False, saveFile = 'evolution', affine = 'none', outputDir = '.'):
@@ -56,13 +56,7 @@ class SurfaceTimeSeries(smatch.SurfaceMatching):
         self.npt = self.fv0.vertices.shape[0]
         self.dim = self.fv0.vertices.shape[1]
         self.saveFile = saveFile
-        self.outputDir = outputDir
-        if not os.access(outputDir, os.W_OK):
-            if os.access(outputDir, os.F_OK):
-                print 'Cannot save in ' + outputDir
-                return
-            else:
-                os.mkdir(outputDir)
+        self.setOutputDir(outputDir)
 
         self.maxIter = maxIter
         self.verb = verb
@@ -110,6 +104,7 @@ class SurfaceTimeSeries(smatch.SurfaceMatching):
             self.xt.append(np.tile(self.fv0.vertices, [self.Tsize+1, 1, 1]))
             self.fvDef.append(surfaces.Surface(surf=self.fv0))
 
+        self.v = np.zeros([self.Tsize+1, self.npt, self.dim])
         self.Ntarg = len(self.fv1)
         self.obj = None
         self.objTry = None
@@ -266,12 +261,12 @@ class SurfaceTimeSeries(smatch.SurfaceMatching):
         self.fvDef[-1].saveVTK(self.outputDir +'/'+ self.saveFile+str(t0)+'.vtk', scalars = Jt[-1, :], scal_name='Jacobian')
 
 
-    def computeMatching(self):
+    def optimizeMatching(self):
         grd = self.getGradient(self.gradCoeff)
         [grd2] = self.dotProduct(grd, [grd])
 
-        self.gradEps = max(0.1, np.sqrt(grd2) / 10000)
+        self.gradEps = max(0.001, np.sqrt(grd2) / 10000)
 
-        cg.cg(self, verb = self.verb, maxIter = self.maxIter, TestGradient=True)
+        cg.cg(self, verb = self.verb, maxIter = self.maxIter, TestGradient=self.testGradient)
         return self
 

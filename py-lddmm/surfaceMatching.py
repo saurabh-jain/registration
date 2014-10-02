@@ -99,13 +99,7 @@ class SurfaceMatching(object):
 
         self.saveRate = 10
         self.iter = 0
-        self.outputDir = outputDir
-        if not os.access(outputDir, os.W_OK):
-            if os.access(outputDir, os.F_OK):
-                logging.error('Cannot save in ' + outputDir)
-                return
-            else:
-                os.mkdir(outputDir)
+        self.setOutputDir(outputDir)
         self.dim = self.fv0.vertices.shape[1]
         self.maxIter = maxIter
         self.verb = verb
