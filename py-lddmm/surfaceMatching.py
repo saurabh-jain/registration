@@ -314,7 +314,7 @@ class SurfaceMatching(object):
         if self.affineDim > 0:
             dA = foo[1]
             db = foo[2]
-            grd.Aff = 2*np.multiply(self.affineWeight.reshape([1, self.affineDim]), self.Afft)
+            grd.aff = 2*np.multiply(self.affineWeight.reshape([1, self.affineDim]), self.Afft)
             #grd.aff = 2 * self.Afft
             for t in range(self.Tsize):
                dAff = np.dot(self.affineBasis.T, np.vstack([dA[t].reshape([dim2,1]), db[t].reshape([self.dim, 1])]))

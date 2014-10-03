@@ -34,7 +34,7 @@ def compute():
     K2 = Kernel(name='laplacian', sigma = 1.0, order=3)
 
     sm = SurfaceMatchingParam(timeStep=0.1, KparDiff=K1, KparDiffOut=K2, sigmaDist=1., sigmaError=1., errorType='varifold')
-    f = (SurfaceMatching(Template=(fv01,fv02,fv03), Target=(fv1,fv2,fv3), outputDir='/Users/younes/Development/Results/biocard_omp_stitched'+name,param=sm, mu=.01,regWeightOut=1, testGradient=False,
+    f = (SurfaceMatching(Template=(fv01,fv02,fv03), Target=(fv1,fv2,fv3), outputDir='/Users/younes/Development/Results/biocard_varifold_stitched'+name,param=sm, mu=.01,regWeightOut=1, testGradient=True,
                          typeConstraint='stitched', maxIter_cg=1000, maxIter_al=100, affine='none', rotWeight=0.1))
     f.optimizeMatching()
 
