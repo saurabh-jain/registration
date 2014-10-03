@@ -10,7 +10,7 @@ import secondOrderMatching as match
 
 def compute():
 
-    outputDir = '/Users/younes/Development/Results/threeBallsGeodesic'
+    outputDir = '/Users/younes/Development/Results/threeBallsSplineAndMomentum'
     #outputDir = '/cis/home/younes/MorphingData/twoBallsStitched'
     #outputDir = '/Users/younes/Development/Results/tight_stitched_rigid2_10'
     if __name__ == "__main__":
@@ -45,7 +45,7 @@ def compute():
 
 
     sm = surfaceMatching.SurfaceMatchingParam(timeStep=0.1, KparDiff=K1, sigmaDist=50., sigmaError=10., errorType='measure')
-    f = (match.SurfaceMatching(Template=fv1, Targets=(fv2,fv3), outputDir=outputDir, param=sm, typeRegression='geodesic',
+    f = (match.SurfaceMatching(Template=fv1, Targets=(fv2,fv3), outputDir=outputDir, param=sm, typeRegression='both',
                           testGradient=False, maxIter=1000))
     #, affine='none', rotWeight=0.1))
     f.optimizeMatching()
