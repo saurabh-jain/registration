@@ -1037,6 +1037,7 @@ def secondOrderGradient(x0, a0, rhot, px1, pa1, KparDiff, times = None, getCovec
 
     drhot = rhot - pat[1:pat.shape[0],...]
     da0 = KparDiff.applyK(x0, a0) - pat[0,...]
+
     if affine == None:
         if getCovector == False:
             return da0, drhot, xt, at
