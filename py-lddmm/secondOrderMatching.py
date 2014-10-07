@@ -42,7 +42,7 @@ class Direction:
 #        maxIter: max iterations in conjugate gradient
 class SurfaceMatching:
     def __init__(self, Template=None, Targets=None, fileTempl=None, fileTarg=None, param=None, initialMomentum=None,
-                 maxIter=1000, regWeight = 1.0, verb=True, typeRegression='spline2', affine = 'none',
+                 maxIter=1000, regWeight = 1.0, verb=True, typeRegression='spline2', affine = 'none', controlWeight = 1.0,
                  affineWeight = 1.0, rotWeight = None, scaleWeight = None, transWeight = None,
                  subsampleTargetSize=-1, testGradient=True, saveFile = 'evolution', outputDir = '.'):
         if Template==None:
@@ -86,6 +86,7 @@ class SurfaceMatching:
         self.affB = AffineBasis(self.dim, affine)
         self.affineDim = self.affB.affineDim
         self.affineBasis = self.affB.basis
+        self.affw = affineWeight
         self.affineWeight = affineWeight * np.ones(self.affineDim)
         if (len(self.affB.rotComp) > 0) & (rotWeight != None):
             self.affineWeight[self.affB.rotComp] = rotWeight
@@ -93,6 +94,8 @@ class SurfaceMatching:
             self.affineWeight[self.affB.simComp] = scaleWeight
         if (len(self.affB.transComp) > 0) & (transWeight != None):
             self.affineWeight[self.affB.transComp] = transWeight
+
+        self.controlWeight = controlWeight
         self.typeRegression = typeRegression 
 
         if param==None:
@@ -139,8 +142,8 @@ class SurfaceMatching:
         for k,s in enumerate(self.fv1):
             s.saveVTK(self.outputDir+'/Target'+str(k)+'.vtk')
         self.affBurnIn = 20
-        self.coeffAff1 = 1.
-        self.coeffAff2 = 100.
+        self.coeffAff1 = .1
+        self.coeffAff2 = 10.
         self.coeffAff = self.coeffAff1
         z= self.fv0.surfVolume()
         if (z < 0):
@@ -171,7 +174,7 @@ class SurfaceMatching:
             obj += self.param.fun_obj(s, self.fv1[k], self.param.KparDist) / (self.param.sigmaError**2)
         return obj
 
-    def  objectiveFunDef(self, a0, rhot, Afft, withTrajectory = False, withJacobian=False, Init = None):
+    def  objectiveFunDef(self, a0, rhot, Afft, withTrajectory = False, withJacobian=False, Init = None, display=False):
         if Init == None:
             x0 = self.x0
         else:
@@ -193,13 +196,18 @@ class SurfaceMatching:
             (xt, at)  = evol.secondOrderEvolution(x0, a0, rhot, param.KparDiff, affine=A)
         #print xt[-1, :, :]
         #print obj
-        obj = 0.5 * (a0 * param.KparDiff.applyK(x0,a0)).sum()
+        obj0 = 0.5 * (a0 * param.KparDiff.applyK(x0,a0)).sum()
+        obj1 = 0
+        obj2 =0
         for t in range(self.Tsize):
             rho = np.squeeze(rhot[t, :, :])            
-            obj = obj + timeStep* (rho**2).sum()/2
+            obj1 += timeStep* self.controlWeight * (rho**2).sum()/2
             if self.affineDim > 0:
-                obj +=  timeStep * np.multiply(self.affineWeight.reshape(Afft[t].shape), Afft[t]**2).sum()
+                obj2 +=  timeStep * (self.affineWeight.reshape(Afft[t].shape) * Afft[t]**2).sum()
             #print xt.sum(), at.sum(), obj
+        obj = obj1+obj2+obj0
+        if display:
+            logging.info('deformation terms: init %f, rho %f, aff %f'%(obj0,obj1/self.controlWeight,obj2/self.affw))
         if withJacobian:
             return obj, xt, at, Jt
         elif withTrajectory:
@@ -287,7 +295,7 @@ class SurfaceMatching:
                 A[1][t] = AB[dim2:dim2+self.dim]
 
         foo = evol.secondOrderGradient(self.x0, self.a0, self.rhot, px1, pa1,
-                                        self.param.KparDiff, affine=A, times = (1+np.array(range(self.nTarg)))*self.Tsize1)
+                                        self.param.KparDiff, affine=A, times = (1+np.array(range(self.nTarg)))*self.Tsize1, controlWeight=self.controlWeight)
         grd = Direction()
         if self.typeRegression == 'spline':
             grd.a0 = np.zeros(foo[0].shape)
@@ -303,7 +311,7 @@ class SurfaceMatching:
         if self.affineDim > 0:
             dA = foo[2]
             db = foo[3]
-            grd.aff = 2*np.multiply(self.affineWeight.reshape([1, self.affineDim]), self.Afft)
+            grd.aff = np.multiply(self.affineWeight.reshape([1, self.affineDim]), self.Afft)
             #grd.aff = 2 * self.Afft
             for t in range(self.Tsize):
                dAff = np.dot(self.affineBasis.T, np.vstack([dA[t].reshape([dim2,1]), db[t].reshape([self.dim, 1])]))
@@ -373,7 +381,7 @@ class SurfaceMatching:
             self.coeffAff = self.coeffAff2
         if (self.iter % self.saveRate == 0):
             logging.info('Saving surfaces...')
-            (obj1, self.xt, self.at) = self.objectiveFunDef(self.a0, self.rhot, self.Afft, withTrajectory=True)
+            (obj1, self.xt, self.at) = self.objectiveFunDef(self.a0, self.rhot, self.Afft, withTrajectory=True, display=True)
             for k in range(self.nTarg):
                 self.fvDef[k].updateVertices(np.squeeze(self.xt[(k+1)*self.Tsize1, :, :]))
             dim2 = self.dim**2
@@ -450,7 +458,7 @@ class SurfaceMatching:
                 vf.vectors.append(self.v[kkm,:])
                 fvDef.saveVTK2(self.outputDir +'/'+ self.saveFile+str(kk)+'.vtk', vf)
         else:
-            (obj1, self.xt, self.at) = self.objectiveFunDef(self.a0, self.rhot, self.Afft, withTrajectory=True)
+            (obj1, self.xt, self.at) = self.objectiveFunDef(self.a0, self.rhot, self.Afft, withTrajectory=True, display=True)
             for k in range(self.nTarg):
                 self.fvDef[k].updateVertices(np.squeeze(self.xt[(k+1)*self.Tsize1, :, :]))
 
