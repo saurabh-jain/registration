@@ -89,3 +89,11 @@ class AffineBasis:
             X[1][t+1] = np.dot(B,X[1][t,...]) + dt * A[1][t]
         return X
             
+    def projectLinear(self, XA, coeff):
+        dim = self.dim
+        dim2 = dim**2
+        linDim = self.affineDim - self.dim
+        A1 = (self.basis[0:dim2, 0:linDim]*XA.reshape([dim2,1])).sum(axis=0)
+        A1 = A1/coeff[0:linDim]
+        AB = (A1[np.newaxis, :] * self.basis[0:dim2, 0:linDim]).sum(axis=1)
+        return AB.reshape([dim, dim])

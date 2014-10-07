@@ -86,7 +86,7 @@ class SurfaceMatching:
         self.affB = AffineBasis(self.dim, affine)
         self.affineDim = self.affB.affineDim
         self.affineBasis = self.affB.basis
-        self.affineWeight = affineWeight * np.ones([self.affineDim, 1])
+        self.affineWeight = affineWeight * np.ones(self.affineDim)
         if (len(self.affB.rotComp) > 0) & (rotWeight != None):
             self.affineWeight[self.affB.rotComp] = rotWeight
         if (len(self.affB.simComp) > 0) & (scaleWeight != None):
@@ -468,4 +468,3 @@ class SurfaceMatching:
         
         cg.cg(self, verb = self.verb, maxIter = self.maxIter,TestGradient=self.testGradient, epsInit=0.1)
         #return self.at, self.xt
-
