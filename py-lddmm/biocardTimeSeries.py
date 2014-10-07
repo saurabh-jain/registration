@@ -10,8 +10,8 @@ import secondOrderMatching as match
 
 def compute():
 
-    #outputDir = '/Users/younes/Development/Results/biocardTS/spline'
-    outputDir = '/Users/younes/Development/Results/biocardTS/geodesic'
+    outputDir = '/Users/younes/Development/Results/biocardTS/spline'
+    #outputDir = '/Users/younes/Development/Results/biocardTS/geodesic'
     #outputDir = '/cis/home/younes/MorphingData/twoBallsStitched'
     #outputDir = '/Users/younes/Development/Results/tight_stitched_rigid2_10'
     if __name__ == "__main__":
@@ -39,8 +39,8 @@ def compute():
 
     sm = surfaceMatching.SurfaceMatchingParam(timeStep=0.1, KparDiff=K1, sigmaDist=1., sigmaError=1., errorType='varifold')
     f = (match.SurfaceMatching(Template=fv1, Targets=(fv2,fv3,fv4), outputDir=outputDir, param=sm,
-                               typeRegression='geodesic',
-                          affine='euclidean', testGradient=False, affineWeight=0.01,  maxIter=1000))
+                               typeRegression='all',
+                          affine='euclidean', testGradient=True, affineWeight=0.0001,  maxIter=1000, controlWeight=0.01))
     #, affine='none', rotWeight=0.1))
     f.optimizeMatching()
 
