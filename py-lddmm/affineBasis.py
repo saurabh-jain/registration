@@ -87,6 +87,7 @@ class AffineBasis:
             B = eye + dt * A[0][t]
             X[0][t+1] = np.dot(B,X[0][t,...])
             X[1][t+1] = np.dot(B,X[1][t,...]) + dt * A[1][t]
+            #X[1][t+1] = X[1][t,...] + dt * A[1][t]
         return X
             
     def projectLinear(self, XA, coeff):

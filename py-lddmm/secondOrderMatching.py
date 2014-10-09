@@ -203,7 +203,7 @@ class SurfaceMatching:
             rho = np.squeeze(rhot[t, :, :])            
             obj1 += timeStep* self.controlWeight * (rho**2).sum()/2
             if self.affineDim > 0:
-                obj2 +=  timeStep * (self.affineWeight.reshape(Afft[t].shape) * Afft[t]**2).sum()
+                obj2 +=  timeStep * (self.affineWeight.reshape(Afft[t].shape) * Afft[t]**2).sum()/2
             #print xt.sum(), at.sum(), obj
         obj = obj1+obj2+obj0
         if display:
@@ -405,8 +405,9 @@ class SurfaceMatching:
                     yyt = np.dot(self.xt[t,...] - X[1][t, ...], U.T)
                     zt = np.dot(xt[t,...] - X[1][t, ...], U.T)
                     if t < self.Tsize:
-                        at = np.dot(self.at[t,...], U.T)
+                        at = np.dot(self.at[t,...], X[0][t])
                         vt = self.param.KparDiff.applyK(yyt, at, firstVar=zt)
+                        vt = np.dot(vt, U.T)
                     f.updateVertices(zt)
                     vf = surfaces.vtkFields() ;
                     vf.scalars.append('Jacobian') ;

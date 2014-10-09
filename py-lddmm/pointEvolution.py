@@ -912,10 +912,10 @@ def secondOrderEvolution(x0, a0, rhot, KparDiff, withJacobian=False, withPointSe
         #print 'evolution v:', np.sqrt((v**2).sum(axis=1)).sum()/v.shape[0]
         rho = np.squeeze(rhot[k,:,:])
         xt[k+1, :, :] = x + timeStep * KparDiff.applyK(x, a) 
+        at[k+1, :, :] = a + timeStep * (-KparDiff.applyDiffKT(x, a[np.newaxis,...], a[np.newaxis,...]) + rho) 
         if not (affine == None):
             xt[k+1, :, :] += timeStep * (np.dot(x, A[k].T) + b[k])
             at[k+1, :, :] -= timeStep * np.dot(a, A[k])
-        at[k+1, :, :] = a + timeStep * (-KparDiff.applyDiffKT(x, a[np.newaxis,...], a[np.newaxis,...]) + rho) 
         if not (withPointSet == None):
             z = np.squeeze(zt[k, :, :])
             zt[k+1, :, :] = z + timeStep * KparDiff.applyK(x, a, firstVar=z)
@@ -1024,7 +1024,7 @@ def secondOrderCovector(x0, a0, rhot, px1, pa1, KparDiff, affine = None, times= 
     return pxt, pat, xt, at
 
 # Computes gradient after covariant evolution for deformation cost a^TK(x,x) a
-def secondOrderGradient(x0, a0, rhot, px1, pa1, KparDiff, times = None, getCovector = False, affine=None):
+def secondOrderGradient(x0, a0, rhot, px1, pa1, KparDiff, times = None, getCovector = False, affine=None, controlWeight=1.0):
     (pxt, pat, xt, at) = secondOrderCovector(x0, a0, rhot, px1, pa1, KparDiff, times=times,affine=affine)
     if not (affine == None):
         dA = np.zeros(affine[0].shape)
@@ -1035,7 +1035,7 @@ def secondOrderGradient(x0, a0, rhot, px1, pa1, KparDiff, times = None, getCovec
             dA[k] = np.dot(pxt[k+1].T, xt[k]) - np.dot(at[k].T, pat[k+1])
             db[k] = pxt[k+1].sum(axis=0)
 
-    drhot = rhot - pat[1:pat.shape[0],...]
+    drhot = rhot*controlWeight - pat[1:pat.shape[0],...]
     da0 = KparDiff.applyK(x0, a0) - pat[0,...]
 
     if affine == None:
