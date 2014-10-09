@@ -304,6 +304,9 @@ class SurfaceMatching:
         elif self.typeRegression == 'geodesic':
             grd.a0 = foo[0] / coeff
             grd.rhot = np.zeros(foo[1].shape)
+        elif self.typeRegression == 'affine':
+            grd.a0 = np.zeros(foo[0].shape)
+            grd.rhot = np.zeros(foo[1].shape)
         else:
             grd.a0 = foo[0] / coeff
             grd.rhot = foo[1]/(coeff)
@@ -345,6 +348,9 @@ class SurfaceMatching:
             dirfoo.rhot = np.random.randn(self.Tsize, self.npt, self.dim)
         elif self.typeRegression == 'geodesic':
             dirfoo.a0 = np.random.randn(self.npt, self.dim)
+            dirfoo.rhot = np.zeros([self.Tsize, self.npt, self.dim])
+        elif self.typeRegression == 'affine':
+            dirfoo.a0 = np.zeros([self.npt, self.dim])
             dirfoo.rhot = np.zeros([self.Tsize, self.npt, self.dim])
         else:
             dirfoo.a0 = np.random.randn(self.npt, self.dim)
@@ -401,12 +407,12 @@ class SurfaceMatching:
                 displ = np.zeros(self.x0.shape[0])
                 dt = 1.0 /self.Tsize ;
                 for t in range(self.Tsize+1):
-                    U = la.inv(X[0][t])
+                    U = la.inv(X[0][t,...])
                     yyt = np.dot(self.xt[t,...] - X[1][t, ...], U.T)
                     zt = np.dot(xt[t,...] - X[1][t, ...], U.T)
                     if t < self.Tsize:
-                        at = np.dot(self.at[t,...], X[0][t])
-                        vt = self.param.KparDiff.applyK(yyt, at, firstVar=zt)
+                        a = np.dot(self.at[t,...], X[0][t,...])
+                        vt = self.param.KparDiff.applyK(yyt, a, firstVar=zt)
                         vt = np.dot(vt, U.T)
                     f.updateVertices(zt)
                     vf = surfaces.vtkFields() ;

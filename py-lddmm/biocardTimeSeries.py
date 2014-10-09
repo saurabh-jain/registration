@@ -39,8 +39,8 @@ def compute():
 
     sm = surfaceMatching.SurfaceMatchingParam(timeStep=0.1, KparDiff=K1, sigmaDist=1., sigmaError=1., errorType='varifold')
     f = (match.SurfaceMatching(Template=fv1, Targets=(fv2,fv3,fv4), outputDir=outputDir, param=sm,
-                               typeRegression='spline',
-                          affine='euclidean', testGradient=False, affineWeight=0.0001,  maxIter=1000, controlWeight=0.01))
+                               typeRegression='affine',
+                          affine='euclidean', testGradient=True, rotWeight=0.0, transWeight=0,  maxIter=1000, controlWeight=0.01))
     #, affine='none', rotWeight=0.1))
     f.optimizeMatching()
 

@@ -1029,11 +1029,16 @@ def secondOrderGradient(x0, a0, rhot, px1, pa1, KparDiff, times = None, getCovec
     if not (affine == None):
         dA = np.zeros(affine[0].shape)
         db = np.zeros(affine[1].shape)
+    Tsize = rhot.shape[0]
     drhot = np.zeros(rhot.shape)
     if not (affine == None):
-        for k in range(rhot.shape[0]):
-            dA[k] = np.dot(pxt[k+1].T, xt[k]) - np.dot(at[k].T, pat[k+1])
-            db[k] = pxt[k+1].sum(axis=0)
+        dA = ((pxt[1:Tsize+1,:,:,np.newaxis]*xt[0:Tsize,:,np.newaxis,:]).sum(axis=1)
+            - (at[0:Tsize,:,:,np.newaxis]*pat[1:Tsize+1,:,np.newaxis,:]).sum(axis=1))
+        db = pxt[1:Tsize+1,...].sum(axis=1)
+        # for k in range(rhot.shape[0]):
+        #     #np.dot(pxt[k+1].T, xt[k]) - np.dot(at[k].T, pat[k+1])
+        #     #dA[k] = -np.dot(pat[k+1].T, at[k]) + np.dot(xt[k].T, pxt[k+1])
+        #     db[k] = pxt[k+1].sum(axis=0)
 
     drhot = rhot*controlWeight - pat[1:pat.shape[0],...]
     da0 = KparDiff.applyK(x0, a0) - pat[0,...]
