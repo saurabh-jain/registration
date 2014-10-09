@@ -892,8 +892,11 @@ def secondOrderEvolution(x0, a0, rhot, KparDiff, withJacobian=False, withPointSe
     at[0, :, :] = a0
     simpleOutput = True
     if not(affine == None):
+        aff_ = True
         A = affine[0]
         b = affine[1]
+    else:
+        aff_=False
     if not (withPointSet==None):
         simpleOutput = False
         K = withPointSet.shape[0]
@@ -911,23 +914,30 @@ def secondOrderEvolution(x0, a0, rhot, KparDiff, withJacobian=False, withPointSe
         a = np.squeeze(at[k, :, :])
         #print 'evolution v:', np.sqrt((v**2).sum(axis=1)).sum()/v.shape[0]
         rho = np.squeeze(rhot[k,:,:])
-        xt[k+1, :, :] = x + timeStep * KparDiff.applyK(x, a) 
-        at[k+1, :, :] = a + timeStep * (-KparDiff.applyDiffKT(x, a[np.newaxis,...], a[np.newaxis,...]) + rho) 
-        if not (affine == None):
-            xt[k+1, :, :] += timeStep * (np.dot(x, A[k].T) + b[k])
-            at[k+1, :, :] -= timeStep * np.dot(a, A[k])
+        zx = KparDiff.applyK(x, a)
+        za = -KparDiff.applyDiffKT(x, a[np.newaxis,...], a[np.newaxis,...]) 
+        if aff_:
+            U = np.eye(dim) + timeStep * A[k]
+            xt[k+1, :, :] = np.dot(x + timeStep * zx, U.T) + timeStep * b[k]
+            Ui = LA.inv(U)
+            at[k+1, :, :] = np.dot(a + timeStep * za, Ui) + timeStep * rho
+        else:
+            xt[k+1, :, :] = x + timeStep * zx  
+            at[k+1, :, :] = a + timeStep * za + timeStep * rho
         if not (withPointSet == None):
             z = np.squeeze(zt[k, :, :])
-            zt[k+1, :, :] = z + timeStep * KparDiff.applyK(x, a, firstVar=z)
-            if not (affine == None):
-                zt[k+1, :, :] += timeStep * (np.dot(z, A[k].T) + b[k])
+            zx = KparDiff.applyK(x, a, firstVar=z)
+            if aff_:
+                zt[k+1, :, :] =  np.dot(z + timeStep * zx, U.T) + timeStep * b[k]
+            else:
+                zt[k+1, :, :] = z + timeStep * zx  
             if withJacobian:
                 Jt[k+1, :] = Jt[k, :] + timeStep * KparDiff.applyDivergence(x, a, firstVar=z)
-                if not (affine == None):
+                if aff_:
                     Jt[k+1, :] += timeStep * (np.trace(A[k]))
         elif withJacobian:
             Jt[k+1, :] = Jt[k, :] + timeStep * KparDiff.applyDivergence(z, a)
-            if not (affine == None):
+            if aff_:
                 Jt[k+1, :] += timeStep * (np.trace(A[k]))
     if simpleOutput:
         return xt, at
@@ -959,8 +969,11 @@ def secondOrderCovector(x0, a0, rhot, px1, pa1, KparDiff, affine = None, times= 
     nTarg = len(px1)
     Tsize1 = T/nTarg
     if not(affine == None):
+        aff_ = True
         A = affine[0]
         b = affine[1]
+    else:
+        aff_ = False
     if times == None:
         t1 = (float(T)/nTarg) * (range(nTarg)+1)
     N = x0.shape[0]
@@ -978,6 +991,14 @@ def secondOrderCovector(x0, a0, rhot, px1, pa1, KparDiff, affine = None, times= 
         a = np.squeeze(at[T-t-1, :, :])
         rho = np.squeeze(rhot[T-t-1, :, :])
         
+        if aff_:
+            U = np.eye(dim) + timeStep * A[T-t-1]
+            px_ = np.dot(px, U)
+            Ui = LA.inv(U)
+            pa_ = np.dot(pa,Ui.T)
+        else:
+            px_ = px
+            pa_ = pa
 
         #zpx = KparDiff.applyDiffKT(x, [px], [a])
 
@@ -985,15 +1006,15 @@ def secondOrderCovector(x0, a0, rhot, px1, pa1, KparDiff, affine = None, times= 
         #print 'zpa1', zpa.sum()
         #zpy = KparDiff.applyDiffKT(x, [a], [px])
 
-        a1 = np.concatenate((px[np.newaxis,...], a[np.newaxis,...]))
-        a2 = np.concatenate((a[np.newaxis,...], px[np.newaxis,...]))
-        zpx = KparDiff.applyDiffKT(x, a1, a2) - KparDiff.applyDDiffK11and12(x, a, a, pa)
-        zpa = KparDiff.applyK(x, px) - KparDiff.applyDiffK1and2(x, pa, a)
+        a1 = np.concatenate((px_[np.newaxis,...], a[np.newaxis,...]))
+        a2 = np.concatenate((a[np.newaxis,...], px_[np.newaxis,...]))
+        zpx = KparDiff.applyDiffKT(x, a1, a2) - KparDiff.applyDDiffK11and12(x, a, a, pa_)
+        zpa = KparDiff.applyK(x, px_) - KparDiff.applyDiffK1and2(x, pa_, a)
 #               - KparDiff.applyDiffK(x, pa, a) - KparDiff.applyDiffK2(x, pa, a))
 
-        if not (affine == None):
-            zpx += np.dot(px, A[T-t-1])
-            zpa -= np.dot(pa, A[T-t-1].T)
+        # if aff_:
+        #     zpx += np.dot(px, A[T-t-1])
+        #     zpa -= np.dot(pa, A[T-t-1].T)
 
         ### Checking derivatives
         # if affine == None:
@@ -1012,8 +1033,8 @@ def secondOrderCovector(x0, a0, rhot, px1, pa1, KparDiff, affine = None, times= 
 
         
         #print 'zpa2', zpx.sum()
-        pxt[T-t-1, :, :] = px + timeStep * zpx
-        pat[T-t-1, :, :] = pa + timeStep * zpa
+        pxt[T-t-1, :, :] = px_ + timeStep * zpx
+        pat[T-t-1, :, :] = pa_ + timeStep * zpa
         if (t<T-1) and ((T-1-t)%Tsize1 == 0):
 #            print T-t-1, (T-t-1)/Tsize1
             pxt[T-t-1, :, :] += px1[(T-t-1)/Tsize1 - 1]
@@ -1028,10 +1049,23 @@ def secondOrderGradient(x0, a0, rhot, px1, pa1, KparDiff, times = None, getCovec
         dA = np.zeros(affine[0].shape)
         db = np.zeros(affine[1].shape)
     Tsize = rhot.shape[0]
+    timeStep = 1.0/Tsize
     drhot = np.zeros(rhot.shape)
     if not (affine == None):
-        dA = ((pxt[1:Tsize+1,:,:,np.newaxis]*xt[0:Tsize,:,np.newaxis,:]).sum(axis=1)
-            - (at[0:Tsize,:,:,np.newaxis]*pat[1:Tsize+1,:,np.newaxis,:]).sum(axis=1))
+        dim = x0.shape[1]
+        for k in range(Tsize):
+            x = np.squeeze(xt[k, :, :])
+            a = np.squeeze(at[k, :, :])
+            px = np.squeeze(pxt[k+1, :, :])
+            pa = np.squeeze(pat[k+1, :, :])
+            zx = x + timeStep*KparDiff.applyK(x, a)
+            za = a - timeStep * KparDiff.applyDiffKT(x, a[np.newaxis,...], a[np.newaxis,...])
+            U = np.eye(dim) + timeStep * affine[0][k]
+            Ui = LA.inv(U)
+            pa = np.dot(pa, Ui.T)
+            za = np.dot(za, Ui)
+            dA[k,...] =  ((px[:,:,np.newaxis]*zx[:,np.newaxis,:]).sum(axis=0)
+                            - (za[:,:,np.newaxis]*pa[:,np.newaxis,:]).sum(axis=0))
         db = pxt[1:Tsize+1,...].sum(axis=1)
         # for k in range(rhot.shape[0]):
         #     #np.dot(pxt[k+1].T, xt[k]) - np.dot(at[k].T, pat[k+1])

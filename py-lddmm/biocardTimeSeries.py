@@ -37,10 +37,10 @@ def compute():
     K1 = Kernel(name='laplacian', sigma = 6.5, order=4)
 
 
-    sm = surfaceMatching.SurfaceMatchingParam(timeStep=0.1, KparDiff=K1, sigmaDist=1., sigmaError=1., errorType='varifold')
+    sm = surfaceMatching.SurfaceMatchingParam(timeStep=0.1, KparDiff=K1, sigmaDist=2.5, sigmaError=10., errorType='varifold')
     f = (match.SurfaceMatching(Template=fv1, Targets=(fv2,fv3,fv4), outputDir=outputDir, param=sm,
-                               typeRegression='affine',
-                          affine='euclidean', testGradient=True, rotWeight=0.0, transWeight=0,  maxIter=1000, controlWeight=0.01))
+                               typeRegression='spline',
+                          affine='euclidean', testGradient=True, affineWeight=100.0,  maxIter=1000, controlWeight=1.))
     #, affine='none', rotWeight=0.1))
     f.optimizeMatching()
 
