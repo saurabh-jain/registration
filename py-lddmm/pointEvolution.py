@@ -1013,8 +1013,6 @@ def secondOrderCovector(x0, a0, rhot, px1, pa1, KparDiff, affine = None, times= 
         
         #print 'zpa2', zpx.sum()
         pxt[T-t-1, :, :] = px + timeStep * zpx
-
-            
         pat[T-t-1, :, :] = pa + timeStep * zpa
         if (t<T-1) and ((T-1-t)%Tsize1 == 0):
 #            print T-t-1, (T-t-1)/Tsize1
