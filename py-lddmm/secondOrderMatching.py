@@ -86,7 +86,6 @@ class SurfaceMatching:
         self.affB = AffineBasis(self.dim, affine)
         self.affineDim = self.affB.affineDim
         self.affineBasis = self.affB.basis
-        self.affw = affineWeight
         self.affineWeight = affineWeight * np.ones(self.affineDim)
         if (len(self.affB.rotComp) > 0) & (rotWeight != None):
             self.affineWeight[self.affB.rotComp] = rotWeight
@@ -94,6 +93,7 @@ class SurfaceMatching:
             self.affineWeight[self.affB.simComp] = scaleWeight
         if (len(self.affB.transComp) > 0) & (transWeight != None):
             self.affineWeight[self.affB.transComp] = transWeight
+        self.affw = affineWeight
 
         self.controlWeight = controlWeight
         self.typeRegression = typeRegression 
