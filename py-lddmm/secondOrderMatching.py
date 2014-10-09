@@ -406,12 +406,14 @@ class SurfaceMatching:
                 X = self.affB.integrateFlow(self.Afft)
                 displ = np.zeros(self.x0.shape[0])
                 dt = 1.0 /self.Tsize ;
+                atCorr = np.zeros(at.shape) 
                 for t in range(self.Tsize+1):
                     U = la.inv(X[0][t,...])
                     yyt = np.dot(self.xt[t,...] - X[1][t, ...], U.T)
                     zt = np.dot(xt[t,...] - X[1][t, ...], U.T)
                     if t < self.Tsize:
                         a = np.dot(self.at[t,...], X[0][t,...])
+                        atCorr[t,...] = a
                         vt = self.param.KparDiff.applyK(yyt, a, firstVar=zt)
                         vt = np.dot(vt, U.T)
                     f.updateVertices(zt)
@@ -425,6 +427,11 @@ class SurfaceMatching:
                     nu = self.fv0ori*f.computeVertexNormals()
                     displ += dt * (vt*nu).sum(axis=1)
                     f.saveVTK2(self.outputDir +'/'+self.saveFile+'Corrected'+str(t)+'.vtk', vf)
+                (foo,zt) = evol.landmarkDirectEvolutionEuler(self.x0, atCorr, self.param.KparDiff, withPointSet = self.fv0Fine.vertices)
+                for t in range(self.Tsize+1):
+                    f.updateVertices(zt[t,...])
+                    f.saveVTK(self.outputDir +'/'+self.saveFile+'CorrectedCheck'+str(t)+'.vtk')
+                 
 
                 for k,fv in enumerate(self.fv1):
                     f = surfaces.Surface(surf=fv)
