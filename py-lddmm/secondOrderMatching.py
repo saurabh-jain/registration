@@ -431,6 +431,10 @@ class SurfaceMatching:
                 for t in range(self.Tsize+1):
                     f.updateVertices(zt[t,...])
                     f.saveVTK(self.outputDir +'/'+self.saveFile+'CorrectedCheck'+str(t)+'.vtk')
+                (foo,foo2,zt) = evol.landmarkDirectEvolutionEuler(self.x0, atCorr[0,...], self.rhot, self.param.KparDiff, withPointSet = self.fv0Fine.vertices)
+                for t in range(self.Tsize+1):
+                    f.updateVertices(zt[t,...])
+                    f.saveVTK(self.outputDir +'/'+self.saveFile+'CorrectedCheckBis'+str(t)+'.vtk')
                  
 
                 for k,fv in enumerate(self.fv1):

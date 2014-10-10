@@ -915,15 +915,15 @@ def secondOrderEvolution(x0, a0, rhot, KparDiff, withJacobian=False, withPointSe
         #print 'evolution v:', np.sqrt((v**2).sum(axis=1)).sum()/v.shape[0]
         rho = np.squeeze(rhot[k,:,:])
         zx = KparDiff.applyK(x, a)
-        za = -KparDiff.applyDiffKT(x, a[np.newaxis,...], a[np.newaxis,...]) 
+        za = -KparDiff.applyDiffKT(x, a[np.newaxis,...], a[np.newaxis,...]) + rho
         if aff_:
             U = np.eye(dim) + timeStep * A[k]
             xt[k+1, :, :] = np.dot(x + timeStep * zx, U.T) + timeStep * b[k]
             Ui = LA.inv(U)
-            at[k+1, :, :] = np.dot(a + timeStep * za, Ui) + timeStep * rho
+            at[k+1, :, :] = np.dot(a + timeStep * za, Ui)
         else:
             xt[k+1, :, :] = x + timeStep * zx  
-            at[k+1, :, :] = a + timeStep * za + timeStep * rho
+            at[k+1, :, :] = a + timeStep * za
         if not (withPointSet == None):
             z = np.squeeze(zt[k, :, :])
             zx = KparDiff.applyK(x, a, firstVar=z)
@@ -1056,23 +1056,25 @@ def secondOrderGradient(x0, a0, rhot, px1, pa1, KparDiff, times = None, getCovec
         for k in range(Tsize):
             x = np.squeeze(xt[k, :, :])
             a = np.squeeze(at[k, :, :])
+            rho = np.squeeze(rhot[k, :, :])
             px = np.squeeze(pxt[k+1, :, :])
             pa = np.squeeze(pat[k+1, :, :])
             zx = x + timeStep*KparDiff.applyK(x, a)
-            za = a - timeStep * KparDiff.applyDiffKT(x, a[np.newaxis,...], a[np.newaxis,...])
+            za = a + timeStep * (-KparDiff.applyDiffKT(x, a[np.newaxis,...], a[np.newaxis,...]) + rho)
             U = np.eye(dim) + timeStep * affine[0][k]
             Ui = LA.inv(U)
             pa = np.dot(pa, Ui.T)
             za = np.dot(za, Ui)
             dA[k,...] =  ((px[:,:,np.newaxis]*zx[:,np.newaxis,:]).sum(axis=0)
                             - (za[:,:,np.newaxis]*pa[:,np.newaxis,:]).sum(axis=0))
+            drhot[k,...] = rho*controlWeight - pa
         db = pxt[1:Tsize+1,...].sum(axis=1)
         # for k in range(rhot.shape[0]):
         #     #np.dot(pxt[k+1].T, xt[k]) - np.dot(at[k].T, pat[k+1])
         #     #dA[k] = -np.dot(pat[k+1].T, at[k]) + np.dot(xt[k].T, pxt[k+1])
         #     db[k] = pxt[k+1].sum(axis=0)
 
-    drhot = rhot*controlWeight - pat[1:pat.shape[0],...]
+    #drhot = rhot*controlWeight - pat[1:pat.shape[0],...]
     da0 = KparDiff.applyK(x0, a0) - pat[0,...]
 
     if affine == None:
