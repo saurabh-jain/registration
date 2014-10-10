@@ -1,4 +1,5 @@
 import os
+import logging
 import numpy as np
 import scipy as sp
 import grid
@@ -682,8 +683,8 @@ class CurveMatching(curveMatching.CurveMatching):
                 z = np.squeeze(xt[k][M-t-1, :, :])
                 a = np.squeeze(at[k][M-t-1, :, :])
                 zpx = np.copy(dxcval[k][M-t-1])
-                a1 = [px, a, -2*self.regweight*a]
-                a2 = [a, px, a]
+                a1 = np.concatenate((px[np.newaxis,...], a[np.newaxis,...], -2*self.regweight*a[np.newaxis,...]))
+                a2 = np.concatenate((a[np.newaxis,...], px[np.newaxis,...], a[np.newaxis,...]))
                 zpx += self.param.KparDiff.applyDiffKT(z, a1, a2)
                 if self.affineDim > 0:
                     zpx += np.dot(px, A[k][0][M-t-1])
@@ -694,8 +695,8 @@ class CurveMatching(curveMatching.CurveMatching):
             z = np.squeeze(xt[self.ncurve][M-t-1, :, :])
             a = np.squeeze(at[self.ncurve][M-t-1, :, :])
             zpx = np.copy(dxcval[self.ncurve][M-t-1])
-            a1 = [px, a, -2*self.regweightOut*a]
-            a2 = [a, px, a]
+            a1 = np.concatenate((px[np.newaxis,...], a[np.newaxis,...], -2*self.regweightOut*a[np.newaxis,...]))
+            a2 = np.concatenate((a[np.newaxis,...], px[np.newaxis,...], a[np.newaxis,...]))
             zpx += self.param.KparDiffOut.applyDiffKT(z, a1, a2)
             pxt[self.ncurve][M-t-2, :, :] = np.squeeze(pxt[self.ncurve][M-t-1, :, :]) + timeStep * zpx
             
@@ -859,18 +860,18 @@ class CurveMatching(curveMatching.CurveMatching):
 
     def endOfIteration(self):
         (obj1, self.xt, Jt, self.cval) = self.objectiveFunDef(self.at, self.Afft, withJacobian=True)
-        print 'mean constraint', np.sqrt((self.cval**2).sum()/self.cval.size), np.fabs(self.cval).sum() / self.cval.size
+        logging.info('mean constraint %.3f %.3f'%(np.sqrt((self.cval**2).sum()/self.cval.size), np.fabs(self.cval).sum() / self.cval.size))
         #self.testConstraintTerm(self.xt, self.nut, self.at, self.Afft)
         self.iter += 1
         if self.iter %10 == 0:
             self.printResults(Jt)
-        else:
-            nn = 0 
-            for k in range(self.ncurve):
-                n1 = self.xt[k].shape[1] ;
-                self.fvDefB[k].updateVertices(np.squeeze(self.xt[-1][-1, nn:nn+n1, :]))
-                self.fvDef[k].updateVertices(np.squeeze(self.xt[k][-1, :, :]))
-                nn += n1
+#        else:
+        nn = 0 
+        for k in range(self.ncurve):
+            n1 = self.xt[k].shape[1] ;
+            self.fvDefB[k].updateVertices(np.squeeze(self.xt[-1][-1, nn:nn+n1, :]))
+            self.fvDef[k].updateVertices(np.squeeze(self.xt[k][-1, :, :]))
+            nn += n1
                 
     def printResults(self,Jt):
         nn = 0 ;
