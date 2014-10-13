@@ -23,7 +23,7 @@ def compute():
     ## Object kernel
     K1 = Kernel(name='laplacian', sigma = 10.0)
     ## Background kernel
-    K2 = Kernel(name='laplacian', sigma = 2.0)
+    K2 = Kernel(name='laplacian', sigma = 1.0)
 
     sm = CurveMatchingParam(timeStep=0.1, KparDiff=K1, KparDiffOut=K2, sigmaDist=2., sigmaError=.1, errorType='measure')
     f = (CurveMatching(Template=(fv01,fv02,fv03), Target=(fv11,fv12,fv13), outputDir=outputDir,

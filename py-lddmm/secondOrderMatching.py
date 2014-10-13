@@ -83,6 +83,11 @@ class SurfaceMatching:
         self.testGradient = testGradient
         self.regweight = regWeight
         self.affine = affine
+        if self.affine=='euclidean' or self.affine=='translation':
+            self.saveCorrected = True
+        else:
+            self.saveCorrected = False
+
         self.affB = AffineBasis(self.dim, affine)
         self.affineDim = self.affB.affineDim
         self.affineBasis = self.affB.basis
@@ -96,7 +101,8 @@ class SurfaceMatching:
         self.affw = affineWeight
 
         self.controlWeight = controlWeight
-        self.typeRegression = typeRegression 
+        self.typeRegression = 'affine' 
+        self.typeRegressionSave = typeRegression 
 
         if param==None:
             self.param = SurfaceMatchingParam()
@@ -141,8 +147,8 @@ class SurfaceMatching:
         self.fv0.saveVTK(self.outputDir+'/Template.vtk')
         for k,s in enumerate(self.fv1):
             s.saveVTK(self.outputDir+'/Target'+str(k)+'.vtk')
-        self.affBurnIn = 20
-        self.coeffAff1 = .1
+        self.affBurnIn = 50
+        self.coeffAff1 = 1
         self.coeffAff2 = 10.
         self.coeffAff = self.coeffAff1
         z= self.fv0.surfVolume()
@@ -207,7 +213,7 @@ class SurfaceMatching:
             #print xt.sum(), at.sum(), obj
         obj = obj1+obj2+obj0
         if display:
-            logging.info('deformation terms: init %f, rho %f, aff %f'%(obj0,obj1/self.controlWeight,obj2/self.affw))
+            logging.info('deformation terms: init %f, rho %f, aff %f'%(obj0,obj1,obj2))
         if withJacobian:
             return obj, xt, at, Jt
         elif withTrajectory:
@@ -246,6 +252,7 @@ class SurfaceMatching:
         objTry = self.obj0
         a0Try = self.a0 - eps * dir.a0
         rhotTry = self.rhot - eps * dir.rhot
+        #print "dir aff", (dir.aff**2).sum()
         if self.affineDim > 0:
             AfftTry = self.Afft - eps * dir.aff
         else:
@@ -311,7 +318,7 @@ class SurfaceMatching:
             grd.a0 = foo[0] / coeff
             grd.rhot = foo[1]/(coeff)
         grd.aff = np.zeros(self.Afft.shape)
-        if self.affineDim > 0:
+        if self.affineDim > 0 and self.iter < self.affBurnIn:
             dA = foo[2]
             db = foo[3]
             grd.aff = np.multiply(self.affineWeight.reshape([1, self.affineDim]), self.Afft)
@@ -321,6 +328,7 @@ class SurfaceMatching:
                #grd.aff[t] -=  np.divide(dAff.reshape(grd.aff[t].shape), self.affineWeight.reshape(grd.aff[t].shape))
                grd.aff[t] -=  dAff.reshape(grd.aff[t].shape)
             grd.aff /= (self.coeffAff*coeff*self.Tsize)
+        #print 'grd aff', (grd.aff**2).sum()
         return grd
 
 
@@ -355,7 +363,9 @@ class SurfaceMatching:
         else:
             dirfoo.a0 = np.random.randn(self.npt, self.dim)
             dirfoo.rhot = np.random.randn(self.Tsize, self.npt, self.dim)
-        dirfoo.aff = np.random.randn(self.Tsize, self.affineDim)
+        
+        if self.iter < self.affBurnIn:
+            dirfoo.aff = np.random.randn(self.Tsize, self.affineDim)
         return dirfoo
 
     def dotProduct(self, g1, g2):
@@ -384,7 +394,9 @@ class SurfaceMatching:
     def endOfIteration(self):
         self.iter += 1
         if self.iter >= self.affBurnIn:
-            self.coeffAff = self.coeffAff2
+            self.typeRegression = self.typeRegressionSave
+            self.affine = 'none'
+            #self.coeffAff = self.coeffAff2
         if (self.iter % self.saveRate == 0):
             logging.info('Saving surfaces...')
             (obj1, self.xt, self.at) = self.objectiveFunDef(self.a0, self.rhot, self.Afft, withTrajectory=True, display=True)
@@ -401,7 +413,7 @@ class SurfaceMatching:
             (xt, at, ft, Jt)  = evol.secondOrderEvolution(self.x0, self.a0,  self.rhot, self.param.KparDiff, affine=A,
                                                            withPointSet = self.fv0Fine.vertices, withJacobian=True)
 
-            if self.affine=='euclidean' or self.affine=='translation':
+            if self.saveCorrected:
                 f = surfaces.Surface(surf=self.fv0Fine)
                 X = self.affB.integrateFlow(self.Afft)
                 displ = np.zeros(self.x0.shape[0])
@@ -491,6 +503,7 @@ class SurfaceMatching:
         print 'Gradient lower bound:', self.gradEps
         #print 'x0:', self.x0
         #print 'y0:', self.y0
+        self.cgBurnIn = self.affBurnIn
         
         cg.cg(self, verb = self.verb, maxIter = self.maxIter,TestGradient=self.testGradient, epsInit=0.1)
         #return self.at, self.xt

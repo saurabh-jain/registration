@@ -134,6 +134,7 @@ class CurveMatching(curveMatching.CurveMatching):
                         fdisc[k0, 1] = firstFound[self.fv0[fk].faces[k, 1]]
                         k0 += 1
                 fv = curves.Curve(FV=(fdisc,vdisc0))
+                #fv.saveVTK(self.outputDir+'/TemplateDiscrete'+str(fk)+'.vtk')
 
                 gr = grid.Grid()
                 gr.copy(gridDef)
@@ -145,11 +146,11 @@ class CurveMatching(curveMatching.CurveMatching):
                 self.gridDef.append(gr)
                 self.gridxy.append(self.gridDef[-1].vertices)
                 if np.fabs((fv.vertices[fv.faces[:,1]]- fv.vertices[fv.faces[:,0]]).sum(axis=0)).sum() < 0.0001:
-                    print 'closed curve' 
-                    K1 = D > - 1e-10 ;
+                    #print 'closed curve' 
+                    K1 = D > -1e-10 ;
                     Kout = np.multiply(Kout, K1)
-                else:
-                    print 'open curve'
+                #else:
+                    #print 'open curve'
                     #print self.fv0[kk].vertices[self.fv0[kk].faces[:,1]]- self.fv0[kk].vertices[self.fv0[kk].faces[:,0]]
             gr = grid.Grid()
             gr.copy(gridDef)

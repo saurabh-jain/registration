@@ -44,6 +44,11 @@ def cg(opt, verb = True, maxIter=1000, TestGradient = False, epsInit=10.):
     else:
         gradEps = 1.0
 
+    if hasattr(opt, 'cgBurnIn'):
+        cgBurnIn = opt.cgBurnIn
+    else:
+        cgBurnIn = -1
+    
     if hasattr(opt, 'gradCoeff'):
         gradCoeff = opt.gradCoeff
     else:
@@ -86,7 +91,7 @@ def cg(opt, verb = True, maxIter=1000, TestGradient = False, epsInit=10.):
                 grdfoo = np.multiply(grd, dirfoo).sum()
             logging.info('Test Gradient: %.4f %.4f' %((objfoo - obj)/epsfoo, -grdfoo * gradCoeff ))
 
-        if it == 0:
+        if it == 0 or it == cgBurnIn:
             if hasattr(opt, 'dotProduct'):
                 [grdOld2] = opt.dotProduct(grd, [grd])
             else:
