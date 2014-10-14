@@ -5,10 +5,18 @@ import argparse
 import numpy as np
 import diffeo
 import surfaces
-from vtk import *
+try:
+    from vtk import *
+    gotVTK = True
+except ImportError:
+    print 'could not import VTK functions'
+    gotVTK = False
 
 
 def main():
+    if not gotVTK:
+        raise Exception('Cannot run function without VTK')
+
     parser = argparse.ArgumentParser(description='Computes hypertemplate: chooses surface from a directory with average volume and retriangulates it as a smoother volume')
     parser.add_argument('dirIn', metavar='dirIn', type = str, help='input directory')
     parser.add_argument('fileout', metavar='fileout', type = str, help='output file') 
@@ -33,6 +41,7 @@ def main():
     #print mean
     k0 = np.argmin(np.fabs(z-mean))
     fv = surfaces.Surface(filename = files[k0])
+    print 'keeping ' + files[k0] 
     minx = fv.vertices[:,0].min() 
     maxx = fv.vertices[:,0].max() 
     miny = fv.vertices[:,1].min() 

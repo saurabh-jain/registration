@@ -24,7 +24,7 @@ def compute():
     K1 = Kernel(name='gauss', sigma = 100.0)
 
     sm = CurveMatchingParam(timeStep=0.1, KparDiff=K1, sigmaDist=20, sigmaError=.1, errorType='measure')
-    f = CurveMatching(Template=fv1, Target=fv2, outputDir='/Users/younes/Development/Results/curveMatching',param=sm, testGradient=False,
+    f = CurveMatching(Template=fv1, Target=fv2, outputDir='/Users/younes/Development/Results/curveMatching',param=sm, testGradient=True,
                       maxIter=1000, affine='none', rotWeight=10., transWeight = 10., scaleWeight=100., affineWeight=100.)
 
     f.optimizeMatching()

@@ -1,5 +1,5 @@
 import numpy as np
-from vtk import *
+#from vtk import *
 import os
 
 # General surface class
@@ -73,7 +73,7 @@ class Grid:
         for k in range(nvert-1):
             pv0 = fv.vertices[fv.faces[:,0], :] - self.vertices[k,:]
             pv1 = fv.vertices[fv.faces[:,1], :] - self.vertices[k,:]
-            c = np.multiply(pv1[:,1], pv0[:,0]) - np.multiply(pv1[:,0], pv0[:,1]) 
+            c = (pv1[:,1]*pv0[:,0]) - (pv1[:,0]*pv0[:,1]) 
             #print c.shape
             c0 = np.sqrt((pv0**2).sum(axis=1))
             c1 = np.sqrt((pv1**2).sum(axis=1))
@@ -82,7 +82,7 @@ class Grid:
             #print c
             w = c.sum()/np.pi
             #print w /np.pi
-            if abs(w) > .001:
+            if abs(w) > 0.5:
                 K[k] = 1
         return np.int_(K)
 

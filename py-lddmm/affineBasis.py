@@ -69,8 +69,35 @@ class AffineBasis:
         dim2 = self.dim**2
         A = [np.zeros([Tsize, self.dim, self.dim]), np.zeros([Tsize, self.dim])]
         if self.affineDim > 0:
-            for t in range(Tsize):
-                AB = np.dot(self.basis, Afft[t])
-                A[0][t] = AB[0:dim2].reshape([self.dim, self.dim])
-                A[1][t] = AB[dim2:dim2+self.dim]
+            AB = (self.basis[np.newaxis,:,:]*Afft[:,np.newaxis,:]).sum(axis=2)
+            A[0] = AB[:,0:dim2].reshape([Tsize, self.dim,self.dim])
+            A[1] = AB[:,dim2:dim2+self.dim]
+            # for t in range(Tsize):
+            #     AB = np.dot(self.basis, Afft[t])
+            #     A[0][t] = AB[0:dim2].reshape([self.dim, self.dim])
+            #     A[1][t] = AB[dim2:dim2+self.dim]
         return A
+
+    def integrateFlow(self, Afft):
+        Tsize = Afft.shape[0]
+        dim2 = self.dim**2
+        X = [np.zeros([Tsize+1, self.dim, self.dim]), np.zeros([Tsize+1, self.dim])]
+        A = self.getTransforms(Afft)
+        dt = 1.0/Tsize
+        eye = np.eye(self.dim)
+        X[0][0,...] = eye
+        for t in range(Tsize):
+            B = eye + dt * A[0][t,...]
+            X[0][t+1,...] = np.dot(B,X[0][t,...])
+            X[1][t+1,...] = np.dot(B,X[1][t,...]) + dt * A[1][t,...]
+            #X[1][t+1] = X[1][t,...] + dt * A[1][t]
+        return X
+            
+    def projectLinear(self, XA, coeff):
+        dim = self.dim
+        dim2 = dim**2
+        linDim = self.affineDim - self.dim
+        A1 = (self.basis[0:dim2, 0:linDim]*XA.reshape([dim2,1])).sum(axis=0)
+        A1 = A1/coeff[0:linDim]
+        AB = (A1[np.newaxis, :] * self.basis[0:dim2, 0:linDim]).sum(axis=1)
+        return AB.reshape([dim, dim])

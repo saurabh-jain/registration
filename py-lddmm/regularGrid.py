@@ -1,4 +1,3 @@
-
 import logging
 import numpy
 import numpy.fft
@@ -7,7 +6,14 @@ import scipy.linalg
 import scipy.sparse
 import scipy.interpolate
 import scipy.ndimage.interpolation
-from tvtk.api import tvtk
+#from tvtk.api import tvtk
+try:
+    from vtk import *
+    import vtk.util.numpy_support as v2n
+    gotVTK = True
+except ImportError:
+    print 'could not import VTK functions'
+    gotVTK = False
 import rg_fort
 
 def meshgrid2(arrs):
@@ -202,35 +208,76 @@ class RegularGrid(object):
     def create_vtk_sg(self):
         # self.sg = tvtk.StructuredGrid(dimensions=self.vtk_dim, \
         #                         points=self.nodes)
-        self.sg = vtkStructureGrid() 
-        self.sg.SetDimensions(self.vtk_dim)
-        points = vtkPoints()
-        
-        
-        self.sg.SetPoints(points)
+        if gotVTK:
+            self.sg = vtkStructuredGrid() 
+            self.sg.SetDimensions(self.vtk_dim)
+            points = vtkPoints()
+            pts = self.nodes.reshape([self.nodes.size/3,3])
+            for k in range(pts.shape[0]):
+                points.InsertNextPoint(pts[k,:])
+            self.sg.SetPoints(points)
+        else:
+            raise Exception('Cannot run create_vtk_sg without VTK')
 
     def create_vtk_fourier_sg(self):
-        self.sg = tvtk.StructuredGrid(dimensions=self.vtk_dim, \
-                                points=self.fourier_nodes)
+        # self.sg = tvtk.StructuredGrid(dimensions=self.vtk_dim, \
+        #                         points=self.fourier_nodes)
+        if gotVTK:
+            self.sg = vtkStructuredGrid() 
+            self.sg.SetDimensions(self.vtk_dim)
+            points = vtkPoints()
+            pts = self.fourier_nodes.reshape([self.fourier_nodes.size/3,3])
+            for k in range(pts.shape[0]):
+                points.InsertNextPoint(pts[k,:])
+            self.sg.SetPoints(points)
+        else:
+            raise Exception('Cannot run create_vtk_fourier_sg without VTK')
 
     def add_vtk_point_data(self, var, name, as_scalars=False, as_vectors=False):
-        if as_scalars:
-            self.sg.point_data.scalars = var
-            self.sg.point_data.scalars.name = name
-            return
-        if as_vectors:
-            self.sg.point_data.vectors = var
-            self.sg.point_data.vectors.name = name
-            return
-        arr_id = self.sg.point_data.add_array(var)
-        self.sg.point_data.get_array(arr_id).name = name
+        if gotVTK:
+            if as_scalars:
+                #self.sg.point_data.scalars = var
+                #self.sg.point_data.scalars.name = name
+                self.sg.GetPointData().SetScalars(var)
+                self.sg.GetPointData().GetScalars().SetName(name)
+                return
+            if as_vectors:
+                # self.sg.point_data.vectors = var
+                # self.sg.point_data.vectors.name = name
+                self.sg.GetPointData().SetVectors(var)
+                self.sg.GetPointData().GetVectors().SetName(name)
+                return
+            #print var.shape
+            var2 = vtkFloatArray()
+            if len(var.shape)== 2:
+                var2.SetNumberOfComponents(3)
+                for ii in range(var.shape[0]):
+                    var2.InsertTuple3(ii,var[ii,0], var[ii,1], var[ii,2])
+            else:
+                var2.SetNumberOfComponents(1)
+                for ii in range(var.shape[0]):
+                    var2.InsertTuple1(ii,var[ii])
+            var2.SetName(name)
+            self.sg.GetPointData().AddArray(var2)
+            #self.sg.GetPointData().GetArray(arr_id).SetName(name)
+        else:
+            raise Exception('Cannot run add_vtk_point_data without VTK')
 
     def vtk_write(self, iter, mesh_name="", output_dir="."):
-        if mesh_name == "":
-            mesh_name = self.mesh_name
-        w = tvtk.XMLStructuredGridWriter(input=self.sg, file_name="%s/%s_mesh%d_%d.vts" % (output_dir, mesh_name, self.num_points[0], iter))
-        w.write()
-        self.sg = None
+        if gotVTK:
+            if mesh_name == "":
+                mesh_name = self.mesh_name
+            w = vtkXMLStructuredGridWriter()
+            w.SetFileName("%s/%s_mesh%d_%d.vts" % (output_dir, mesh_name, self.num_points[0], iter))
+            if vtkVersion.GetVTKMajorVersion() < 6:
+                w.SetInput(self.sg)
+            else:
+                w.SetInputData(self.sg)
+            #w = tvtk.XMLStructuredGridWriter(input=self.sg, file_name="%s/%s_mesh%d_%d.vts" % (output_dir, mesh_name, self.num_points[0], iter))
+            w.Write()
+            self.sg = None
+        else:
+            raise Exception('Cannot run vtk_write without VTK')
 
     def neighbors(self, node):
         assert(not node in self.boundary_nodes)

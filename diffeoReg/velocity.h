@@ -195,7 +195,7 @@ public:
 
 
     double endOfIteration(TimeVectorMap &Lv) {
-      cout << "obj fun: " << objectiveFun(Lv) << endl ;
+      //cout << "obj fun: " << objectiveFun(Lv) << endl ;
       _sh->Lv0.copy(Lv) ;
       _sh->Print() ;
       return -1 ;
@@ -205,11 +205,12 @@ public:
       Vector foo ;
       int nbFreeVar=0 ;
       _sh->Template.gradient().norm(foo) ;
+      // cout << _sh->Template.img().max() << endl ;
       for (unsigned int k=0; k<foo.d.length;k++)
 	if (foo[k] > 0.01)
 	  nbFreeVar++ ;
       _sh->kernelNormalization = nbFreeVar ; 
-      cout << "Number of momentum variables: " << nbFreeVar << " out of " << foo.d.length << endl ;
+      // cout << "Number of momentum variables: " << nbFreeVar << " out of " << foo.d.length << endl ;
     }
 
     void endOfProcedure(TimeVectorMap &Lv) {
