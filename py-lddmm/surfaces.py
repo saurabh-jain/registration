@@ -1251,7 +1251,7 @@ def varifoldNormGradient(fvDef, fv1, KparDist):
 
     z1 = KparDist.applyK(c1, u1,matrixWeights=True) - KparDist.applyK(c2, u2, firstVar=c1, matrixWeights=True)
     #print a1.shape, c1.shape
-    dz1 = (1./3.) * (KparDist.applyDiffK2(c1, beta1) - KparDist.applyDiffK2(c2, beta2, firstVar=c1))
+    dz1 = (1./3.) * (KparDist.applyDiffKmat(c1, beta1) - KparDist.applyDiffKmat(c2, beta2, firstVar=c1))
                         
     xDef1 = xDef[fvDef.faces[:, 0], :]
     xDef2 = xDef[fvDef.faces[:, 1], :]

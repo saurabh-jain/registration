@@ -1,4 +1,5 @@
 import logging
+import os
 
 def setup_default_logging(output_dir=None, config=None, fileName=None, stdOutput=True):
     logger = logging.getLogger()
@@ -12,6 +13,12 @@ def setup_default_logging(output_dir=None, config=None, fileName=None, stdOutput
     if output_dir == None:
         output_dir = ""
     if fileName != None:
+        if not os.access(output_dir, os.W_OK):
+            if os.access(output_dir, os.F_OK):
+                logging.error('Cannot save in ' + output_dir)
+                return
+            else:
+                os.makedirs(output_dir)
         fh = logging.FileHandler("%s/%s" % (output_dir, log_file_name), mode='w')
         fh.setFormatter(formatter)
         logger.addHandler(fh)

@@ -99,13 +99,7 @@ class SurfaceMatching(object):
 
         self.saveRate = 10
         self.iter = 0
-        self.outputDir = outputDir
-        if not os.access(outputDir, os.W_OK):
-            if os.access(outputDir, os.F_OK):
-                logging.error('Cannot save in ' + outputDir)
-                return
-            else:
-                os.mkdir(outputDir)
+        self.setOutputDir(outputDir)
         self.dim = self.fv0.vertices.shape[1]
         self.maxIter = maxIter
         self.verb = verb
@@ -320,7 +314,7 @@ class SurfaceMatching(object):
         if self.affineDim > 0:
             dA = foo[1]
             db = foo[2]
-            grd.Aff = 2*np.multiply(self.affineWeight.reshape([1, self.affineDim]), self.Afft)
+            grd.aff = 2*np.multiply(self.affineWeight.reshape([1, self.affineDim]), self.Afft)
             #grd.aff = 2 * self.Afft
             for t in range(self.Tsize):
                dAff = np.dot(self.affineBasis.T, np.vstack([dA[t].reshape([dim2,1]), db[t].reshape([self.dim, 1])]))

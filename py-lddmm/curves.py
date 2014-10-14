@@ -34,6 +34,8 @@ class Curve:
                     (mainPart, ext) = os.path.splitext(filename)
                     if ext == '.dat':
                         self.readCurve(filename)
+                    elif ext=='.txt':
+                        self.readTxt(filename)
                     elif ext=='.vtk':
                         self.readVTK(filename)
                     else:
@@ -262,7 +264,36 @@ class Curve:
         ll = np.sqrt((self.lenel**2).sum(axis=1))
         return ll.sum()
 
-    # Reads from .byu file
+
+    # Reads from .txt file
+    def readTxt(self, infile):
+        with open(infile,'r') as ftxt:
+            ln0 = ftxt.readline()
+            ln = ln0.split()
+            # read header
+            dim = int(ln[0])	# number of components
+            npoints = int(ln[1])  # number of vertices
+            # read data
+            self.vertices = np.zeros([npoints, dim]) ;
+            for k in range(npoints):
+                ln = ftxt.readline().split()
+                for kk in range(dim):
+                    self.vertices[k, kk] = float(ln[kk]) 
+
+        self.faces = np.int_(np.empty([npoints, 2]))
+        self.faces[:,0] = range(npoints)
+        self.faces[0:npoints-1,1] = range(1,npoints)
+        self.faces[npoints-1,1] = 0
+		#print nfaces, kf, ln
+        
+        xDef1 = self.vertices[self.faces[:, 0], :]
+        xDef2 = self.vertices[self.faces[:, 1], :]
+        self.centers = (xDef1 + xDef2) / 2
+        #self.lenel = np.zeros(self.faces.shape[0], self.vertices.shape[1]) ;
+        self.lenel = xDef2 - xDef1 ; 
+        #self.lenel[:,1] = xDef2[:,1] - xDef1[:,1] ; 
+
+    # Reads from .dat file
     def readCurve(self, infile):
         with open(infile,'r') as fbyu:
             ln0 = fbyu.readline()
